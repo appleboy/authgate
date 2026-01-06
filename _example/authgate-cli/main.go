@@ -9,12 +9,35 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
-const (
-	serverURL = "http://localhost:8080"
-	clientID  = "cli-tool"
+var (
+	serverURL string
+	clientID  string
 )
+
+func init() {
+	// Load .env file if exists (ignore error if not found)
+	_ = godotenv.Load()
+
+	serverURL = getEnv("SERVER_URL", "http://localhost:8080")
+	clientID = getEnv("CLIENT_ID", "")
+
+	if clientID == "" {
+		fmt.Println("Error: CLIENT_ID not set. Please set it in .env file or environment variable.")
+		fmt.Println("You can find the client_id in the server startup logs.")
+		os.Exit(1)
+	}
+}
+
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
 
 type DeviceCodeResponse struct {
 	DeviceCode              string `json:"device_code"`

@@ -3,6 +3,8 @@ package config
 import (
 	"os"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 type Config struct {
@@ -26,6 +28,9 @@ type Config struct {
 }
 
 func Load() *Config {
+	// Load .env file if exists (ignore error if not found)
+	_ = godotenv.Load()
+
 	return &Config{
 		ServerAddr:           getEnv("SERVER_ADDR", ":8080"),
 		BaseURL:              getEnv("BASE_URL", "http://localhost:8080"),

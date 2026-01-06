@@ -82,7 +82,7 @@ func main() {
 	log.Printf("OAuth Device Flow server starting on %s", cfg.ServerAddr)
 	log.Printf("Verification URL: %s/device", cfg.BaseURL)
 	log.Printf("Default user: admin / password123")
-	log.Printf("Default client: cli-tool")
+	log.Printf("Default client: AuthGate CLI (check logs for client_id)")
 
 	if err := r.Run(cfg.ServerAddr); err != nil {
 		log.Fatalf("Failed to start server: %v", err)

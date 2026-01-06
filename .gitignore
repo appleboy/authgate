@@ -1,5 +1,6 @@
 # Binary
 authgate
+_example/authgate-cli/authgate-cli
 
 # Database
 *.db
@@ -27,3 +28,4 @@ Thumbs.db
 # Env
 .env
 .env.local
+bin

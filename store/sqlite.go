@@ -68,15 +68,16 @@ func (s *Store) seedData() error {
 	var clientCount int64
 	s.db.Model(&models.OAuthClient{}).Count(&clientCount)
 	if clientCount == 0 {
+		clientID := uuid.New().String()
 		client := &models.OAuthClient{
-			ClientID:   "cli-tool",
-			ClientName: "CLI Tool",
+			ClientID:   clientID,
+			ClientName: "AuthGate CLI",
 			Scopes:     "read write",
 		}
 		if err := s.db.Create(client).Error; err != nil {
 			return err
 		}
-		log.Println("Created default OAuth client: cli-tool")
+		log.Printf("Created default OAuth client: %s (AuthGate CLI)", clientID)
 	}
 
 	return nil
