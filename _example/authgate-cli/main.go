@@ -106,7 +106,11 @@ func requestDeviceCode() (*DeviceCodeResponse, error) {
 	data.Set("client_id", clientID)
 	data.Set("scope", "read write")
 
-	resp, err := http.Post(serverURL+"/oauth/device/code", "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
+	resp, err := http.Post(
+		serverURL+"/oauth/device/code",
+		"application/x-www-form-urlencoded",
+		strings.NewReader(data.Encode()),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +142,11 @@ func pollForToken(deviceCode string, interval int) (*TokenResponse, error) {
 	data.Set("client_id", clientID)
 
 	for {
-		resp, err := http.Post(serverURL+"/oauth/token", "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
+		resp, err := http.Post(
+			serverURL+"/oauth/token",
+			"application/x-www-form-urlencoded",
+			strings.NewReader(data.Encode()),
+		)
 		if err != nil {
 			return nil, err
 		}
