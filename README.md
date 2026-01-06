@@ -40,14 +40,14 @@ Modern CLI tools and IoT devices need to access user resources securely, but tra
 
 ## Features
 
-✅ **RFC 8628 Compliant** - Full implementation of OAuth 2.0 Device Authorization Grant
-✅ **Lightweight** - Single binary, SQLite database, no external dependencies
-✅ **Easy Configuration** - `.env` file support for all settings
-✅ **Session-Based Auth** - Secure user login with encrypted cookies
-✅ **JWT Tokens** - Industry-standard access tokens
-✅ **Example CLI** - Complete working example of a client implementation
-✅ **Token Verification** - Built-in endpoint to validate tokens
-✅ **Cross-Platform** - Runs on Linux, macOS, Windows
+- ✅ **RFC 8628 Compliant** - Full implementation of OAuth 2.0 Device Authorization Grant
+- ✅ **Lightweight** - Single binary, SQLite database, no external dependencies
+- ✅ **Easy Configuration** - `.env` file support for all settings
+- ✅ **Session-Based Auth** - Secure user login with encrypted cookies
+- ✅ **JWT Tokens** - Industry-standard access tokens
+- ✅ **Example CLI** - Complete working example of a client implementation
+- ✅ **Token Verification** - Built-in endpoint to validate tokens
+- ✅ **Cross-Platform** - Runs on Linux, macOS, Windows
 
 ---
 
