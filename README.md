@@ -287,6 +287,45 @@ The CLI will:
 
 ---
 
+## User Interface
+
+AuthGate provides a clean, modern web interface for user authentication and device authorization. Below are screenshots of the complete authorization flow:
+
+### 1. Login Page
+
+![Login Page](images/login-page.png)
+
+Users are prompted to sign in with their credentials before authorizing any device. The login page features:
+
+- Simple username and password authentication
+- Clear call-to-action: "Sign in to authorize your device"
+- Responsive design that works on both desktop and mobile browsers
+
+### 2. Device Authorization Page
+
+![Device Authorization](images/device-page.png)
+
+After successful login, users see the device authorization page where they:
+
+- Enter the code displayed on their CLI tool or device
+- See their current logged-in status with a logout option
+- Submit the code with a clear "Authorize Device" button
+- Code format: `XXXX-XXXX` (8 characters, case-insensitive)
+
+### 3. Authorization Success
+
+![Authorization Successful](images/authorization-successful.png)
+
+Upon successful authorization, users receive confirmation with:
+
+- Visual success indicator (green checkmark)
+- Confirmation message showing which client was authorized
+- Clear instructions to return to their CLI tool
+- Option to authorize additional devices without re-login
+- Logout button for security
+
+---
+
 ## How It Works
 
 ### Device Flow Sequence
