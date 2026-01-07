@@ -12,7 +12,7 @@ LABEL org.opencontainers.image.source=https://github.com/your-org/authgate
 LABEL org.opencontainers.image.description="OAuth 2.0 Device Authorization Grant server for CLI tools and browserless devices"
 LABEL org.opencontainers.image.licenses=MIT
 
-RUN apk add --no-cache ca-certificates && \
+RUN apk add --no-cache ca-certificates wget && \
   rm -rf /var/cache/apk/* && \
   adduser -D -u 1000 authgate && \
   mkdir -p /app/data && \
@@ -27,6 +27,10 @@ WORKDIR /app
 
 # Expose default port
 EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
 # Volume for database
 VOLUME ["/app/data"]

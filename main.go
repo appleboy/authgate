@@ -75,9 +75,25 @@ func main() {
 	}
 	r.StaticFS("/static", http.FS(staticSubFS))
 
+	// Health check endpoint
+	r.GET("/health", func(c *gin.Context) {
+		// Check database connection
+		if err := db.Health(); err == nil {
+			c.JSON(http.StatusOK, gin.H{
+				"status":   "healthy",
+				"database": "connected",
+			})
+			return
+		}
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"status":   "unhealthy",
+			"database": "disconnected",
+		})
+	})
+
 	// Public routes
 	r.GET("/", func(c *gin.Context) {
-		c.Redirect(302, "/device")
+		c.Redirect(http.StatusFound, "/device")
 	})
 	r.GET("/login", authHandler.LoginPage)
 	r.POST("/login", authHandler.Login)

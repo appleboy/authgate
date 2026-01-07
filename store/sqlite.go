@@ -158,3 +158,12 @@ func (s *Store) DeleteExpiredTokens() error {
 func (s *Store) DeleteExpiredDeviceCodes() error {
 	return s.db.Where("expires_at < datetime('now')").Delete(&models.DeviceCode{}).Error
 }
+
+// Health checks the database connection
+func (s *Store) Health() error {
+	sqlDB, err := s.db.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.Ping()
+}
