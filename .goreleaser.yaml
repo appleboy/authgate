@@ -60,12 +60,12 @@ builds:
       - -trimpath
     ldflags:
       - -s -w
-      - -X 'github.com/appleboy/authgate/version.Version={{.Version}}'
-      - -X 'github.com/appleboy/authgate/version.BuildTime={{.Date}}'
-      - -X 'github.com/appleboy/authgate/version.GitCommit={{.FullCommit}}'
-      - -X 'github.com/appleboy/authgate/version.GoVersion={{.Env.GO_VERSION}}'
-      - -X 'github.com/appleboy/authgate/version.BuildOS={{.Os}}'
-      - -X 'github.com/appleboy/authgate/version.BuildArch={{.Arch}}'
+      - -X 'github.com/appleboy/authgate/internal/version.Version={{.Version}}'
+      - -X 'github.com/appleboy/authgate/internal/version.BuildTime={{.Date}}'
+      - -X 'github.com/appleboy/authgate/internal/version.GitCommit={{.FullCommit}}'
+      - -X 'github.com/appleboy/authgate/internal/version.GoVersion={{.Env.GO_VERSION}}'
+      - -X 'github.com/appleboy/authgate/internal/version.BuildOS={{.Os}}'
+      - -X 'github.com/appleboy/authgate/internal/version.BuildArch={{.Arch}}'
     binary: >-
       {{ .ProjectName }}-
       {{- if .IsSnapshot }}{{ .Branch }}-

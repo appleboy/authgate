@@ -3,8 +3,8 @@ package services
 import (
 	"errors"
 
-	"github.com/appleboy/authgate/models"
-	"github.com/appleboy/authgate/store"
+	"github.com/appleboy/authgate/internal/models"
+	"github.com/appleboy/authgate/internal/store"
 
 	"golang.org/x/crypto/bcrypt"
 )

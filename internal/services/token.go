@@ -4,9 +4,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/appleboy/authgate/config"
-	"github.com/appleboy/authgate/models"
-	"github.com/appleboy/authgate/store"
+	"github.com/appleboy/authgate/internal/config"
+	"github.com/appleboy/authgate/internal/models"
+	"github.com/appleboy/authgate/internal/store"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"

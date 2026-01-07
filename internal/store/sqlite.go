@@ -3,7 +3,7 @@ package store
 import (
 	"log"
 
-	"github.com/appleboy/authgate/models"
+	"github.com/appleboy/authgate/internal/models"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"

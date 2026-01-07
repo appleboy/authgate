@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/appleboy/authgate/config"
-	"github.com/appleboy/authgate/services"
+	"github.com/appleboy/authgate/internal/config"
+	"github.com/appleboy/authgate/internal/services"
 
 	"github.com/gin-gonic/gin"
 )

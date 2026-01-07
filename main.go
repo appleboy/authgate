@@ -9,11 +9,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/appleboy/authgate/config"
-	"github.com/appleboy/authgate/handlers"
-	"github.com/appleboy/authgate/middleware"
-	"github.com/appleboy/authgate/services"
-	"github.com/appleboy/authgate/store"
+	"github.com/appleboy/authgate/internal/config"
+	"github.com/appleboy/authgate/internal/handlers"
+	"github.com/appleboy/authgate/internal/middleware"
+	"github.com/appleboy/authgate/internal/services"
+	"github.com/appleboy/authgate/internal/store"
 	"github.com/appleboy/graceful"
 
 	"github.com/gin-contrib/sessions"
@@ -21,10 +21,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-//go:embed templates/*
+//go:embed internal/templates/*
 var templatesFS embed.FS
 
-//go:embed static/*
+//go:embed internal/static/*
 var staticFS embed.FS
 
 func main() {
@@ -62,14 +62,14 @@ func main() {
 	r.Use(sessions.Sessions("oauth_session", sessionStore))
 
 	// Load embedded templates
-	tmpl, err := template.ParseFS(templatesFS, "templates/*.html")
+	tmpl, err := template.ParseFS(templatesFS, "internal/templates/*.html")
 	if err != nil {
 		log.Fatalf("Failed to parse templates: %v", err)
 	}
 	r.SetHTMLTemplate(tmpl)
 
 	// Serve embedded static files
-	staticSubFS, err := fs.Sub(staticFS, "static")
+	staticSubFS, err := fs.Sub(staticFS, "internal/static")
 	if err != nil {
 		log.Fatalf("Failed to create static sub filesystem: %v", err)
 	}

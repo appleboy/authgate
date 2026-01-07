@@ -3,7 +3,7 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/appleboy/authgate/services"
+	"github.com/appleboy/authgate/internal/services"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"

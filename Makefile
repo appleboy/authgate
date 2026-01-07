@@ -16,12 +16,12 @@ else
 endif
 COMMIT ?= $(shell git rev-parse --short HEAD)
 
-LDFLAGS ?= -X 'github.com/appleboy/authgate/version.Version=$(VERSION)' \
-	-X 'github.com/appleboy/authgate/version.BuildTime=$(shell date +%Y-%m-%dT%H:%M:%S)' \
-	-X 'github.com/appleboy/authgate/version.GitCommit=$(shell git rev-parse HEAD)' \
-	-X 'github.com/appleboy/authgate/version.GoVersion=$(shell $(GO) version | cut -d " " -f 3)' \
-	-X 'github.com/appleboy/authgate/version.BuildOS=$(shell $(GO) env GOOS)' \
-	-X 'github.com/appleboy/authgate/version.BuildArch=$(shell $(GO) env GOARCH)'
+LDFLAGS ?= -X 'github.com/appleboy/authgate/internal/version.Version=$(VERSION)' \
+	-X 'github.com/appleboy/authgate/internal/version.BuildTime=$(shell date +%Y-%m-%dT%H:%M:%S)' \
+	-X 'github.com/appleboy/authgate/internal/version.GitCommit=$(shell git rev-parse HEAD)' \
+	-X 'github.com/appleboy/authgate/internal/version.GoVersion=$(shell $(GO) version | cut -d " " -f 3)' \
+	-X 'github.com/appleboy/authgate/internal/version.BuildOS=$(shell $(GO) env GOOS)' \
+	-X 'github.com/appleboy/authgate/internal/version.BuildArch=$(shell $(GO) env GOARCH)'
 
 ## build: build the authgate binary
 build: $(EXECUTABLE)
