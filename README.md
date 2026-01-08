@@ -23,6 +23,10 @@
       - [Docker Features](#docker-features)
       - [Docker Compose Example](#docker-compose-example)
     - [Test with the Example CLI](#test-with-the-example-cli)
+  - [User Interface](#user-interface)
+    - [1. Login Page](#1-login-page)
+    - [2. Device Authorization Page](#2-device-authorization-page)
+    - [3. Authorization Success](#3-authorization-success)
   - [How It Works](#how-it-works)
     - [Device Flow Sequence](#device-flow-sequence)
     - [Key Endpoints](#key-endpoints)
@@ -180,11 +184,18 @@ go build -o bin/authgate .
 ### Run the Server
 
 ```bash
-# After make build
-./bin/authgate
+# Show version information
+./bin/authgate -v
+./bin/authgate --version
+
+# Show help
+./bin/authgate -h
+
+# Start the server
+./bin/authgate server
 
 # Or directly with Go
-go run .
+go run . server
 ```
 
 The server will start on `http://localhost:8080` by default.
@@ -665,7 +676,7 @@ After=network.target
 Type=simple
 User=authgate
 WorkingDirectory=/var/lib/authgate
-ExecStart=/usr/local/bin/authgate
+ExecStart=/usr/local/bin/authgate server
 Restart=on-failure
 RestartSec=10
 
@@ -880,7 +891,7 @@ db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 Enable debug logging by setting Gin to debug mode:
 
 ```bash
-GIN_MODE=debug ./bin/authgate
+GIN_MODE=debug ./bin/authgate server
 ```
 
 ---

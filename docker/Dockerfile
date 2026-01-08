@@ -38,4 +38,4 @@ VOLUME ["/app/data"]
 # Set default environment
 ENV DATABASE_PATH=/app/data/oauth.db
 
-CMD ["/bin/authgate"]
+CMD ["/bin/authgate", "server"]

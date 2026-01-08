@@ -13,7 +13,9 @@ AuthGate is an OAuth 2.0 Device Authorization Grant (RFC 8628) server built with
 make build              # Build to bin/authgate with version info in LDFLAGS
 
 # Run
-./bin/authgate          # Run after make build
+./bin/authgate -v       # Show version information
+./bin/authgate -h       # Show help
+./bin/authgate server   # Start the OAuth server
 
 # Test & Lint
 make test               # Run tests with coverage report (outputs coverage.txt)
