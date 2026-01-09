@@ -12,6 +12,7 @@ import (
 )
 
 const (
+  // https://datatracker.ietf.org/doc/html/rfc8628#section-3.4
 	GrantTypeDeviceCode = "urn:ietf:params:oauth:grant-type:device_code"
 )
 
