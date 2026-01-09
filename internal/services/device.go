@@ -16,6 +16,7 @@ import (
 
 var (
 	ErrInvalidClient      = errors.New("invalid client_id")
+	ErrClientInactive     = errors.New("client is inactive")
 	ErrDeviceCodeNotFound = errors.New("device code not found")
 	ErrDeviceCodeExpired  = errors.New("device code expired")
 	ErrUserCodeNotFound   = errors.New("user code not found")
@@ -33,9 +34,14 @@ func NewDeviceService(s *store.Store, cfg *config.Config) *DeviceService {
 // GenerateDeviceCode creates a new device code request
 func (s *DeviceService) GenerateDeviceCode(clientID, scope string) (*models.DeviceCode, error) {
 	// Validate client
-	_, err := s.store.GetClient(clientID)
+	client, err := s.store.GetClient(clientID)
 	if err != nil {
 		return nil, ErrInvalidClient
+	}
+
+	// Check if client is active
+	if !client.IsActive {
+		return nil, ErrClientInactive
 	}
 
 	deviceCode := &models.DeviceCode{

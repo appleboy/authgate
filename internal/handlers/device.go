@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/appleboy/authgate/internal/config"
@@ -62,10 +63,17 @@ func (h *DeviceHandler) DeviceCodeRequest(c *gin.Context) {
 
 	dc, err := h.deviceService.GenerateDeviceCode(clientID, scope)
 	if err != nil {
-		if err == services.ErrInvalidClient {
+		if errors.Is(err, services.ErrInvalidClient) {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error":             "invalid_client",
 				"error_description": "Unknown client_id",
+			})
+			return
+		}
+		if errors.Is(err, services.ErrClientInactive) {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":             "invalid_client",
+				"error_description": "Client is inactive",
 			})
 			return
 		}
@@ -147,10 +155,10 @@ func (h *DeviceHandler) DeviceVerify(c *gin.Context) {
 	err := h.deviceService.AuthorizeDeviceCode(userCode, userID.(string))
 	if err != nil {
 		var errorMsg string
-		switch err {
-		case services.ErrUserCodeNotFound:
+		switch {
+		case errors.Is(err, services.ErrUserCodeNotFound):
 			errorMsg = "User code not found"
-		case services.ErrDeviceCodeExpired:
+		case errors.Is(err, services.ErrDeviceCodeExpired):
 			errorMsg = "Code has expired, please request a new one"
 		default:
 			errorMsg = "Invalid or expired code"

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -49,20 +50,20 @@ func (h *TokenHandler) Token(c *gin.Context) {
 
 	accessToken, err := h.tokenService.ExchangeDeviceCode(deviceCode, clientID)
 	if err != nil {
-		switch err {
-		case services.ErrAuthorizationPending:
+		switch {
+		case errors.Is(err, services.ErrAuthorizationPending):
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": "authorization_pending",
 			})
-		case services.ErrSlowDown:
+		case errors.Is(err, services.ErrSlowDown):
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": "slow_down",
 			})
-		case services.ErrExpiredToken:
+		case errors.Is(err, services.ErrExpiredToken):
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": "expired_token",
 			})
-		case services.ErrAccessDenied:
+		case errors.Is(err, services.ErrAccessDenied):
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": "access_denied",
 			})

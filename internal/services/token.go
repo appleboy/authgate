@@ -55,6 +55,15 @@ func (s *TokenService) ExchangeDeviceCode(
 		return nil, ErrAccessDenied
 	}
 
+	// Check if client is active
+	client, err := s.store.GetClient(clientID)
+	if err != nil {
+		return nil, ErrAccessDenied
+	}
+	if !client.IsActive {
+		return nil, ErrAccessDenied
+	}
+
 	// Check if authorized
 	if !dc.Authorized {
 		return nil, ErrAuthorizationPending
