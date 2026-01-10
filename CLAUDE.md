@@ -44,13 +44,31 @@ docker build -f docker/Dockerfile -t authgate .
 
 **Layers** (dependency injection pattern):
 
-- `main.go` - Wires up store → services → handlers, configures Gin router with session middleware
+- `main.go` - Wires up store → auth providers → services → handlers, configures Gin router with session middleware
 - `config/` - Loads .env via godotenv, provides Config struct with defaults
 - `store/` - GORM-based data access layer with SQLite, single Store struct with all DB methods
-- `services/` - Business logic (UserService, DeviceService, TokenService), depends on Store
+- `auth/` - Authentication providers (LocalAuthProvider, HTTPAPIAuthProvider) with pluggable design
+- `services/` - Business logic (UserService, DeviceService, TokenService), depends on Store and Auth providers
 - `handlers/` - HTTP handlers (AuthHandler, DeviceHandler, TokenHandler), depends on Services
 - `models/` - GORM models (User, OAuthClient, DeviceCode, AccessToken)
 - `middleware/` - Gin middleware (auth.go: RequireAuth checks session for user_id)
+
+**Authentication Architecture**:
+
+- **Pluggable Providers**: Supports local (database) and external HTTP API authentication
+- **Hybrid Mode**: Each user authenticates based on their `auth_source` field
+- **Auth Mode**: Configured via `AUTH_MODE` env var (`local` or `http_api`), defaults to `local`
+- **User Sync**: External auth automatically creates/updates users in local database
+- **No Interfaces**: Direct struct dependency injection (project convention)
+- **Authentication Flow**:
+  1. UserService looks up user by username
+  2. If user exists: route to provider based on user's `auth_source` field
+     - `auth_source=local`: LocalAuthProvider (bcrypt against database)
+     - `auth_source=http_api`: HTTPAPIAuthProvider (call external API)
+  3. If user doesn't exist and `AUTH_MODE=http_api`: try external auth and create user
+  4. Default admin user always uses local authentication (failsafe)
+- **User Fields**: ExternalID, AuthSource, Email, FullName added for external auth support
+- **Key Benefit**: Admin can always login locally even if external service is down
 
 **Key Implementation Details**:
 
@@ -77,13 +95,17 @@ docker build -f docker/Dockerfile -t authgate .
 
 ## Environment Variables
 
-| Variable       | Default                 | Description                     |
-| -------------- | ----------------------- | ------------------------------- |
-| SERVER_ADDR    | :8080                   | Listen address                  |
-| BASE_URL       | `http://localhost:8080` | Public URL for verification_uri |
-| JWT_SECRET     | (default)               | JWT signing key                 |
-| SESSION_SECRET | (default)               | Cookie encryption key           |
-| DATABASE_PATH  | oauth.db                | SQLite database path            |
+| Variable                      | Default                 | Description                                       |
+| ----------------------------- | ----------------------- | ------------------------------------------------- |
+| SERVER_ADDR                   | :8080                   | Listen address                                    |
+| BASE_URL                      | `http://localhost:8080` | Public URL for verification_uri                   |
+| JWT_SECRET                    | (default)               | JWT signing key                                   |
+| SESSION_SECRET                | (default)               | Cookie encryption key                             |
+| DATABASE_PATH                 | oauth.db                | SQLite database path                              |
+| **AUTH_MODE**                 | local                   | Authentication mode: `local` or `http_api`        |
+| HTTP_API_URL                  | (none)                  | External auth API endpoint (required for http_api)|
+| HTTP_API_TIMEOUT              | 10s                     | HTTP API request timeout                          |
+| HTTP_API_INSECURE_SKIP_VERIFY | false                   | Skip TLS verification (dev/testing only)          |
 
 ## Default Test Data
 
@@ -101,6 +123,71 @@ cd _example/authgate-cli
 cp .env.example .env      # Add CLIENT_ID from server logs
 go run main.go
 ```
+
+## External Authentication Configuration
+
+### HTTP API Authentication
+
+To use external HTTP API for authentication, configure these environment variables:
+
+```bash
+AUTH_MODE=http_api
+HTTP_API_URL=https://your-auth-api.com/verify
+HTTP_API_TIMEOUT=10s
+HTTP_API_INSECURE_SKIP_VERIFY=false
+```
+
+**Expected API Contract:**
+
+Request (POST to HTTP_API_URL):
+```json
+{
+  "username": "john",
+  "password": "secret123"
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "user_id": "external-user-id",
+  "email": "john@example.com",
+  "full_name": "John Doe"
+}
+```
+
+**Behavior:**
+- First login auto-creates user in local database with `auth_source="http_api"`
+- Subsequent logins update user info (email, full_name)
+- Users get default "user" role (admins must be promoted manually)
+- External users stored with `auth_source="http_api"` and `external_id` set
+- Each user authenticates based on their own `auth_source` field (hybrid mode)
+- Default admin user (`auth_source="local"`) can always login even if external API is down
+
+### Local Authentication (Default)
+
+No additional configuration needed. Users authenticate against local SQLite database:
+
+```bash
+AUTH_MODE=local  # or omit AUTH_MODE entirely
+```
+
+### Hybrid Mode Advantages
+
+The system supports **per-user authentication routing** based on the `auth_source` field:
+
+- **Failsafe Admin Access**: Default admin user always uses local auth, providing emergency access
+- **Mixed User Base**: Can have both local and external users in the same system
+- **Zero Downtime Migration**: Gradually migrate users from local to external auth
+- **Service Independence**: External service outage doesn't lock out local users
+
+**Example Scenario:**
+1. Server starts with `AUTH_MODE=http_api`
+2. Default admin user created with `auth_source=local` (can always login)
+3. External users authenticate via HTTP API, created with `auth_source=http_api`
+4. Each user authenticates via their designated provider
+5. If external API fails, admin can still login to manage the system
 
 ## Coding Conventions
 

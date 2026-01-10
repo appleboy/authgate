@@ -128,6 +128,56 @@ func (s *Store) GetUserByID(id string) (*models.User, error) {
 	return &user, nil
 }
 
+// GetUserByExternalID finds a user by their external ID and auth source
+func (s *Store) GetUserByExternalID(externalID, authSource string) (*models.User, error) {
+	var user models.User
+	if err := s.db.Where("external_id = ? AND auth_source = ?", externalID, authSource).First(&user).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// UpsertExternalUser creates or updates a user from external authentication
+func (s *Store) UpsertExternalUser(
+	username, externalID, authSource, email, fullName string,
+) (*models.User, error) {
+	var user models.User
+
+	// Try to find by external ID first
+	err := s.db.Where("external_id = ? AND auth_source = ?", externalID, authSource).
+		First(&user).
+		Error
+
+	if err == nil {
+		// User exists, update fields
+		user.Username = username
+		user.Email = email
+		user.FullName = fullName
+		if err := s.db.Save(&user).Error; err != nil {
+			return nil, err
+		}
+		return &user, nil
+	}
+
+	// User doesn't exist, create new
+	user = models.User{
+		ID:           uuid.New().String(),
+		Username:     username,
+		PasswordHash: "", // No local password for external users
+		Role:         "user",
+		ExternalID:   externalID,
+		AuthSource:   authSource,
+		Email:        email,
+		FullName:     fullName,
+	}
+
+	if err := s.db.Create(&user).Error; err != nil {
+		return nil, err
+	}
+
+	return &user, nil
+}
+
 // OAuth Client operations
 func (s *Store) GetClient(clientID string) (*models.OAuthClient, error) {
 	var client models.OAuthClient
