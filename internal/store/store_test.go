@@ -18,11 +18,7 @@ import (
 
 // TestStoreWithSQLite tests store operations with SQLite
 func TestStoreWithSQLite(t *testing.T) {
-	store, err := New("sqlite", ":memory:")
-	require.NoError(t, err)
-	require.NotNil(t, store)
-
-	testBasicOperations(t, store)
+	testBasicOperations(t, "sqlite", nil)
 }
 
 // TestStoreWithPostgres tests store operations with PostgreSQL
@@ -62,21 +58,69 @@ func TestStoreWithPostgres(t *testing.T) {
 		}
 	})
 
-	// Get connection string
-	connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
-	require.NoError(t, err)
+	testBasicOperations(t, "postgres", pgContainer)
+}
 
-	// Create store
-	store, err := New("postgres", connStr)
+// createFreshStore creates a new store instance for test isolation
+// For SQLite, each call creates a fresh :memory: database
+// For PostgreSQL, each call creates a uniquely-named database in the container
+func createFreshStore(t *testing.T, driver string, pgContainer *postgres.PostgresContainer) *Store {
+	t.Helper()
+
+	var dsn string
+	switch driver {
+	case "sqlite":
+		// SQLite :memory: creates a fresh database for each connection
+		dsn = ":memory:"
+	case "postgres":
+		// Create a unique database name for this subtest using UUID
+		dbName := "test_" + uuid.New().String()[:8] // Use first 8 chars of UUID
+
+		ctx := context.Background()
+
+		// Create the database
+		createDBCmd := fmt.Sprintf("CREATE DATABASE %s", dbName)
+		_, _, err := pgContainer.Exec(
+			ctx,
+			[]string{"psql", "-U", "testuser", "-d", "testdb", "-c", createDBCmd},
+		)
+		require.NoError(t, err)
+
+		// Build connection string for the new database
+		host, err := pgContainer.Host(ctx)
+		require.NoError(t, err)
+		port, err := pgContainer.MappedPort(ctx, "5432")
+		require.NoError(t, err)
+		dsn = fmt.Sprintf(
+			"host=%s port=%s user=testuser password=testpass dbname=%s sslmode=disable",
+			host, port.Port(), dbName,
+		)
+
+		// Clean up database after test
+		t.Cleanup(func() {
+			dropDBCmd := fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbName)
+			_, _, _ = pgContainer.Exec(
+				context.Background(),
+				[]string{"psql", "-U", "testuser", "-d", "testdb", "-c", dropDBCmd},
+			)
+		})
+	default:
+		t.Fatalf("unsupported driver: %s", driver)
+	}
+
+	store, err := New(driver, dsn)
 	require.NoError(t, err)
 	require.NotNil(t, store)
 
-	testBasicOperations(t, store)
+	return store
 }
 
 // testBasicOperations tests basic CRUD operations on the store
-func testBasicOperations(t *testing.T, store *Store) {
+// Each subtest creates a fresh store instance for isolation
+func testBasicOperations(t *testing.T, driver string, pgContainer *postgres.PostgresContainer) {
 	t.Run("CreateAndGetUser", func(t *testing.T) {
+		store := createFreshStore(t, driver, pgContainer)
+
 		user := &models.User{
 			ID:           uuid.New().String(),
 			Username:     "testuser",
@@ -93,6 +137,8 @@ func testBasicOperations(t *testing.T, store *Store) {
 	})
 
 	t.Run("CreateAndGetClient", func(t *testing.T) {
+		store := createFreshStore(t, driver, pgContainer)
+
 		client := &models.OAuthClient{
 			ClientID:     uuid.New().String(),
 			ClientSecret: "secret",
@@ -112,6 +158,8 @@ func testBasicOperations(t *testing.T, store *Store) {
 	})
 
 	t.Run("CreateAndGetDeviceCode", func(t *testing.T) {
+		store := createFreshStore(t, driver, pgContainer)
+
 		deviceCode := &models.DeviceCode{
 			DeviceCode: uuid.New().String(),
 			UserCode:   "ABCD1234",
@@ -130,6 +178,8 @@ func testBasicOperations(t *testing.T, store *Store) {
 	})
 
 	t.Run("CreateAndGetAccessToken", func(t *testing.T) {
+		store := createFreshStore(t, driver, pgContainer)
+
 		token := &models.AccessToken{
 			ID:        uuid.New().String(),
 			Token:     uuid.New().String(),
@@ -148,6 +198,8 @@ func testBasicOperations(t *testing.T, store *Store) {
 	})
 
 	t.Run("DeleteExpiredTokens", func(t *testing.T) {
+		store := createFreshStore(t, driver, pgContainer)
+
 		// Create expired token
 		expiredToken := &models.AccessToken{
 			ID:        uuid.New().String(),
@@ -170,6 +222,8 @@ func testBasicOperations(t *testing.T, store *Store) {
 	})
 
 	t.Run("DeleteExpiredDeviceCodes", func(t *testing.T) {
+		store := createFreshStore(t, driver, pgContainer)
+
 		// Create expired device code
 		expiredCode := &models.DeviceCode{
 			DeviceCode: uuid.New().String(),
@@ -192,6 +246,8 @@ func testBasicOperations(t *testing.T, store *Store) {
 	})
 
 	t.Run("HealthCheck", func(t *testing.T) {
+		store := createFreshStore(t, driver, pgContainer)
+
 		err := store.Health()
 		assert.NoError(t, err)
 	})
