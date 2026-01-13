@@ -19,7 +19,10 @@ func NewLocalAuthProvider(s *store.Store) *LocalAuthProvider {
 }
 
 // Authenticate verifies credentials against local database
-func (p *LocalAuthProvider) Authenticate(ctx context.Context, username, password string) (*AuthResult, error) {
+func (p *LocalAuthProvider) Authenticate(
+	ctx context.Context,
+	username, password string,
+) (*AuthResult, error) {
 	user, err := p.store.GetUserByUsername(username)
 	if err != nil {
 		return nil, ErrInvalidCredentials

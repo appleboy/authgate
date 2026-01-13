@@ -44,7 +44,10 @@ func NewUserService(
 	}
 }
 
-func (s *UserService) Authenticate(ctx context.Context, username, password string) (*models.User, error) {
+func (s *UserService) Authenticate(
+	ctx context.Context,
+	username, password string,
+) (*models.User, error) {
 	// First, try to find existing user
 	existingUser, err := s.store.GetUserByUsername(username)
 

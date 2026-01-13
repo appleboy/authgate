@@ -54,7 +54,10 @@ type APIAuthResponse struct {
 }
 
 // Authenticate verifies credentials against external HTTP API
-func (p *HTTPAPIAuthProvider) Authenticate(ctx context.Context, username, password string) (*AuthResult, error) {
+func (p *HTTPAPIAuthProvider) Authenticate(
+	ctx context.Context,
+	username, password string,
+) (*AuthResult, error) {
 	reqBody := APIAuthRequest{
 		Username: username,
 		Password: password,
