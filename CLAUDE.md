@@ -95,17 +95,17 @@ docker build -f docker/Dockerfile -t authgate .
 
 ## Environment Variables
 
-| Variable                      | Default                 | Description                                       |
-| ----------------------------- | ----------------------- | ------------------------------------------------- |
-| SERVER_ADDR                   | :8080                   | Listen address                                    |
-| BASE_URL                      | `http://localhost:8080` | Public URL for verification_uri                   |
-| JWT_SECRET                    | (default)               | JWT signing key                                   |
-| SESSION_SECRET                | (default)               | Cookie encryption key                             |
-| DATABASE_PATH                 | oauth.db                | SQLite database path                              |
-| **AUTH_MODE**                 | local                   | Authentication mode: `local` or `http_api`        |
-| HTTP_API_URL                  | (none)                  | External auth API endpoint (required for http_api)|
-| HTTP_API_TIMEOUT              | 10s                     | HTTP API request timeout                          |
-| HTTP_API_INSECURE_SKIP_VERIFY | false                   | Skip TLS verification (dev/testing only)          |
+| Variable                      | Default                 | Description                                        |
+| ----------------------------- | ----------------------- | -------------------------------------------------- |
+| SERVER_ADDR                   | :8080                   | Listen address                                     |
+| BASE_URL                      | `http://localhost:8080` | Public URL for verification_uri                    |
+| JWT_SECRET                    | (default)               | JWT signing key                                    |
+| SESSION_SECRET                | (default)               | Cookie encryption key                              |
+| DATABASE_PATH                 | oauth.db                | SQLite database path                               |
+| **AUTH_MODE**                 | local                   | Authentication mode: `local` or `http_api`         |
+| HTTP_API_URL                  | (none)                  | External auth API endpoint (required for http_api) |
+| HTTP_API_TIMEOUT              | 10s                     | HTTP API request timeout                           |
+| HTTP_API_INSECURE_SKIP_VERIFY | false                   | Skip TLS verification (dev/testing only)           |
 
 ## Default Test Data
 
@@ -140,6 +140,7 @@ HTTP_API_INSECURE_SKIP_VERIFY=false
 **Expected API Contract:**
 
 Request (POST to HTTP_API_URL):
+
 ```json
 {
   "username": "john",
@@ -148,6 +149,7 @@ Request (POST to HTTP_API_URL):
 ```
 
 Response:
+
 ```json
 {
   "success": true,
@@ -158,6 +160,7 @@ Response:
 ```
 
 **Behavior:**
+
 - First login auto-creates user in local database with `auth_source="http_api"`
 - Subsequent logins update user info (email, full_name)
 - Users get default "user" role (admins must be promoted manually)
@@ -183,6 +186,7 @@ The system supports **per-user authentication routing** based on the `auth_sourc
 - **Service Independence**: External service outage doesn't lock out local users
 
 **Example Scenario:**
+
 1. Server starts with `AUTH_MODE=http_api`
 2. Default admin user created with `auth_source=local` (can always login)
 3. External users authenticate via HTTP API, created with `auth_source=http_api`
