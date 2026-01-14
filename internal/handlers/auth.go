@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/appleboy/authgate/internal/services"
@@ -46,8 +47,17 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	user, err := h.userService.Authenticate(c.Request.Context(), username, password)
 	if err != nil {
+		var errorMsg string
+
+		// Check for specific error types
+		if errors.Is(err, services.ErrUsernameConflict) {
+			errorMsg = "Username conflict with existing user. Please contact administrator."
+		} else {
+			errorMsg = "Invalid username or password"
+		}
+
 		c.HTML(http.StatusUnauthorized, "login.html", gin.H{
-			"error":    "Invalid username or password",
+			"error":    errorMsg,
 			"redirect": redirectTo,
 		})
 		return

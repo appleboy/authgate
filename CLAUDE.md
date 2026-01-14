@@ -179,6 +179,9 @@ Response:
 - Each user authenticates based on their own `auth_source` field (hybrid mode)
 - Default admin user (`auth_source="local"`) can always login even if external API is down
 - Missing or empty `user_id` when `success=true` will cause authentication to fail
+- **Username conflicts**: If external username matches existing user, login fails with error
+  - User sees: "Username conflict with existing user. Please contact administrator."
+  - Administrator must either: (1) rename existing user, (2) update external API username, or (3) manually merge accounts
 
 ### Local Authentication (Default)
 

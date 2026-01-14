@@ -21,6 +21,7 @@ var (
 	ErrUserNotFound       = errors.New("user not found")
 	ErrAuthProviderFailed = errors.New("authentication provider failed")
 	ErrUserSyncFailed     = errors.New("failed to sync user from external provider")
+	ErrUsernameConflict   = errors.New("username already exists")
 )
 
 type UserService struct {
@@ -160,6 +161,10 @@ func (s *UserService) syncExternalUser(
 		result.FullName,
 	)
 	if err != nil {
+		// Check for username conflict
+		if errors.Is(err, store.ErrUsernameConflict) {
+			return nil, ErrUsernameConflict
+		}
 		return nil, fmt.Errorf("failed to upsert external user: %w", err)
 	}
 

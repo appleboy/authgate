@@ -15,7 +15,7 @@ func TestHTTPAPIAuthProvider_Authenticate_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(APIAuthResponse{
+		_ = json.NewEncoder(w).Encode(APIAuthResponse{
 			Success:  true,
 			UserID:   "ext-user-123",
 			Email:    "user@example.com",
@@ -31,7 +31,6 @@ func TestHTTPAPIAuthProvider_Authenticate_Success(t *testing.T) {
 
 	provider := NewHTTPAPIAuthProvider(cfg)
 	result, err := provider.Authenticate(context.Background(), "testuser", "password123")
-
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
@@ -58,7 +57,7 @@ func TestHTTPAPIAuthProvider_Authenticate_MissingUserID(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(APIAuthResponse{
+		_ = json.NewEncoder(w).Encode(APIAuthResponse{
 			Success:  true,
 			UserID:   "", // Empty user_id
 			Email:    "user@example.com",
@@ -94,7 +93,7 @@ func TestHTTPAPIAuthProvider_Authenticate_AuthFailed(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(APIAuthResponse{
+		_ = json.NewEncoder(w).Encode(APIAuthResponse{
 			Success: false,
 			Message: "Invalid credentials",
 		})
@@ -123,7 +122,7 @@ func TestHTTPAPIAuthProvider_Authenticate_Non2xxStatus(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(APIAuthResponse{
+		_ = json.NewEncoder(w).Encode(APIAuthResponse{
 			Success: false,
 			Message: "Unauthorized access",
 		})
@@ -152,7 +151,7 @@ func TestHTTPAPIAuthProvider_Authenticate_InvalidJSON(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("invalid json"))
+		_, _ = w.Write([]byte("invalid json"))
 	}))
 	defer server.Close()
 
