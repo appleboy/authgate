@@ -91,6 +91,35 @@ func (p *HTTPAPIAuthProvider) Authenticate(
 		return nil, fmt.Errorf("%w: failed to read response", ErrHTTPAPIInvalidResp)
 	}
 
+	// Check HTTP status code before attempting to parse JSON
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		// Try to parse as JSON to get error message
+		var authResp APIAuthResponse
+		if err := json.Unmarshal(body, &authResp); err == nil {
+			// Valid JSON response with error
+			if authResp.Message != "" {
+				return nil, fmt.Errorf(
+					"%w: HTTP %d - %s",
+					ErrHTTPAPIAuthFailed,
+					resp.StatusCode,
+					authResp.Message,
+				)
+			}
+		}
+		// Non-JSON or missing message, return generic error with status code
+		// Limit body preview to 200 characters to avoid overwhelming logs
+		bodyPreview := string(body)
+		if len(bodyPreview) > 200 {
+			bodyPreview = bodyPreview[:200] + "..."
+		}
+		return nil, fmt.Errorf(
+			"%w: HTTP %d - %s",
+			ErrHTTPAPIInvalidResp,
+			resp.StatusCode,
+			bodyPreview,
+		)
+	}
+
 	var authResp APIAuthResponse
 	if err := json.Unmarshal(body, &authResp); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrHTTPAPIInvalidResp, err)

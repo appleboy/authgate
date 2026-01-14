@@ -35,6 +35,8 @@ func (p *LocalAuthProvider) Authenticate(
 	return &AuthResult{
 		Username:   user.Username,
 		ExternalID: "", // Local users don't have external IDs
+		Email:      user.Email,
+		FullName:   user.FullName,
 		Success:    true,
 	}, nil
 }
