@@ -162,6 +162,14 @@ Response:
 }
 ```
 
+**Response Requirements:**
+
+- `success` (required): Boolean indicating authentication result
+- `user_id` (required when success=true): Non-empty string uniquely identifying the user in external system
+- `email` (optional): User's email address
+- `full_name` (optional): User's display name
+- `message` (optional): Error message when success=false or HTTP status is non-2xx
+
 **Behavior:**
 
 - First login auto-creates user in local database with `auth_source="http_api"`
@@ -170,6 +178,7 @@ Response:
 - External users stored with `auth_source="http_api"` and `external_id` set
 - Each user authenticates based on their own `auth_source` field (hybrid mode)
 - Default admin user (`auth_source="local"`) can always login even if external API is down
+- Missing or empty `user_id` when `success=true` will cause authentication to fail
 
 ### Local Authentication (Default)
 

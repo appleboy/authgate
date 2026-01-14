@@ -129,6 +129,14 @@ func (p *HTTPAPIAuthProvider) Authenticate(
 		return nil, ErrHTTPAPIAuthFailed
 	}
 
+	// Validate that user_id is provided when authentication succeeds
+	if authResp.UserID == "" {
+		return nil, fmt.Errorf(
+			"%w: external API returned success=true but missing user_id",
+			ErrHTTPAPIInvalidResp,
+		)
+	}
+
 	return &AuthResult{
 		Username:   username,
 		ExternalID: authResp.UserID,
