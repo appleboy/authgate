@@ -96,7 +96,7 @@ func (h *TokenHandler) TokenInfo(c *gin.Context) {
 	}
 
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-	claims, err := h.tokenService.ValidateToken(tokenString)
+	result, err := h.tokenService.ValidateToken(tokenString)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error":             "invalid_token",
@@ -106,12 +106,12 @@ func (h *TokenHandler) TokenInfo(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"active":    true,
-		"user_id":   claims.UserID,
-		"client_id": claims.ClientID,
-		"scope":     claims.Scopes,
-		"exp":       claims.ExpiresAt.Unix(),
-		"iss":       claims.Issuer,
+		"active":    result.Valid,
+		"user_id":   result.UserID,
+		"client_id": result.ClientID,
+		"scope":     result.Scopes,
+		"exp":       result.ExpiresAt.Unix(),
+		"iss":       h.config.BaseURL,
 	})
 }
 

@@ -1,0 +1,244 @@
+package token
+
+import (
+	"bytes"
+	"context"
+	"crypto/tls"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"time"
+
+	"github.com/appleboy/authgate/internal/config"
+)
+
+// HTTPTokenProvider generates and validates tokens via external HTTP API
+type HTTPTokenProvider struct {
+	config *config.Config
+	client *http.Client
+}
+
+// NewHTTPTokenProvider creates a new HTTP API token provider
+func NewHTTPTokenProvider(cfg *config.Config) *HTTPTokenProvider {
+	// #nosec G402 -- InsecureSkipVerify is user-configurable for development/testing
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: cfg.TokenAPIInsecureSkipVerify,
+		},
+	}
+
+	client := &http.Client{
+		Timeout:   cfg.TokenAPITimeout,
+		Transport: transport,
+	}
+
+	return &HTTPTokenProvider{
+		config: cfg,
+		client: client,
+	}
+}
+
+// APITokenGenerateRequest is the request payload for token generation
+type APITokenGenerateRequest struct {
+	UserID    string `json:"user_id"`
+	ClientID  string `json:"client_id"`
+	Scopes    string `json:"scopes"`
+	ExpiresIn int    `json:"expires_in,omitempty"` // seconds
+}
+
+// APITokenGenerateResponse is the expected response for token generation
+type APITokenGenerateResponse struct {
+	Success     bool           `json:"success"`
+	AccessToken string         `json:"access_token,omitempty"`
+	TokenType   string         `json:"token_type,omitempty"`
+	ExpiresIn   int            `json:"expires_in,omitempty"` // seconds
+	Claims      map[string]any `json:"claims,omitempty"`
+	Message     string         `json:"message,omitempty"`
+}
+
+// APITokenValidateRequest is the request payload for token validation
+type APITokenValidateRequest struct {
+	Token string `json:"token"`
+}
+
+// APITokenValidateResponse is the expected response for token validation
+type APITokenValidateResponse struct {
+	Valid     bool           `json:"valid"`
+	UserID    string         `json:"user_id,omitempty"`
+	ClientID  string         `json:"client_id,omitempty"`
+	Scopes    string         `json:"scopes,omitempty"`
+	ExpiresAt int64          `json:"expires_at,omitempty"` // Unix timestamp
+	Claims    map[string]any `json:"claims,omitempty"`
+	Message   string         `json:"message,omitempty"`
+}
+
+// GenerateToken requests token generation from external API
+func (p *HTTPTokenProvider) GenerateToken(
+	ctx context.Context,
+	userID, clientID, scopes string,
+) (*TokenResult, error) {
+	reqBody := APITokenGenerateRequest{
+		UserID:    userID,
+		ClientID:  clientID,
+		Scopes:    scopes,
+		ExpiresIn: int(p.config.JWTExpiration.Seconds()),
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		"POST",
+		p.config.TokenAPIURL+"/generate",
+		bytes.NewBuffer(jsonData),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrHTTPTokenConnection, err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrHTTPTokenConnection, err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("%w: failed to read response", ErrHTTPTokenInvalidResp)
+	}
+
+	// Check HTTP status code
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		var apiResp APITokenGenerateResponse
+		if err := json.Unmarshal(body, &apiResp); err == nil && apiResp.Message != "" {
+			return nil, fmt.Errorf(
+				"%w: HTTP %d - %s",
+				ErrHTTPTokenAuthFailed,
+				resp.StatusCode,
+				apiResp.Message,
+			)
+		}
+		bodyPreview := string(body)
+		if len(bodyPreview) > 200 {
+			bodyPreview = bodyPreview[:200] + "..."
+		}
+		return nil, fmt.Errorf(
+			"%w: HTTP %d - %s",
+			ErrHTTPTokenInvalidResp,
+			resp.StatusCode,
+			bodyPreview,
+		)
+	}
+
+	var apiResp APITokenGenerateResponse
+	if err := json.Unmarshal(body, &apiResp); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrHTTPTokenInvalidResp, err)
+	}
+
+	if !apiResp.Success {
+		return nil, fmt.Errorf("%w: %s", ErrHTTPTokenAuthFailed, apiResp.Message)
+	}
+
+	// Validate that access_token is provided
+	if apiResp.AccessToken == "" {
+		return nil, fmt.Errorf(
+			"%w: external API returned success=true but missing access_token",
+			ErrHTTPTokenInvalidResp,
+		)
+	}
+
+	tokenType := apiResp.TokenType
+	if tokenType == "" {
+		tokenType = "Bearer"
+	}
+
+	expiresAt := time.Now().Add(time.Duration(apiResp.ExpiresIn) * time.Second)
+
+	return &TokenResult{
+		TokenString: apiResp.AccessToken,
+		TokenType:   tokenType,
+		ExpiresAt:   expiresAt,
+		Claims:      apiResp.Claims,
+		Success:     true,
+	}, nil
+}
+
+// ValidateToken requests token validation from external API
+func (p *HTTPTokenProvider) ValidateToken(
+	ctx context.Context,
+	tokenString string,
+) (*TokenValidationResult, error) {
+	reqBody := APITokenValidateRequest{
+		Token: tokenString,
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		"POST",
+		p.config.TokenAPIURL+"/validate",
+		bytes.NewBuffer(jsonData),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrHTTPTokenConnection, err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrHTTPTokenConnection, err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("%w: failed to read response", ErrHTTPTokenInvalidResp)
+	}
+
+	// Check HTTP status code
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("%w: HTTP %d", ErrInvalidToken, resp.StatusCode)
+	}
+
+	var apiResp APITokenValidateResponse
+	if err := json.Unmarshal(body, &apiResp); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrHTTPTokenInvalidResp, err)
+	}
+
+	if !apiResp.Valid {
+		return nil, ErrInvalidToken
+	}
+
+	var expiresAt time.Time
+	if apiResp.ExpiresAt > 0 {
+		expiresAt = time.Unix(apiResp.ExpiresAt, 0)
+		if time.Now().After(expiresAt) {
+			return nil, ErrExpiredToken
+		}
+	}
+
+	return &TokenValidationResult{
+		Valid:     true,
+		UserID:    apiResp.UserID,
+		ClientID:  apiResp.ClientID,
+		Scopes:    apiResp.Scopes,
+		ExpiresAt: expiresAt,
+		Claims:    apiResp.Claims,
+	}, nil
+}
+
+// Name returns provider name for logging
+func (p *HTTPTokenProvider) Name() string {
+	return "http_api"
+}

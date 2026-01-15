@@ -1,12 +1,15 @@
 package services
 
 import (
+	"context"
 	"errors"
-	"time"
+	"fmt"
+	"log"
 
 	"github.com/appleboy/authgate/internal/config"
 	"github.com/appleboy/authgate/internal/models"
 	"github.com/appleboy/authgate/internal/store"
+	"github.com/appleboy/authgate/internal/token"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -26,8 +29,11 @@ var (
 )
 
 type TokenService struct {
-	store  *store.Store
-	config *config.Config
+	store              *store.Store
+	config             *config.Config
+	localTokenProvider *token.LocalTokenProvider
+	httpTokenProvider  *token.HTTPTokenProvider
+	tokenProviderMode  string
 }
 
 type JWTClaims struct {
@@ -37,8 +43,20 @@ type JWTClaims struct {
 	jwt.RegisteredClaims
 }
 
-func NewTokenService(s *store.Store, cfg *config.Config) *TokenService {
-	return &TokenService{store: s, config: cfg}
+func NewTokenService(
+	s *store.Store,
+	cfg *config.Config,
+	localProvider *token.LocalTokenProvider,
+	httpProvider *token.HTTPTokenProvider,
+	providerMode string,
+) *TokenService {
+	return &TokenService{
+		store:              s,
+		config:             cfg,
+		localTokenProvider: localProvider,
+		httpTokenProvider:  httpProvider,
+		tokenProviderMode:  providerMode,
+	}
 }
 
 // ExchangeDeviceCode exchanges an authorized device code for an access token
@@ -75,36 +93,53 @@ func (s *TokenService) ExchangeDeviceCode(
 		return nil, ErrAuthorizationPending
 	}
 
-	// Generate JWT token
-	expiresAt := time.Now().Add(s.config.JWTExpiration)
-	claims := &JWTClaims{
-		UserID:   dc.UserID,
-		ClientID: dc.ClientID,
-		Scopes:   dc.Scopes,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(expiresAt),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			Issuer:    s.config.BaseURL,
-			Subject:   dc.UserID,
-			ID:        uuid.New().String(),
-		},
+	// Generate JWT token using provider
+	var tokenResult *token.TokenResult
+	var providerErr error
+
+	switch s.tokenProviderMode {
+	case "http_api":
+		if s.httpTokenProvider == nil {
+			return nil, fmt.Errorf("HTTP token provider not configured")
+		}
+		tokenResult, providerErr = s.httpTokenProvider.GenerateToken(
+			context.Background(),
+			dc.UserID,
+			dc.ClientID,
+			dc.Scopes,
+		)
+	case "local":
+		fallthrough
+	default:
+		if s.localTokenProvider == nil {
+			return nil, fmt.Errorf("local token provider not configured")
+		}
+		tokenResult, providerErr = s.localTokenProvider.GenerateToken(
+			context.Background(),
+			dc.UserID,
+			dc.ClientID,
+			dc.Scopes,
+		)
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString([]byte(s.config.JWTSecret))
-	if err != nil {
-		return nil, err
+	if providerErr != nil {
+		log.Printf("[Token] Generation failed provider=%s: %v", s.tokenProviderMode, providerErr)
+		return nil, fmt.Errorf("token generation failed: %w", providerErr)
+	}
+
+	if !tokenResult.Success {
+		return nil, fmt.Errorf("token generation unsuccessful")
 	}
 
 	// Create access token record
 	accessToken := &models.AccessToken{
 		ID:        uuid.New().String(),
-		Token:     tokenString,
-		TokenType: "Bearer",
+		Token:     tokenResult.TokenString,
+		TokenType: tokenResult.TokenType,
 		UserID:    dc.UserID,
 		ClientID:  dc.ClientID,
 		Scopes:    dc.Scopes,
-		ExpiresAt: expiresAt,
+		ExpiresAt: tokenResult.ExpiresAt,
 	}
 
 	if err := s.store.CreateAccessToken(accessToken); err != nil {
@@ -117,24 +152,39 @@ func (s *TokenService) ExchangeDeviceCode(
 	return accessToken, nil
 }
 
-// ValidateToken validates a JWT token and returns the claims
-func (s *TokenService) ValidateToken(tokenString string) (*JWTClaims, error) {
-	token, err := jwt.ParseWithClaims(
-		tokenString,
-		&JWTClaims{},
-		func(token *jwt.Token) (interface{}, error) {
-			return []byte(s.config.JWTSecret), nil
-		},
-	)
+// ValidateToken validates a JWT token using the configured provider
+func (s *TokenService) ValidateToken(tokenString string) (*token.TokenValidationResult, error) {
+	var result *token.TokenValidationResult
+	var err error
+
+	switch s.tokenProviderMode {
+	case "http_api":
+		if s.httpTokenProvider == nil {
+			return nil, fmt.Errorf("HTTP token provider not configured")
+		}
+		result, err = s.httpTokenProvider.ValidateToken(context.Background(), tokenString)
+	case "local":
+		fallthrough
+	default:
+		if s.localTokenProvider == nil {
+			return nil, fmt.Errorf("local token provider not configured")
+		}
+		result, err = s.localTokenProvider.ValidateToken(context.Background(), tokenString)
+	}
+
 	if err != nil {
 		return nil, err
 	}
 
-	if claims, ok := token.Claims.(*JWTClaims); ok && token.Valid {
-		return claims, nil
+	// Optional: Check if token exists in database (for revocation check)
+	// This adds an extra layer of security
+	_, dbErr := s.store.GetAccessToken(tokenString)
+	if dbErr != nil {
+		// Token was revoked or doesn't exist in our records
+		return nil, errors.New("token not found or revoked")
 	}
 
-	return nil, errors.New("invalid token")
+	return result, nil
 }
 
 // RevokeToken revokes a token by its JWT string

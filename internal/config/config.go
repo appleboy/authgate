@@ -34,6 +34,14 @@ type Config struct {
 	HTTPAPIURL                string
 	HTTPAPITimeout            time.Duration
 	HTTPAPIInsecureSkipVerify bool
+
+	// Token Provider
+	TokenProviderMode string // "local" or "http_api"
+
+	// HTTP API Token Provider
+	TokenAPIURL                string
+	TokenAPITimeout            time.Duration
+	TokenAPIInsecureSkipVerify bool
 }
 
 func Load() *Config {
@@ -67,6 +75,14 @@ func Load() *Config {
 		HTTPAPIURL:                getEnv("HTTP_API_URL", ""),
 		HTTPAPITimeout:            getEnvDuration("HTTP_API_TIMEOUT", 10*time.Second),
 		HTTPAPIInsecureSkipVerify: getEnvBool("HTTP_API_INSECURE_SKIP_VERIFY", false),
+
+		// Token Provider
+		TokenProviderMode: getEnv("TOKEN_PROVIDER_MODE", "local"),
+
+		// HTTP API Token Provider
+		TokenAPIURL:                getEnv("TOKEN_API_URL", ""),
+		TokenAPITimeout:            getEnvDuration("TOKEN_API_TIMEOUT", 10*time.Second),
+		TokenAPIInsecureSkipVerify: getEnvBool("TOKEN_API_INSECURE_SKIP_VERIFY", false),
 	}
 }
 

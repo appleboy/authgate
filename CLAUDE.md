@@ -44,13 +44,18 @@ docker build -f docker/Dockerfile -t authgate .
 
 **Layers** (dependency injection pattern):
 
-- `main.go` - Wires up store → auth providers → services → handlers, configures Gin router with session middleware
+- `main.go` - Wires up store → auth providers → token providers → services → handlers, configures Gin router with session middleware
 - `config/` - Loads .env via godotenv, provides Config struct with defaults
 - `store/` - GORM-based data access layer, supports SQLite and PostgreSQL via driver factory pattern
   - `driver.go` - Database driver factory using map-based pattern (no if-else)
   - `sqlite.go` - Store implementation and database operations (driver-agnostic)
 - `auth/` - Authentication providers (LocalAuthProvider, HTTPAPIAuthProvider) with pluggable design
-- `services/` - Business logic (UserService, DeviceService, TokenService), depends on Store and Auth providers
+- `token/` - Token providers (LocalTokenProvider, HTTPTokenProvider) with pluggable design
+  - `types.go` - Shared data structures (TokenResult, TokenValidationResult)
+  - `errors.go` - Provider-level error definitions
+  - `local.go` - Local JWT provider (HMAC-SHA256)
+  - `http_api.go` - External HTTP API token provider
+- `services/` - Business logic (UserService, DeviceService, TokenService), depends on Store, Auth providers, and Token providers
 - `handlers/` - HTTP handlers (AuthHandler, DeviceHandler, TokenHandler), depends on Services
 - `models/` - GORM models (User, OAuthClient, DeviceCode, AccessToken)
 - `middleware/` - Gin middleware (auth.go: RequireAuth checks session for user_id)
@@ -71,6 +76,31 @@ docker build -f docker/Dockerfile -t authgate .
   4. Default admin user always uses local authentication (failsafe)
 - **User Fields**: ExternalID, AuthSource, Email, FullName added for external auth support
 - **Key Benefit**: Admin can always login locally even if external service is down
+
+**Token Provider Architecture**:
+
+- **Pluggable Providers**: Supports local JWT generation/validation and external HTTP API token services
+- **Global Mode**: Configured via `TOKEN_PROVIDER_MODE` env var (`local` or `http_api`), defaults to `local`
+- **Local Storage**: Token records always stored in local database for management (revocation, listing, auditing)
+- **No Interfaces**: Direct struct dependency injection (project convention, following auth provider pattern)
+- **Token Generation Flow**:
+  1. TokenService receives token generation request (from ExchangeDeviceCode)
+  2. Selects provider based on `TOKEN_PROVIDER_MODE` configuration
+     - `local`: LocalTokenProvider generates JWT with HMAC-SHA256 using `JWT_SECRET`
+     - `http_api`: HTTPTokenProvider calls external API to generate JWT
+  3. Saves token record to local database (regardless of provider)
+  4. Returns AccessToken to client
+- **Token Validation Flow**:
+  1. TokenService receives validation request (from TokenInfo endpoint)
+  2. Selects provider based on `TOKEN_PROVIDER_MODE` configuration
+     - `local`: LocalTokenProvider validates JWT signature with `JWT_SECRET`
+     - `http_api`: HTTPTokenProvider calls external API to validate JWT
+  3. Returns TokenValidationResult with claims
+- **Provider Types**:
+  - `LocalTokenProvider`: Uses golang-jwt/jwt library for HMAC-SHA256 signing
+  - `HTTPTokenProvider`: Delegates to external HTTP API, supports custom signing algorithms (RS256, ES256, etc.)
+- **API Contract**: HTTPTokenProvider expects `/generate` and `/validate` endpoints with specific JSON format
+- **Key Benefit**: Centralized token services, advanced key management, compliance requirements while maintaining local token management
 
 **Key Implementation Details**:
 
@@ -97,18 +127,22 @@ docker build -f docker/Dockerfile -t authgate .
 
 ## Environment Variables
 
-| Variable                      | Default                 | Description                                             |
-| ----------------------------- | ----------------------- | ------------------------------------------------------- |
-| SERVER_ADDR                   | :8080                   | Listen address                                          |
-| BASE_URL                      | `http://localhost:8080` | Public URL for verification_uri                         |
-| JWT_SECRET                    | (default)               | JWT signing key                                         |
-| SESSION_SECRET                | (default)               | Cookie encryption key                                   |
-| DATABASE_DRIVER               | sqlite                  | Database driver ("sqlite" or "postgres")                |
-| DATABASE_DSN                  | oauth.db                | Connection string (path for SQLite, DSN for PostgreSQL) |
-| **AUTH_MODE**                 | local                   | Authentication mode: `local` or `http_api`              |
-| HTTP_API_URL                  | (none)                  | External auth API endpoint (required for http_api)      |
-| HTTP_API_TIMEOUT              | 10s                     | HTTP API request timeout                                |
-| HTTP_API_INSECURE_SKIP_VERIFY | false                   | Skip TLS verification (dev/testing only)                |
+| Variable                      | Default                 | Description                                                  |
+| ----------------------------- | ----------------------- | ------------------------------------------------------------ |
+| SERVER_ADDR                   | :8080                   | Listen address                                               |
+| BASE_URL                      | `http://localhost:8080` | Public URL for verification_uri                              |
+| JWT_SECRET                    | (default)               | JWT signing key (used when TOKEN_PROVIDER_MODE=local)        |
+| SESSION_SECRET                | (default)               | Cookie encryption key                                        |
+| DATABASE_DRIVER               | sqlite                  | Database driver ("sqlite" or "postgres")                     |
+| DATABASE_DSN                  | oauth.db                | Connection string (path for SQLite, DSN for PostgreSQL)      |
+| **AUTH_MODE**                 | local                   | Authentication mode: `local` or `http_api`                   |
+| HTTP_API_URL                  | (none)                  | External auth API endpoint (required when AUTH_MODE=http_api)|
+| HTTP_API_TIMEOUT              | 10s                     | HTTP API request timeout                                     |
+| HTTP_API_INSECURE_SKIP_VERIFY | false                   | Skip TLS verification (dev/testing only)                     |
+| **TOKEN_PROVIDER_MODE**       | local                   | Token provider mode: `local` or `http_api`                   |
+| TOKEN_API_URL                 | (none)                  | External token API endpoint (required when TOKEN_PROVIDER_MODE=http_api) |
+| TOKEN_API_TIMEOUT             | 10s                     | Token API request timeout                                    |
+| TOKEN_API_INSECURE_SKIP_VERIFY| false                   | Skip TLS verification for token API (dev/testing only)       |
 
 ## Default Test Data
 
@@ -207,6 +241,142 @@ The system supports **per-user authentication routing** based on the `auth_sourc
 3. External users authenticate via HTTP API, created with `auth_source=http_api`
 4. Each user authenticates via their designated provider
 5. If external API fails, admin can still login to manage the system
+
+## External Token Provider Configuration
+
+### HTTP API Token Provider
+
+To use external HTTP API for token generation and validation, configure these environment variables:
+
+```bash
+TOKEN_PROVIDER_MODE=http_api
+TOKEN_API_URL=https://token-service.example.com/api
+TOKEN_API_TIMEOUT=10s
+TOKEN_API_INSECURE_SKIP_VERIFY=false
+```
+
+**Expected API Contract:**
+
+**Token Generation Endpoint:** `POST {TOKEN_API_URL}/generate`
+
+Request:
+```json
+{
+  "user_id": "user-uuid",
+  "client_id": "client-uuid",
+  "scopes": "read write",
+  "expires_in": 3600
+}
+```
+
+Response (Success):
+```json
+{
+  "success": true,
+  "access_token": "eyJhbGc...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "claims": {
+    "custom_claim": "value"
+  }
+}
+```
+
+Response (Error):
+```json
+{
+  "success": false,
+  "message": "Invalid user_id or client_id"
+}
+```
+
+**Token Validation Endpoint:** `POST {TOKEN_API_URL}/validate`
+
+Request:
+```json
+{
+  "token": "eyJhbGc..."
+}
+```
+
+Response (Valid):
+```json
+{
+  "valid": true,
+  "user_id": "user-uuid",
+  "client_id": "client-uuid",
+  "scopes": "read write",
+  "expires_at": 1736899200,
+  "claims": {
+    "custom_claim": "value"
+  }
+}
+```
+
+Response (Invalid):
+```json
+{
+  "valid": false,
+  "message": "Token expired or signature invalid"
+}
+```
+
+**Response Requirements:**
+
+Generation Response:
+- `success` (required): Boolean indicating generation result
+- `access_token` (required when success=true): Non-empty JWT string
+- `token_type` (optional): Token type, defaults to "Bearer"
+- `expires_in` (optional): Expiration duration in seconds
+- `claims` (optional): Additional JWT claims
+- `message` (optional): Error message when success=false
+
+Validation Response:
+- `valid` (required): Boolean indicating validation result
+- `user_id` (required when valid=true): User identifier from token
+- `client_id` (required when valid=true): Client identifier from token
+- `scopes` (required when valid=true): Granted scopes
+- `expires_at` (required when valid=true): Unix timestamp of expiration
+- `claims` (optional): Additional JWT claims
+- `message` (optional): Error message when valid=false
+
+**Behavior:**
+
+- Token generation/validation delegated to external service
+- Token records still saved to local database for management
+- Supports custom signing algorithms (RS256, ES256, etc.)
+- Local database tracks: token ID, token string, user_id, client_id, scopes, expiration
+- Revocation handled locally (external service doesn't need revocation endpoint)
+- Token listing handled locally (external service doesn't need listing endpoint)
+
+### Local Token Provider (Default)
+
+No additional configuration needed. Tokens generated/validated using local JWT secret:
+
+```bash
+TOKEN_PROVIDER_MODE=local  # or omit TOKEN_PROVIDER_MODE entirely
+JWT_SECRET=your-256-bit-secret-change-in-production
+```
+
+### Token Provider Benefits
+
+**Local Mode:**
+- Simple setup, no external dependencies
+- Fast token operations
+- Self-contained deployment
+
+**HTTP API Mode:**
+- Centralized token services across multiple applications
+- Advanced key management and rotation
+- Custom signing algorithms (RS256, ES256)
+- Compliance requirements for token generation
+- Integration with existing IAM/PKI systems
+
+**Why Local Storage is Retained:**
+- Revocation: Users can revoke tokens via `/account/sessions` or `/oauth/revoke`
+- Management: Users can list active sessions
+- Auditing: Track when and for which clients tokens were issued
+- Client Association: Link tokens to OAuth clients for display in UI
 
 ## Coding Conventions
 
