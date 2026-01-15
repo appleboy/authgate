@@ -43,7 +43,14 @@
     - [Default Test Data](#default-test-data)
       - [User Account](#user-account)
       - [OAuth Client](#oauth-client)
-  - [Architecture](#architecture)
+    - [Pluggable Token Providers](#pluggable-token-providers)
+      - [Architecture](#architecture)
+      - [Token Provider Modes](#token-provider-modes)
+      - [HTTP API Contract](#http-api-contract)
+      - [Why Local Storage is Retained](#why-local-storage-is-retained)
+      - [Use Cases](#use-cases)
+      - [Migration Path](#migration-path)
+  - [Architecture](#architecture-1)
     - [Project Structure](#project-structure)
     - [Technology Stack](#technology-stack)
   - [Development](#development)
@@ -71,7 +78,7 @@
       - [3. Reverse Proxy Setup (Nginx)](#3-reverse-proxy-setup-nginx)
       - [4. Cloud Platform Deployment](#4-cloud-platform-deployment)
         - [Fly.io Example](#flyio-example)
-  - [Use Cases](#use-cases)
+  - [Use Cases](#use-cases-1)
     - [Example: Securing a CLI Tool](#example-securing-a-cli-tool)
     - [Example: IoT Device Authentication](#example-iot-device-authentication)
     - [Example: Security Incident Response](#example-security-incident-response)
@@ -159,6 +166,8 @@ Modern CLI tools and IoT devices need to access user resources securely, but tra
 - ✅ **Cross-Platform** - Runs on Linux, macOS, Windows
 - ✅ **Docker Ready** - Multi-arch images with security best practices
 - ✅ **Static Binaries** - CGO-free builds for easy deployment
+- ✅ **Pluggable Token Providers** - Use local JWT or delegate to external token services
+- ✅ **Hybrid Authentication** - Support both local and external authentication providers
 
 ---
 
@@ -495,6 +504,27 @@ DATABASE_DSN=oauth.db            # Connection string (file path for SQLite, DSN 
 # PostgreSQL Example:
 # DATABASE_DRIVER=postgres
 # DATABASE_DSN="host=localhost user=authgate password=secret dbname=authgate port=5432 sslmode=disable"
+
+# Authentication Mode
+# Options: local, http_api
+# Default: local
+AUTH_MODE=local
+
+# HTTP API Authentication (when AUTH_MODE=http_api)
+HTTP_API_URL=https://auth.example.com/api/verify
+HTTP_API_TIMEOUT=10s
+HTTP_API_INSECURE_SKIP_VERIFY=false
+
+# Token Provider Mode
+# Options: local, http_api
+# Default: local
+TOKEN_PROVIDER_MODE=local
+
+# HTTP API Token Provider (when TOKEN_PROVIDER_MODE=http_api)
+# External token service will handle JWT generation and validation
+TOKEN_API_URL=https://token.example.com/api
+TOKEN_API_TIMEOUT=10s
+TOKEN_API_INSECURE_SKIP_VERIFY=false
 ```
 
 #### Generate Strong Secrets
@@ -527,6 +557,146 @@ The server initializes with default test accounts:
 
 **⚠️ Security Warning:** Note the admin password from server logs on first run and change it in production!
 
+### Pluggable Token Providers
+
+AuthGate supports **pluggable token providers** for JWT generation and validation, allowing you to delegate token operations to external services while maintaining local token management.
+
+#### Architecture
+
+- **Token Generation & Validation**: Can be handled locally or by external HTTP API
+- **Local Storage**: Token records are always stored in local database for management (revocation, listing, auditing)
+- **Configuration**: Global mode selection via `TOKEN_PROVIDER_MODE` environment variable
+
+#### Token Provider Modes
+
+**1. Local Mode (Default)**
+
+Uses local JWT secret for token signing and verification:
+
+```bash
+TOKEN_PROVIDER_MODE=local  # Default, can be omitted
+```
+
+- JWT signed with HMAC-SHA256
+- Uses `JWT_SECRET` from environment
+- No external dependencies
+- Best for: Self-contained deployments
+
+**2. HTTP API Mode**
+
+Delegates JWT generation and validation to external service:
+
+```bash
+TOKEN_PROVIDER_MODE=http_api
+TOKEN_API_URL=https://token-service.example.com/api
+TOKEN_API_TIMEOUT=10s
+TOKEN_API_INSECURE_SKIP_VERIFY=false  # Set true only for dev/testing
+```
+
+- External service generates and validates JWTs
+- Local database still stores token records
+- Supports custom signing algorithms (RS256, ES256, etc.)
+- Best for: Centralized token services, advanced key management
+
+#### HTTP API Contract
+
+When using `TOKEN_PROVIDER_MODE=http_api`, your token service must implement:
+
+**Token Generation Endpoint:** `POST {TOKEN_API_URL}/generate`
+
+Request:
+
+```json
+{
+  "user_id": "user-uuid",
+  "client_id": "client-uuid",
+  "scopes": "read write",
+  "expires_in": 3600
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "access_token": "eyJhbGc...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "claims": {
+    "custom_claim": "value"
+  }
+}
+```
+
+**Token Validation Endpoint:** `POST {TOKEN_API_URL}/validate`
+
+Request:
+
+```json
+{
+  "token": "eyJhbGc..."
+}
+```
+
+Response (Valid):
+
+```json
+{
+  "valid": true,
+  "user_id": "user-uuid",
+  "client_id": "client-uuid",
+  "scopes": "read write",
+  "expires_at": 1736899200,
+  "claims": {
+    "custom_claim": "value"
+  }
+}
+```
+
+Response (Invalid):
+
+```json
+{
+  "valid": false,
+  "message": "Token expired or invalid"
+}
+```
+
+#### Why Local Storage is Retained
+
+Even when using external token providers, AuthGate stores token records locally for:
+
+1. **Revocation**: Users can revoke tokens via `/account/sessions` or `/oauth/revoke`
+2. **Management**: Users can list their active sessions
+3. **Auditing**: Track when and for which clients tokens were issued
+4. **Client Association**: Link tokens to OAuth clients
+
+#### Use Cases
+
+**Local Mode:**
+
+- Self-hosted deployments
+- Simple setups
+- When you don't need advanced key management
+
+**HTTP API Mode:**
+
+- Centralized token services across multiple apps
+- Advanced key rotation policies
+- Custom JWT signing algorithms (RS256, ES256)
+- Compliance requirements for token generation
+- Integration with existing IAM systems
+
+#### Migration Path
+
+1. Start with `TOKEN_PROVIDER_MODE=local` (default)
+2. Test thoroughly
+3. Set up external token service
+4. Switch to `TOKEN_PROVIDER_MODE=http_api`
+5. Monitor logs for errors
+6. Can rollback to local mode without data loss
+
 ---
 
 ## Architecture
@@ -550,12 +720,21 @@ authgate/
 │   ├── client.go    # OAuth clients (OAuthClient)
 │   ├── device.go    # Device codes (DeviceCode)
 │   └── token.go     # Access tokens (AccessToken)
-├── services/        # Business logic layer (depends on store)
-│   ├── auth.go      # User authentication and session management
+├── auth/            # Authentication providers (pluggable design)
+│   ├── local.go     # Local authentication (database)
+│   └── http_api.go  # External HTTP API authentication
+├── token/           # Token providers (pluggable design)
+│   ├── types.go     # Shared data structures (TokenResult, TokenValidationResult)
+│   ├── errors.go    # Provider-level error definitions
+│   ├── local.go     # Local JWT provider (HMAC-SHA256)
+│   └── http_api.go  # External HTTP API token provider
+├── services/        # Business logic layer (depends on store and providers)
+│   ├── user.go      # User management (integrates auth providers)
 │   ├── device.go    # Device code generation and validation
-│   ├── token.go     # JWT creation, signing, validation, and revocation
+│   ├── token.go     # Token service (integrates token providers)
 │   └── client.go    # OAuth client management
-├── store/           # Database layer (GORM + SQLite)
+├── store/           # Database layer (GORM)
+│   ├── driver.go    # Database driver factory (SQLite, PostgreSQL)
 │   └── sqlite.go    # Database initialization, migrations, seed data, batch queries
 ├── templates/       # HTML templates (embedded via go:embed)
 │   ├── account/     # User account templates

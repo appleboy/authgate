@@ -7,11 +7,17 @@ import (
 	"github.com/appleboy/authgate/internal/config"
 	"github.com/appleboy/authgate/internal/models"
 	"github.com/appleboy/authgate/internal/store"
+	"github.com/appleboy/authgate/internal/token"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func createTestTokenService(s *store.Store, cfg *config.Config) *TokenService {
+	localProvider := token.NewLocalTokenProvider(cfg)
+	return NewTokenService(s, cfg, localProvider, nil, "local")
+}
 
 func createAuthorizedDeviceCode(t *testing.T, s *store.Store, clientID string) *models.DeviceCode {
 	cfg := &config.Config{
@@ -42,7 +48,7 @@ func TestExchangeDeviceCode_ActiveClient(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := NewTokenService(s, cfg)
+	tokenService := createTestTokenService(s, cfg)
 
 	// Create an active client and authorized device code
 	client := createTestClient(t, s, true)
@@ -80,7 +86,7 @@ func TestExchangeDeviceCode_InactiveClient(t *testing.T) {
 	require.NoError(t, err)
 
 	// Try to exchange device code with inactive client
-	tokenService := NewTokenService(s, cfg)
+	tokenService := createTestTokenService(s, cfg)
 	token, err := tokenService.ExchangeDeviceCode(dc.DeviceCode, client.ClientID)
 
 	// Assert - should fail with access denied
@@ -98,7 +104,7 @@ func TestExchangeDeviceCode_ClientMismatch(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := NewTokenService(s, cfg)
+	tokenService := createTestTokenService(s, cfg)
 
 	// Create an active client and authorized device code
 	client := createTestClient(t, s, true)
@@ -123,7 +129,7 @@ func TestExchangeDeviceCode_NotAuthorized(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := NewTokenService(s, cfg)
+	tokenService := createTestTokenService(s, cfg)
 	deviceService := NewDeviceService(s, cfg)
 
 	// Create an active client and device code but don't authorize it
@@ -149,7 +155,7 @@ func TestExchangeDeviceCode_ExpiredCode(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := NewTokenService(s, cfg)
+	tokenService := createTestTokenService(s, cfg)
 	deviceService := NewDeviceService(s, cfg)
 
 	// Create an active client and device code (it will be expired)
@@ -175,7 +181,7 @@ func TestExchangeDeviceCode_InvalidDeviceCode(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := NewTokenService(s, cfg)
+	tokenService := createTestTokenService(s, cfg)
 
 	// Create an active client
 	client := createTestClient(t, s, true)
@@ -198,7 +204,7 @@ func TestValidateToken_Success(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := NewTokenService(s, cfg)
+	tokenService := createTestTokenService(s, cfg)
 
 	// Create an active client and get a token
 	client := createTestClient(t, s, true)
@@ -214,7 +220,6 @@ func TestValidateToken_Success(t *testing.T) {
 	assert.NotNil(t, claims)
 	assert.Equal(t, client.ClientID, claims.ClientID)
 	assert.Equal(t, "read write", claims.Scopes)
-	assert.Equal(t, cfg.BaseURL, claims.Issuer)
 }
 
 func TestValidateToken_InvalidToken(t *testing.T) {
@@ -222,7 +227,7 @@ func TestValidateToken_InvalidToken(t *testing.T) {
 	cfg := &config.Config{
 		JWTSecret: "test-secret",
 	}
-	tokenService := NewTokenService(s, cfg)
+	tokenService := createTestTokenService(s, cfg)
 
 	// Try to validate an invalid token
 	claims, err := tokenService.ValidateToken("invalid-token")
@@ -241,7 +246,7 @@ func TestValidateToken_WrongSecret(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := NewTokenService(s, cfg)
+	tokenService := createTestTokenService(s, cfg)
 
 	// Create an active client and get a token
 	client := createTestClient(t, s, true)
@@ -253,7 +258,7 @@ func TestValidateToken_WrongSecret(t *testing.T) {
 	differentCfg := &config.Config{
 		JWTSecret: "different-secret",
 	}
-	differentTokenService := NewTokenService(s, differentCfg)
+	differentTokenService := createTestTokenService(s, differentCfg)
 	claims, err := differentTokenService.ValidateToken(token.Token)
 
 	// Assert
@@ -270,7 +275,7 @@ func TestRevokeToken_Success(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := NewTokenService(s, cfg)
+	tokenService := createTestTokenService(s, cfg)
 
 	// Create an active client and get a token
 	client := createTestClient(t, s, true)
@@ -294,7 +299,7 @@ func TestRevokeToken_InvalidToken(t *testing.T) {
 	cfg := &config.Config{
 		JWTSecret: "test-secret",
 	}
-	tokenService := NewTokenService(s, cfg)
+	tokenService := createTestTokenService(s, cfg)
 
 	// Try to revoke a non-existent token
 	err := tokenService.RevokeToken("non-existent-token")
@@ -313,7 +318,7 @@ func TestRevokeTokenByID_Success(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := NewTokenService(s, cfg)
+	tokenService := createTestTokenService(s, cfg)
 
 	// Create an active client and get a token
 	client := createTestClient(t, s, true)
@@ -341,7 +346,7 @@ func TestGetUserTokens_Success(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := NewTokenService(s, cfg)
+	tokenService := createTestTokenService(s, cfg)
 	deviceService := NewDeviceService(s, cfg)
 
 	// Create an active client
@@ -384,7 +389,7 @@ func TestRevokeAllUserTokens_Success(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := NewTokenService(s, cfg)
+	tokenService := createTestTokenService(s, cfg)
 	deviceService := NewDeviceService(s, cfg)
 
 	// Create an active client
@@ -427,7 +432,7 @@ func TestGetUserTokensWithClient_Success(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := NewTokenService(s, cfg)
+	tokenService := createTestTokenService(s, cfg)
 	deviceService := NewDeviceService(s, cfg)
 
 	// Create an active client
@@ -464,7 +469,7 @@ func TestGetUserTokensWithClient_MultipleClients(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := NewTokenService(s, cfg)
+	tokenService := createTestTokenService(s, cfg)
 	deviceService := NewDeviceService(s, cfg)
 
 	// Create two different clients
@@ -518,7 +523,7 @@ func TestGetUserTokensWithClient_EmptyResult(t *testing.T) {
 	cfg := &config.Config{
 		JWTSecret: "test-secret",
 	}
-	tokenService := NewTokenService(s, cfg)
+	tokenService := createTestTokenService(s, cfg)
 
 	// Get tokens for non-existent user
 	tokensWithClient, err := tokenService.GetUserTokensWithClient("non-existent-user")

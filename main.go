@@ -20,6 +20,7 @@ import (
 	"github.com/appleboy/authgate/internal/middleware"
 	"github.com/appleboy/authgate/internal/services"
 	"github.com/appleboy/authgate/internal/store"
+	"github.com/appleboy/authgate/internal/token"
 	"github.com/appleboy/authgate/internal/version"
 
 	"github.com/appleboy/graceful"
@@ -84,6 +85,11 @@ func runServer() {
 		log.Fatalf("Invalid authentication configuration: %v", err)
 	}
 
+	// Validate token provider configuration
+	if err := validateTokenProviderConfig(cfg); err != nil {
+		log.Fatalf("Invalid token provider configuration: %v", err)
+	}
+
 	// Initialize store
 	db, err := store.New(cfg.DatabaseDriver, cfg.DatabaseDSN)
 	if err != nil {
@@ -99,10 +105,25 @@ func runServer() {
 		log.Printf("HTTP API authentication enabled: %s", cfg.HTTPAPIURL)
 	}
 
+	// Initialize token providers
+	localTokenProvider := token.NewLocalTokenProvider(cfg)
+
+	var httpTokenProvider *token.HTTPTokenProvider
+	if cfg.TokenProviderMode == "http_api" {
+		httpTokenProvider = token.NewHTTPTokenProvider(cfg)
+		log.Printf("HTTP API token provider enabled: %s", cfg.TokenAPIURL)
+	}
+
 	// Initialize services
 	userService := services.NewUserService(db, localProvider, httpAPIProvider, cfg.AuthMode)
 	deviceService := services.NewDeviceService(db, cfg)
-	tokenService := services.NewTokenService(db, cfg)
+	tokenService := services.NewTokenService(
+		db,
+		cfg,
+		localTokenProvider,
+		httpTokenProvider,
+		cfg.TokenProviderMode,
+	)
 	clientService := services.NewClientService(db)
 
 	// Initialize handlers
@@ -296,6 +317,24 @@ func validateAuthConfig(cfg *config.Config) error {
 		// No additional validation needed
 	default:
 		return fmt.Errorf("invalid AUTH_MODE: %s (must be: local, http_api)", cfg.AuthMode)
+	}
+	return nil
+}
+
+// validateTokenProviderConfig checks that required config is present for selected token provider mode
+func validateTokenProviderConfig(cfg *config.Config) error {
+	switch cfg.TokenProviderMode {
+	case "http_api":
+		if cfg.TokenAPIURL == "" {
+			return errors.New("TOKEN_API_URL is required when TOKEN_PROVIDER_MODE=http_api")
+		}
+	case "local":
+		// No additional validation needed
+	default:
+		return fmt.Errorf(
+			"invalid TOKEN_PROVIDER_MODE: %s (must be: local, http_api)",
+			cfg.TokenProviderMode,
+		)
 	}
 	return nil
 }
