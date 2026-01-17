@@ -2,6 +2,11 @@ package token
 
 import "time"
 
+// Token type constants
+const (
+	TokenTypeBearer = "Bearer"
+)
+
 // TokenResult represents the result of token generation
 type TokenResult struct {
 	TokenString string         // The JWT string

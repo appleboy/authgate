@@ -21,18 +21,16 @@ func NewLocalTokenProvider(cfg *config.Config) *LocalTokenProvider {
 	return &LocalTokenProvider{config: cfg}
 }
 
-// GenerateToken creates a JWT token using local signing
-func (p *LocalTokenProvider) GenerateToken(
-	ctx context.Context,
-	userID, clientID, scopes string,
+// generateJWT creates a signed JWT token with the given claims and expiration
+func (p *LocalTokenProvider) generateJWT(
+	userID, clientID, scopes, tokenType string,
+	expiresAt time.Time,
 ) (*TokenResult, error) {
-	expiresAt := time.Now().Add(p.config.JWTExpiration)
-
 	claims := jwt.MapClaims{
 		"user_id":   userID,
 		"client_id": clientID,
 		"scope":     scopes,
-		"type":      "access", // Distinguish from refresh tokens
+		"type":      tokenType,
 		"exp":       expiresAt.Unix(),
 		"iat":       time.Now().Unix(),
 		"iss":       p.config.BaseURL,
@@ -48,11 +46,20 @@ func (p *LocalTokenProvider) GenerateToken(
 
 	return &TokenResult{
 		TokenString: tokenString,
-		TokenType:   "Bearer",
+		TokenType:   TokenTypeBearer,
 		ExpiresAt:   expiresAt,
 		Claims:      claims,
 		Success:     true,
 	}, nil
+}
+
+// GenerateToken creates a JWT token using local signing
+func (p *LocalTokenProvider) GenerateToken(
+	ctx context.Context,
+	userID, clientID, scopes string,
+) (*TokenResult, error) {
+	expiresAt := time.Now().Add(p.config.JWTExpiration)
+	return p.generateJWT(userID, clientID, scopes, "access", expiresAt)
 }
 
 // ValidateToken verifies a JWT token using local verification
@@ -115,32 +122,7 @@ func (p *LocalTokenProvider) GenerateRefreshToken(
 	userID, clientID, scopes string,
 ) (*TokenResult, error) {
 	expiresAt := time.Now().Add(p.config.RefreshTokenExpiration)
-
-	claims := jwt.MapClaims{
-		"user_id":   userID,
-		"client_id": clientID,
-		"scope":     scopes,
-		"type":      "refresh", // Distinguish from access tokens
-		"exp":       expiresAt.Unix(),
-		"iat":       time.Now().Unix(),
-		"iss":       p.config.BaseURL,
-		"sub":       userID,
-		"jti":       uuid.New().String(),
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString([]byte(p.config.JWTSecret))
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrTokenGeneration, err)
-	}
-
-	return &TokenResult{
-		TokenString: tokenString,
-		TokenType:   "Bearer",
-		ExpiresAt:   expiresAt,
-		Claims:      claims,
-		Success:     true,
-	}, nil
+	return p.generateJWT(userID, clientID, scopes, "refresh", expiresAt)
 }
 
 // ValidateRefreshToken verifies a refresh token JWT

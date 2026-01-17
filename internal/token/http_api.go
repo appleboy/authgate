@@ -39,6 +39,76 @@ func NewHTTPTokenProvider(cfg *config.Config) *HTTPTokenProvider {
 	}
 }
 
+// callValidateAPI is a helper function to validate tokens via HTTP API
+func (p *HTTPTokenProvider) callValidateAPI(
+	ctx context.Context,
+	tokenString string,
+	invalidErr, expiredErr error,
+) (*TokenValidationResult, error) {
+	reqBody := APITokenValidateRequest{
+		Token: tokenString,
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		"POST",
+		p.config.TokenAPIURL+"/validate",
+		bytes.NewBuffer(jsonData),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrHTTPTokenConnection, err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrHTTPTokenConnection, err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("%w: failed to read response", ErrHTTPTokenInvalidResp)
+	}
+
+	// Check HTTP status code
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("%w: HTTP %d", invalidErr, resp.StatusCode)
+	}
+
+	var apiResp APITokenValidateResponse
+	if err := json.Unmarshal(body, &apiResp); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrHTTPTokenInvalidResp, err)
+	}
+
+	if !apiResp.Valid {
+		return nil, invalidErr
+	}
+
+	var expiresAt time.Time
+	if apiResp.ExpiresAt > 0 {
+		expiresAt = time.Unix(apiResp.ExpiresAt, 0)
+		if time.Now().After(expiresAt) {
+			return nil, expiredErr
+		}
+	}
+
+	return &TokenValidationResult{
+		Valid:     true,
+		UserID:    apiResp.UserID,
+		ClientID:  apiResp.ClientID,
+		Scopes:    apiResp.Scopes,
+		ExpiresAt: expiresAt,
+		Claims:    apiResp.Claims,
+	}, nil
+}
+
 // APITokenGenerateRequest is the request payload for token generation
 type APITokenGenerateRequest struct {
 	UserID    string `json:"user_id"`
@@ -155,7 +225,7 @@ func (p *HTTPTokenProvider) GenerateToken(
 
 	tokenType := apiResp.TokenType
 	if tokenType == "" {
-		tokenType = "Bearer"
+		tokenType = TokenTypeBearer
 	}
 
 	expiresAt := time.Now().Add(time.Duration(apiResp.ExpiresIn) * time.Second)
@@ -174,68 +244,7 @@ func (p *HTTPTokenProvider) ValidateToken(
 	ctx context.Context,
 	tokenString string,
 ) (*TokenValidationResult, error) {
-	reqBody := APITokenValidateRequest{
-		Token: tokenString,
-	}
-
-	jsonData, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(
-		ctx,
-		"POST",
-		p.config.TokenAPIURL+"/validate",
-		bytes.NewBuffer(jsonData),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrHTTPTokenConnection, err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := p.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrHTTPTokenConnection, err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("%w: failed to read response", ErrHTTPTokenInvalidResp)
-	}
-
-	// Check HTTP status code
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("%w: HTTP %d", ErrInvalidToken, resp.StatusCode)
-	}
-
-	var apiResp APITokenValidateResponse
-	if err := json.Unmarshal(body, &apiResp); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrHTTPTokenInvalidResp, err)
-	}
-
-	if !apiResp.Valid {
-		return nil, ErrInvalidToken
-	}
-
-	var expiresAt time.Time
-	if apiResp.ExpiresAt > 0 {
-		expiresAt = time.Unix(apiResp.ExpiresAt, 0)
-		if time.Now().After(expiresAt) {
-			return nil, ErrExpiredToken
-		}
-	}
-
-	return &TokenValidationResult{
-		Valid:     true,
-		UserID:    apiResp.UserID,
-		ClientID:  apiResp.ClientID,
-		Scopes:    apiResp.Scopes,
-		ExpiresAt: expiresAt,
-		Claims:    apiResp.Claims,
-	}, nil
+	return p.callValidateAPI(ctx, tokenString, ErrInvalidToken, ErrExpiredToken)
 }
 
 // Name returns provider name for logging
@@ -337,7 +346,7 @@ func (p *HTTPTokenProvider) GenerateRefreshToken(
 
 	tokenType := apiResp.TokenType
 	if tokenType == "" {
-		tokenType = "Bearer"
+		tokenType = TokenTypeBearer
 	}
 
 	expiresAt := time.Now().Add(time.Duration(apiResp.ExpiresIn) * time.Second)
@@ -356,68 +365,7 @@ func (p *HTTPTokenProvider) ValidateRefreshToken(
 	ctx context.Context,
 	tokenString string,
 ) (*TokenValidationResult, error) {
-	reqBody := APITokenValidateRequest{
-		Token: tokenString,
-	}
-
-	jsonData, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(
-		ctx,
-		"POST",
-		p.config.TokenAPIURL+"/validate",
-		bytes.NewBuffer(jsonData),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrHTTPTokenConnection, err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := p.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrHTTPTokenConnection, err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("%w: failed to read response", ErrHTTPTokenInvalidResp)
-	}
-
-	// Check HTTP status code
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("%w: HTTP %d", ErrInvalidRefreshToken, resp.StatusCode)
-	}
-
-	var apiResp APITokenValidateResponse
-	if err := json.Unmarshal(body, &apiResp); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrHTTPTokenInvalidResp, err)
-	}
-
-	if !apiResp.Valid {
-		return nil, ErrInvalidRefreshToken
-	}
-
-	var expiresAt time.Time
-	if apiResp.ExpiresAt > 0 {
-		expiresAt = time.Unix(apiResp.ExpiresAt, 0)
-		if time.Now().After(expiresAt) {
-			return nil, ErrExpiredRefreshToken
-		}
-	}
-
-	return &TokenValidationResult{
-		Valid:     true,
-		UserID:    apiResp.UserID,
-		ClientID:  apiResp.ClientID,
-		Scopes:    apiResp.Scopes,
-		ExpiresAt: expiresAt,
-		Claims:    apiResp.Claims,
-	}, nil
+	return p.callValidateAPI(ctx, tokenString, ErrInvalidRefreshToken, ErrExpiredRefreshToken)
 }
 
 // RefreshAccessToken requests new access token (and optionally new refresh token) from external API
@@ -501,7 +449,7 @@ func (p *HTTPTokenProvider) RefreshAccessToken(
 
 	tokenType := apiResp.TokenType
 	if tokenType == "" {
-		tokenType = "Bearer"
+		tokenType = TokenTypeBearer
 	}
 
 	accessExpiresAt := time.Now().Add(time.Duration(apiResp.AccessExpiresIn) * time.Second)

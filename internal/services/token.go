@@ -99,7 +99,7 @@ func (s *TokenService) ExchangeDeviceCode(
 	var providerErr error
 
 	switch s.tokenProviderMode {
-	case "http_api":
+	case config.TokenProviderModeHTTPAPI:
 		if s.httpTokenProvider == nil {
 			return nil, nil, fmt.Errorf(
 				"HTTP token provider not configured (TOKEN_PROVIDER_MODE=http_api requires TOKEN_API_URL)",
@@ -111,7 +111,7 @@ func (s *TokenService) ExchangeDeviceCode(
 			dc.ClientID,
 			dc.Scopes,
 		)
-	case "local":
+	case config.TokenProviderModeLocal:
 		fallthrough
 	default:
 		if s.localTokenProvider == nil {
@@ -142,14 +142,14 @@ func (s *TokenService) ExchangeDeviceCode(
 	var refreshTokenResult *token.TokenResult
 
 	switch s.tokenProviderMode {
-	case "http_api":
+	case config.TokenProviderModeHTTPAPI:
 		refreshTokenResult, providerErr = s.httpTokenProvider.GenerateRefreshToken(
 			context.Background(),
 			dc.UserID,
 			dc.ClientID,
 			dc.Scopes,
 		)
-	case "local":
+	case config.TokenProviderModeLocal:
 		fallthrough
 	default:
 		refreshTokenResult, providerErr = s.localTokenProvider.GenerateRefreshToken(
@@ -233,12 +233,12 @@ func (s *TokenService) ValidateToken(tokenString string) (*token.TokenValidation
 	var err error
 
 	switch s.tokenProviderMode {
-	case "http_api":
+	case config.TokenProviderModeHTTPAPI:
 		if s.httpTokenProvider == nil {
 			return nil, fmt.Errorf("HTTP token provider not configured")
 		}
 		result, err = s.httpTokenProvider.ValidateToken(context.Background(), tokenString)
-	case "local":
+	case config.TokenProviderModeLocal:
 		fallthrough
 	default:
 		if s.localTokenProvider == nil {
@@ -373,7 +373,7 @@ func (s *TokenService) RefreshAccessToken(
 	var providerErr error
 
 	switch s.tokenProviderMode {
-	case "http_api":
+	case config.TokenProviderModeHTTPAPI:
 		if s.httpTokenProvider == nil {
 			return nil, nil, fmt.Errorf("HTTP token provider not configured")
 		}
@@ -382,7 +382,7 @@ func (s *TokenService) RefreshAccessToken(
 			refreshTokenString,
 			enableRotation,
 		)
-	case "local":
+	case config.TokenProviderModeLocal:
 		fallthrough
 	default:
 		if s.localTokenProvider == nil {
