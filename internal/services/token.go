@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/appleboy/authgate/internal/config"
@@ -503,33 +504,7 @@ func splitScopes(scopes string) []string {
 	if scopes == "" {
 		return []string{}
 	}
-	var result []string
-	for _, s := range splitBySpace(scopes) {
-		if s != "" {
-			result = append(result, s)
-		}
-	}
-	return result
-}
-
-// splitBySpace splits string by space
-func splitBySpace(s string) []string {
-	var result []string
-	current := ""
-	for _, r := range s {
-		if r == ' ' {
-			if current != "" {
-				result = append(result, current)
-				current = ""
-			}
-		} else {
-			current += string(r)
-		}
-	}
-	if current != "" {
-		result = append(result, current)
-	}
-	return result
+	return strings.Fields(scopes)
 }
 
 // DisableToken disables a token (can be re-enabled)
