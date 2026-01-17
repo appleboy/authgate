@@ -34,9 +34,51 @@
                 <div class="sessions-grid">
                     {{range .Sessions}}
                     <div class="session-item">
+                        <div class="session-actions-top">
+                            {{if eq .Status "active"}}
+                                <form method="POST" action="/account/sessions/{{.ID}}/disable" style="display: inline;">
+                                    <input type="hidden" name="csrf_token" value="{{$.csrf_token}}">
+                                    <button type="submit" class="btn btn-warning btn-sm" onclick="return confirm('Disable this token? You can re-enable it later.')">
+                                        Disable
+                                    </button>
+                                </form>
+                            {{else if eq .Status "disabled"}}
+                                <form method="POST" action="/account/sessions/{{.ID}}/enable" style="display: inline;">
+                                    <input type="hidden" name="csrf_token" value="{{$.csrf_token}}">
+                                    <button type="submit" class="btn btn-success btn-sm">
+                                        Enable
+                                    </button>
+                                </form>
+                            {{end}}
+                            {{if ne .Status "revoked"}}
+                            <form method="POST" action="/account/sessions/{{.ID}}/revoke" style="display: inline;">
+                                <input type="hidden" name="csrf_token" value="{{$.csrf_token}}">
+                                <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Permanently revoke this token? This action cannot be undone.')">
+                                    Revoke
+                                </button>
+                            </form>
+                            {{end}}
+                        </div>
                         <div class="session-info">
-                            <div class="session-client">
-                                <strong>Client:</strong> <span class="client-name">{{.ClientName}}</span>
+                            <div class="session-header-row">
+                                <div class="session-client">
+                                    <strong>Client:</strong> <span class="client-name">{{.ClientName}}</span>
+                                </div>
+                                <div class="token-badges">
+                                    {{if eq .TokenCategory "refresh"}}
+                                    <span class="badge badge-token-type badge-refresh">Refresh Token</span>
+                                    {{else}}
+                                    <span class="badge badge-token-type badge-access">Access Token</span>
+                                    {{end}}
+
+                                    {{if eq .Status "active"}}
+                                    <span class="badge badge-status badge-active">Active</span>
+                                    {{else if eq .Status "disabled"}}
+                                    <span class="badge badge-status badge-disabled">Disabled</span>
+                                    {{else if eq .Status "revoked"}}
+                                    <span class="badge badge-status badge-revoked">Revoked</span>
+                                    {{end}}
+                                </div>
                             </div>
                             <div class="session-client-id">
                                 <strong>Client ID:</strong> <span class="client-id-text">{{.ClientID}}</span>
@@ -47,20 +89,13 @@
                             <div class="session-dates">
                                 <div><strong>Created:</strong> {{.CreatedAt.Format "2006-01-02 15:04:05"}}</div>
                                 <div><strong>Expires:</strong> {{.ExpiresAt.Format "2006-01-02 15:04:05"}}</div>
+                                {{if and (eq .TokenCategory "refresh") .LastUsedAt}}
+                                <div><strong>Last Used:</strong> {{.LastUsedAt.Format "2006-01-02 15:04:05"}}</div>
+                                {{end}}
                             </div>
                             {{if .IsExpired}}
-                            <div class="session-status expired">Expired</div>
-                            {{else}}
-                            <div class="session-status active">Active</div>
+                            <div class="session-expiry-warning">⚠ Token Expired</div>
                             {{end}}
-                        </div>
-                        <div class="session-actions">
-                            <form method="POST" action="/account/sessions/{{.ID}}/revoke">
-                                <input type="hidden" name="csrf_token" value="{{$.csrf_token}}">
-                                <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to revoke this session?')">
-                                    Revoke
-                                </button>
-                            </form>
                         </div>
                     </div>
                     {{end}}
@@ -103,9 +138,6 @@
             border: 1px solid #e5e7eb;
             border-radius: 8px;
             padding: 1.5rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
             background: #fafafa;
             transition: box-shadow 0.2s;
         }
@@ -114,8 +146,28 @@
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
 
+        .session-actions-top {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
         .session-info {
             flex: 1;
+        }
+
+        .session-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .token-badges {
+            display: flex;
+            gap: 0.5rem;
         }
 
         .session-client,
@@ -142,9 +194,17 @@
             gap: 2rem;
             font-size: 0.875rem;
             color: #6b7280;
+            flex-wrap: wrap;
         }
 
-        .session-status {
+        .session-expiry-warning {
+            margin-top: 0.5rem;
+            color: #dc2626;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .badge {
             display: inline-block;
             padding: 0.25rem 0.75rem;
             border-radius: 12px;
@@ -153,23 +213,37 @@
             text-transform: uppercase;
         }
 
-        .session-status.active {
+        .badge-token-type {
+            padding: 0.25rem 0.75rem;
+        }
+
+        .badge-access {
+            background-color: #dbeafe;
+            color: #1e40af;
+        }
+
+        .badge-refresh {
+            background-color: #e0e7ff;
+            color: #4338ca;
+        }
+
+        .badge-status {
+            padding: 0.25rem 0.75rem;
+        }
+
+        .badge-active {
             background-color: #d1fae5;
             color: #065f46;
         }
 
-        .session-status.expired {
-            background-color: #fee2e2;
-            color: #991b1b;
+        .badge-disabled {
+            background-color: #fef3c7;
+            color: #92400e;
         }
 
-        .badge {
-            display: inline-block;
-            padding: 0.25rem 0.5rem;
-            background-color: #dbeafe;
-            color: #1e40af;
-            border-radius: 4px;
-            font-size: 0.875rem;
+        .badge-revoked {
+            background-color: #fee2e2;
+            color: #991b1b;
         }
 
         .header-actions {
@@ -180,6 +254,7 @@
         .btn-sm {
             padding: 0.5rem 1rem;
             font-size: 0.875rem;
+            white-space: nowrap;
         }
 
         .btn-danger {
@@ -189,6 +264,28 @@
 
         .btn-danger:hover {
             background-color: #b91c1c;
+        }
+
+        .btn-warning {
+            background-color: #f59e0b;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-warning:hover {
+            background-color: #d97706;
+        }
+
+        .btn-success {
+            background-color: #10b981;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-success:hover {
+            background-color: #059669;
         }
     </style>
 </body>

@@ -47,16 +47,16 @@ func (h *SessionHandler) ListSessions(c *gin.Context) {
 func (h *SessionHandler) RevokeSession(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "User not authenticated",
+		c.HTML(http.StatusUnauthorized, "error.html", gin.H{
+			"Error": "User not authenticated",
 		})
 		return
 	}
 
 	tokenID := c.Param("id")
 	if tokenID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Token ID is required",
+		c.HTML(http.StatusBadRequest, "error.html", gin.H{
+			"Error": "Token ID is required",
 		})
 		return
 	}
@@ -64,8 +64,8 @@ func (h *SessionHandler) RevokeSession(c *gin.Context) {
 	// Verify that this token belongs to the current user
 	tokens, err := h.tokenService.GetUserTokens(userID.(string))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to retrieve sessions",
+		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
+			"Error": "Failed to retrieve sessions",
 		})
 		return
 	}
@@ -79,16 +79,16 @@ func (h *SessionHandler) RevokeSession(c *gin.Context) {
 	}
 
 	if !found {
-		c.JSON(http.StatusForbidden, gin.H{
-			"error": "You don't have permission to revoke this token",
+		c.HTML(http.StatusForbidden, "error.html", gin.H{
+			"Error": "You don't have permission to revoke this token",
 		})
 		return
 	}
 
 	// Revoke the token
 	if err := h.tokenService.RevokeTokenByID(tokenID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to revoke session",
+		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
+			"Error": "Failed to revoke session",
 		})
 		return
 	}
@@ -100,15 +100,121 @@ func (h *SessionHandler) RevokeSession(c *gin.Context) {
 func (h *SessionHandler) RevokeAllSessions(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "User not authenticated",
+		c.HTML(http.StatusUnauthorized, "error.html", gin.H{
+			"Error": "User not authenticated",
 		})
 		return
 	}
 
 	if err := h.tokenService.RevokeAllUserTokens(userID.(string)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to revoke all sessions",
+		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
+			"Error": "Failed to revoke all sessions",
+		})
+		return
+	}
+
+	c.Redirect(http.StatusFound, "/account/sessions")
+}
+
+// DisableSession temporarily disables a specific session by token ID
+func (h *SessionHandler) DisableSession(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.HTML(http.StatusUnauthorized, "error.html", gin.H{
+			"Error": "User not authenticated",
+		})
+		return
+	}
+
+	tokenID := c.Param("id")
+	if tokenID == "" {
+		c.HTML(http.StatusBadRequest, "error.html", gin.H{
+			"Error": "Token ID is required",
+		})
+		return
+	}
+
+	// Verify that this token belongs to the current user
+	tokens, err := h.tokenService.GetUserTokens(userID.(string))
+	if err != nil {
+		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
+			"Error": "Failed to retrieve sessions",
+		})
+		return
+	}
+
+	found := false
+	for _, token := range tokens {
+		if token.ID == tokenID {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		c.HTML(http.StatusForbidden, "error.html", gin.H{
+			"Error": "You don't have permission to disable this token",
+		})
+		return
+	}
+
+	// Disable the token
+	if err := h.tokenService.DisableToken(tokenID); err != nil {
+		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
+			"Error": "Failed to disable session",
+		})
+		return
+	}
+
+	c.Redirect(http.StatusFound, "/account/sessions")
+}
+
+// EnableSession re-enables a previously disabled session by token ID
+func (h *SessionHandler) EnableSession(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.HTML(http.StatusUnauthorized, "error.html", gin.H{
+			"Error": "User not authenticated",
+		})
+		return
+	}
+
+	tokenID := c.Param("id")
+	if tokenID == "" {
+		c.HTML(http.StatusBadRequest, "error.html", gin.H{
+			"Error": "Token ID is required",
+		})
+		return
+	}
+
+	// Verify that this token belongs to the current user
+	tokens, err := h.tokenService.GetUserTokens(userID.(string))
+	if err != nil {
+		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
+			"Error": "Failed to retrieve sessions",
+		})
+		return
+	}
+
+	found := false
+	for _, token := range tokens {
+		if token.ID == tokenID {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		c.HTML(http.StatusForbidden, "error.html", gin.H{
+			"Error": "You don't have permission to enable this token",
+		})
+		return
+	}
+
+	// Enable the token
+	if err := h.tokenService.EnableToken(tokenID); err != nil {
+		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
+			"Error": "Failed to enable session",
 		})
 		return
 	}

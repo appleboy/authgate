@@ -234,6 +234,8 @@ func runServer() {
 	{
 		account.GET("/sessions", sessionHandler.ListSessions)
 		account.POST("/sessions/:id/revoke", sessionHandler.RevokeSession)
+		account.POST("/sessions/:id/disable", sessionHandler.DisableSession)
+		account.POST("/sessions/:id/enable", sessionHandler.EnableSession)
 		account.POST("/sessions/revoke-all", sessionHandler.RevokeAllSessions)
 	}
 
