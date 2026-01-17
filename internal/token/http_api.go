@@ -11,12 +11,14 @@ import (
 	"time"
 
 	"github.com/appleboy/authgate/internal/config"
+	"github.com/appleboy/authgate/internal/httpclient"
 )
 
 // HTTPTokenProvider generates and validates tokens via external HTTP API
 type HTTPTokenProvider struct {
-	config *config.Config
-	client *http.Client
+	config     *config.Config
+	client     *http.Client
+	authConfig *httpclient.AuthConfig
 }
 
 // NewHTTPTokenProvider creates a new HTTP API token provider
@@ -33,9 +35,17 @@ func NewHTTPTokenProvider(cfg *config.Config) *HTTPTokenProvider {
 		Transport: transport,
 	}
 
+	// Initialize authentication config
+	authConfig := &httpclient.AuthConfig{
+		Mode:       cfg.TokenAPIAuthMode,
+		Secret:     cfg.TokenAPIAuthSecret,
+		HeaderName: cfg.TokenAPIAuthHeader,
+	}
+
 	return &HTTPTokenProvider{
-		config: cfg,
-		client: client,
+		config:     cfg,
+		client:     client,
+		authConfig: authConfig,
 	}
 }
 
@@ -65,6 +75,11 @@ func (p *HTTPTokenProvider) callValidateAPI(
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+
+	// Add authentication headers
+	if err := p.authConfig.AddAuthHeaders(req, jsonData); err != nil {
+		return nil, fmt.Errorf("failed to add auth headers: %w", err)
+	}
 
 	resp, err := p.client.Do(req)
 	if err != nil {
@@ -171,6 +186,11 @@ func (p *HTTPTokenProvider) GenerateToken(
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+
+	// Add authentication headers
+	if err := p.authConfig.AddAuthHeaders(req, jsonData); err != nil {
+		return nil, fmt.Errorf("failed to add auth headers: %w", err)
+	}
 
 	resp, err := p.client.Do(req)
 	if err != nil {
@@ -303,6 +323,11 @@ func (p *HTTPTokenProvider) GenerateRefreshToken(
 
 	req.Header.Set("Content-Type", "application/json")
 
+	// Add authentication headers
+	if err := p.authConfig.AddAuthHeaders(req, jsonData); err != nil {
+		return nil, fmt.Errorf("failed to add auth headers: %w", err)
+	}
+
 	resp, err := p.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrHTTPTokenConnection, err)
@@ -404,6 +429,11 @@ func (p *HTTPTokenProvider) RefreshAccessToken(
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+
+	// Add authentication headers
+	if err := p.authConfig.AddAuthHeaders(req, jsonData); err != nil {
+		return nil, fmt.Errorf("failed to add auth headers: %w", err)
+	}
 
 	resp, err := p.client.Do(req)
 	if err != nil {

@@ -35,7 +35,7 @@ docker build -f docker/Dockerfile -t authgate .
 
 ## Architecture
 
-**Device Authorization Flow (with Refresh Tokens)**:
+### Device Authorization Flow (with Refresh Tokens)
 
 1. CLI calls `POST /oauth/device/code` with client_id → receives device_code + user_code + verification_uri
 2. User visits verification_uri (`/device`) in browser, must login first if not authenticated
@@ -44,7 +44,7 @@ docker build -f docker/Dockerfile -t authgate .
 5. CLI uses access_token for API calls (expires in 1 hour)
 6. When access_token expires, CLI calls `POST /oauth/token` with `grant_type=refresh_token` → receives new access_token (fixed mode) or new access_token + refresh_token (rotation mode)
 
-**Layers** (dependency injection pattern):
+### Layers (dependency injection pattern)
 
 - `main.go` - Wires up store → auth providers → token providers → services → handlers, configures Gin router with session middleware
 - `config/` - Loads .env via godotenv, provides Config struct with defaults
@@ -62,7 +62,7 @@ docker build -f docker/Dockerfile -t authgate .
 - `models/` - GORM models (User, OAuthClient, DeviceCode, AccessToken)
 - `middleware/` - Gin middleware (auth.go: RequireAuth checks session for user_id)
 
-**Authentication Architecture**:
+### Authentication Architecture
 
 - **Pluggable Providers**: Supports local (database) and external HTTP API authentication
 - **Hybrid Mode**: Each user authenticates based on their `auth_source` field
@@ -79,7 +79,7 @@ docker build -f docker/Dockerfile -t authgate .
 - **User Fields**: ExternalID, AuthSource, Email, FullName added for external auth support
 - **Key Benefit**: Admin can always login locally even if external service is down
 
-**Token Provider Architecture**:
+### Token Provider Architecture
 
 - **Pluggable Providers**: Supports local JWT generation/validation and external HTTP API token services
 - **Global Mode**: Configured via `TOKEN_PROVIDER_MODE` env var (`local` or `http_api`), defaults to `local`
@@ -104,12 +104,11 @@ docker build -f docker/Dockerfile -t authgate .
 - **API Contract**: HTTPTokenProvider expects `/generate` and `/validate` endpoints with specific JSON format
 - **Key Benefit**: Centralized token services, advanced key management, compliance requirements while maintaining local token management
 
-**Refresh Token Architecture**:
+### Refresh Token Architecture
 
 AuthGate supports refresh tokens following RFC 6749 with configurable rotation modes for different security requirements.
 
 - **Key Features**:
-
   - **Dual Modes**: Fixed (reusable) vs Rotation (one-time use) refresh tokens
   - **Unified Storage**: Both access and refresh tokens stored in `AccessToken` table with `token_category` field
   - **Token Family Tracking**: `parent_token_id` links tokens for audit trails and revocation
@@ -118,7 +117,6 @@ AuthGate supports refresh tokens following RFC 6749 with configurable rotation m
   - **Provider Support**: Both LocalTokenProvider and HTTPTokenProvider support refresh operations
 
 - **Fixed Mode (Default - Multi-Device Friendly)**:
-
   1. Device code exchange returns `access_token` + `refresh_token`
   2. When access token expires, client POSTs to `/oauth/token` with `grant_type=refresh_token`
   3. Server returns new `access_token` only (refresh token remains unchanged and reusable)
@@ -128,7 +126,6 @@ AuthGate supports refresh tokens following RFC 6749 with configurable rotation m
   7. LastUsedAt field tracks activity for identifying inactive sessions
 
 - **Rotation Mode (Optional - High Security)**:
-
   1. Same as fixed mode, but step 3 returns both new `access_token` + new `refresh_token`
   2. Old refresh token is automatically revoked (status set to 'revoked') after each use
   3. Prevents token replay attacks
@@ -136,20 +133,17 @@ AuthGate supports refresh tokens following RFC 6749 with configurable rotation m
   5. Enable via `ENABLE_TOKEN_ROTATION=true`
 
 - **Token Management**:
-
   - **Status Field**: `active` (usable) / `disabled` (temporarily blocked, can re-enable) / `revoked` (permanently blocked)
   - **Independent Revocation**: Revoking refresh token doesn't affect existing access tokens
   - **Family Tracking**: ParentTokenID enables audit trails and selective revocation
   - **Scope Validation**: Refresh requests cannot escalate privileges beyond original grant
 
 - **Environment Variables**:
-
   - `REFRESH_TOKEN_EXPIRATION=720h` - Refresh token lifetime (default: 30 days)
   - `ENABLE_REFRESH_TOKENS=true` - Feature flag (default: enabled)
   - `ENABLE_TOKEN_ROTATION=false` - Enable rotation mode (default: disabled, uses fixed mode)
 
 - **Grant Type Support**:
-
   - `urn:ietf:params:oauth:grant-type:device_code` - Device authorization flow (returns access + refresh)
   - `refresh_token` - RFC 6749 refresh token grant (returns new tokens)
 
@@ -160,7 +154,7 @@ AuthGate supports refresh tokens following RFC 6749 with configurable rotation m
   - Token family tracking enables detection of suspicious patterns
   - Optional rotation mode for high-security scenarios
 
-**Key Implementation Details**:
+### Key Implementation Details
 
 - Device codes expire after 30min (configurable via Config.DeviceCodeExpiration)
 - User codes are 8-char uppercase alphanumeric (generated by generateUserCode in services/device.go)
@@ -170,7 +164,7 @@ AuthGate supports refresh tokens following RFC 6749 with configurable rotation m
 - Polling interval is 5 seconds (Config.PollingInterval)
 - Templates and static files embedded via go:embed in main.go
 
-**Key Endpoints**:
+### Key Endpoints
 
 - `GET /health` - Health check with database connection test
 - `POST /oauth/device/code` - CLI requests device+user codes (accepts form or JSON)
@@ -184,7 +178,9 @@ AuthGate supports refresh tokens following RFC 6749 with configurable rotation m
 - `GET|POST /login` - User authentication
 - `GET /logout` - Clear session
 
-**Error Handling**: Services return typed errors (ErrInvalidClient, ErrDeviceCodeNotFound, etc.), handlers convert to RFC 8628 OAuth error responses
+### Error Handling
+
+Services return typed errors (ErrInvalidClient, ErrDeviceCodeNotFound, etc.), handlers convert to RFC 8628 OAuth error responses.
 
 ## Environment Variables
 
@@ -200,10 +196,16 @@ AuthGate supports refresh tokens following RFC 6749 with configurable rotation m
 | HTTP_API_URL                   | (none)                  | External auth API endpoint (required when AUTH_MODE=http_api)            |
 | HTTP_API_TIMEOUT               | 10s                     | HTTP API request timeout                                                 |
 | HTTP_API_INSECURE_SKIP_VERIFY  | false                   | Skip TLS verification (dev/testing only)                                 |
+| HTTP_API_AUTH_MODE             | none                    | Service-to-service auth mode: `none`, `simple`, or `hmac`                |
+| HTTP_API_AUTH_SECRET           | (none)                  | Shared secret for service-to-service authentication                      |
+| HTTP_API_AUTH_HEADER           | X-API-Secret            | Custom header name for simple auth mode                                  |
 | **TOKEN_PROVIDER_MODE**        | local                   | Token provider mode: `local` or `http_api`                               |
 | TOKEN_API_URL                  | (none)                  | External token API endpoint (required when TOKEN_PROVIDER_MODE=http_api) |
 | TOKEN_API_TIMEOUT              | 10s                     | Token API request timeout                                                |
 | TOKEN_API_INSECURE_SKIP_VERIFY | false                   | Skip TLS verification for token API (dev/testing only)                   |
+| TOKEN_API_AUTH_MODE            | none                    | Service-to-service auth mode: `none`, `simple`, or `hmac`                |
+| TOKEN_API_AUTH_SECRET          | (none)                  | Shared secret for service-to-service authentication                      |
+| TOKEN_API_AUTH_HEADER          | X-API-Secret            | Custom header name for simple auth mode                                  |
 | **REFRESH_TOKEN_EXPIRATION**   | 720h                    | Refresh token lifetime (default: 30 days)                                |
 | **ENABLE_REFRESH_TOKENS**      | true                    | Feature flag to enable/disable refresh tokens                            |
 | **ENABLE_TOKEN_ROTATION**      | false                   | Enable rotation mode (default: false, uses fixed mode)                   |
@@ -238,7 +240,7 @@ HTTP_API_TIMEOUT=10s
 HTTP_API_INSECURE_SKIP_VERIFY=false
 ```
 
-**Expected API Contract:**
+#### Expected API Contract
 
 Request (POST to HTTP_API_URL):
 
@@ -260,7 +262,7 @@ Response:
 }
 ```
 
-**Response Requirements:**
+#### Response Requirements
 
 - `success` (required): Boolean indicating authentication result
 - `user_id` (required when success=true): Non-empty string uniquely identifying the user in external system
@@ -268,7 +270,7 @@ Response:
 - `full_name` (optional): User's display name
 - `message` (optional): Error message when success=false or HTTP status is non-2xx
 
-**Behavior:**
+#### Behavior
 
 - First login auto-creates user in local database with `auth_source="http_api"`
 - Subsequent logins update user info (email, full_name)
@@ -298,7 +300,7 @@ The system supports **per-user authentication routing** based on the `auth_sourc
 - **Zero Downtime Migration**: Gradually migrate users from local to external auth
 - **Service Independence**: External service outage doesn't lock out local users
 
-**Example Scenario:**
+#### Example Scenario
 
 1. Server starts with `AUTH_MODE=http_api`
 2. Default admin user created with `auth_source=local` (can always login)
@@ -319,7 +321,7 @@ TOKEN_API_TIMEOUT=10s
 TOKEN_API_INSECURE_SKIP_VERIFY=false
 ```
 
-**Expected API Contract:**
+#### Expected API Contract
 
 **Token Generation Endpoint:** `POST {TOKEN_API_URL}/generate`
 
@@ -391,7 +393,7 @@ Response (Invalid):
 }
 ```
 
-**Response Requirements:**
+#### Response Requirements
 
 Generation Response:
 
@@ -412,7 +414,7 @@ Validation Response:
 - `claims` (optional): Additional JWT claims
 - `message` (optional): Error message when valid=false
 
-**Behavior:**
+#### Behavior
 
 - Token generation/validation delegated to external service
 - Token records still saved to local database for management
@@ -432,13 +434,13 @@ JWT_SECRET=your-256-bit-secret-change-in-production
 
 ### Token Provider Benefits
 
-**Local Mode:**
+#### Local Mode
 
 - Simple setup, no external dependencies
 - Fast token operations
 - Self-contained deployment
 
-**HTTP API Mode:**
+#### HTTP API Mode
 
 - Centralized token services across multiple applications
 - Advanced key management and rotation
@@ -446,12 +448,177 @@ JWT_SECRET=your-256-bit-secret-change-in-production
 - Compliance requirements for token generation
 - Integration with existing IAM/PKI systems
 
-**Why Local Storage is Retained:**
+#### Why Local Storage is Retained
 
 - Revocation: Users can revoke tokens via `/account/sessions` or `/oauth/revoke`
 - Management: Users can list active sessions
 - Auditing: Track when and for which clients tokens were issued
 - Client Association: Link tokens to OAuth clients for display in UI
+
+## Service-to-Service Authentication
+
+When using external HTTP APIs for authentication (`AUTH_MODE=http_api`) or token operations (`TOKEN_PROVIDER_MODE=http_api`), you can secure the communication between AuthGate and these services using service-to-service authentication.
+
+### Authentication Modes
+
+#### 1. None Mode (Default)
+
+No authentication headers are added. Use only in trusted internal networks.
+
+```bash
+HTTP_API_AUTH_MODE=none
+# or omit HTTP_API_AUTH_MODE entirely
+```
+
+#### 2. Simple Mode (Shared Secret)
+
+Adds a simple API secret header to each request. Quick to set up, suitable for internal services.
+
+```bash
+# For HTTP API Authentication
+HTTP_API_AUTH_MODE=simple
+HTTP_API_AUTH_SECRET=your-shared-secret-key
+HTTP_API_AUTH_HEADER=X-API-Secret  # Optional, defaults to X-API-Secret
+
+# For Token API
+TOKEN_API_AUTH_MODE=simple
+TOKEN_API_AUTH_SECRET=your-shared-secret-key
+TOKEN_API_AUTH_HEADER=X-API-Secret  # Optional
+```
+
+##### Request Headers
+
+```
+X-API-Secret: your-shared-secret-key
+```
+
+##### Server-side validation
+
+```go
+secret := r.Header.Get("X-API-Secret")
+if secret != expectedSecret {
+    return http.StatusUnauthorized
+}
+```
+
+#### 3. HMAC Mode (Signature-based)
+
+Calculates HMAC-SHA256 signature for each request. Provides protection against tampering and replay attacks. Recommended for production.
+
+```bash
+# For HTTP API Authentication
+HTTP_API_AUTH_MODE=hmac
+HTTP_API_AUTH_SECRET=your-shared-secret-key
+
+# For Token API
+TOKEN_API_AUTH_MODE=hmac
+TOKEN_API_AUTH_SECRET=your-shared-secret-key
+```
+
+##### Request Headers
+
+```txt
+X-Signature: <hmac-sha256-hex>
+X-Timestamp: <unix-timestamp>
+X-Nonce: <random-uuid>
+Content-Type: application/json
+```
+
+##### Signature Calculation
+
+```txt
+message = timestamp + method + path + body
+signature = HMAC-SHA256(secret, message)
+```
+
+##### Example in Go
+
+```go
+import (
+    "crypto/hmac"
+    "crypto/sha256"
+    "encoding/hex"
+)
+
+message := fmt.Sprintf("%d%s%s%s", timestamp, "POST", "/api/auth", requestBody)
+h := hmac.New(sha256.New, []byte(secret))
+h.Write([]byte(message))
+signature := hex.EncodeToString(h.Sum(nil))
+```
+
+##### Server-side validation
+
+```go
+import "github.com/appleboy/authgate/internal/httpclient"
+
+authConfig := &httpclient.AuthConfig{
+    Mode:   httpclient.AuthModeHMAC,
+    Secret: "your-shared-secret-key",
+}
+
+// Verify signature (checks timestamp age and signature validity)
+err := authConfig.VerifyHMACSignature(req, 5*time.Minute)
+if err != nil {
+    return http.StatusUnauthorized
+}
+```
+
+##### Security Features
+
+- **Timestamp validation**: Requests older than 5 minutes are rejected (prevents replay attacks)
+- **Signature verification**: Ensures request hasn't been tampered with
+- **Nonce**: Adds uniqueness to each request (can be logged for additional replay protection)
+
+### Configuration Examples
+
+#### Example 1: Simple mode for internal network
+
+```bash
+# .env
+AUTH_MODE=http_api
+HTTP_API_URL=http://internal-auth-service:8080/verify
+HTTP_API_AUTH_MODE=simple
+HTTP_API_AUTH_SECRET=internal-shared-secret-abc123
+```
+
+#### Example 2: HMAC mode for production
+
+```bash
+# .env
+AUTH_MODE=http_api
+HTTP_API_URL=https://auth-api.example.com/verify
+HTTP_API_AUTH_MODE=hmac
+HTTP_API_AUTH_SECRET=production-secret-change-this
+
+TOKEN_PROVIDER_MODE=http_api
+TOKEN_API_URL=https://token-api.example.com
+TOKEN_API_AUTH_MODE=hmac
+TOKEN_API_AUTH_SECRET=token-service-secret-change-this
+```
+
+#### Example 3: Custom header name
+
+```bash
+# .env
+HTTP_API_AUTH_MODE=simple
+HTTP_API_AUTH_SECRET=my-secret
+HTTP_API_AUTH_HEADER=X-Internal-Token  # Custom header name
+```
+
+### Implementation Notes
+
+- **Per-Service Configuration**: Auth API and Token API have independent authentication settings
+- **Backward Compatible**: Defaults to `none` mode, existing deployments continue working
+- **Error Handling**: Authentication failures are logged but don't expose secret details
+- **Testing**: Set `HTTP_API_INSECURE_SKIP_VERIFY=true` for self-signed certificates (dev only)
+
+### Security Recommendations
+
+1. **Production**: Use HMAC mode with strong secrets (32+ characters)
+2. **Development**: Simple mode acceptable for local/internal testing
+3. **Secret Rotation**: Coordinate secret changes between AuthGate and external services
+4. **HTTPS Required**: Always use HTTPS for external API calls in production
+5. **Logging**: External services should log authentication attempts for audit trails
 
 ## Coding Conventions
 
