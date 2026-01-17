@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -251,10 +250,6 @@ func saveTokens(storage *TokenStorage) error {
 	if err != nil {
 		return err
 	}
-
-	// Get absolute path for display
-	absPath, _ := filepath.Abs(tokenFile)
-	_ = absPath // Use the variable to avoid unused warning
 
 	return os.WriteFile(tokenFile, data, 0o600) // 0600 = read/write for owner only
 }
