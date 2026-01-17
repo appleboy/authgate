@@ -43,31 +43,37 @@ func (h *SessionHandler) ListSessions(c *gin.Context) {
 	})
 }
 
-// RevokeSession revokes a specific session by token ID
-func (h *SessionHandler) RevokeSession(c *gin.Context) {
-	userID, exists := c.Get("user_id")
+// validateTokenOwnership checks if the current user owns the specified token
+// Returns the tokenID if valid, otherwise renders error and returns empty string
+func (h *SessionHandler) validateTokenOwnership(
+	c *gin.Context,
+	actionName string,
+) (tokenID string, valid bool) {
+	userIDVal, exists := c.Get("user_id")
 	if !exists {
 		c.HTML(http.StatusUnauthorized, "error.html", gin.H{
 			"Error": "User not authenticated",
 		})
-		return
+		return "", false
 	}
 
-	tokenID := c.Param("id")
+	tokenID = c.Param("id")
 	if tokenID == "" {
 		c.HTML(http.StatusBadRequest, "error.html", gin.H{
 			"Error": "Token ID is required",
 		})
-		return
+		return "", false
 	}
 
+	userID := userIDVal.(string)
+
 	// Verify that this token belongs to the current user
-	tokens, err := h.tokenService.GetUserTokens(userID.(string))
+	tokens, err := h.tokenService.GetUserTokens(userID)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"Error": "Failed to retrieve sessions",
 		})
-		return
+		return "", false
 	}
 
 	found := false
@@ -80,8 +86,18 @@ func (h *SessionHandler) RevokeSession(c *gin.Context) {
 
 	if !found {
 		c.HTML(http.StatusForbidden, "error.html", gin.H{
-			"Error": "You don't have permission to revoke this token",
+			"Error": "You don't have permission to " + actionName + " this token",
 		})
+		return "", false
+	}
+
+	return tokenID, true
+}
+
+// RevokeSession revokes a specific session by token ID
+func (h *SessionHandler) RevokeSession(c *gin.Context) {
+	tokenID, valid := h.validateTokenOwnership(c, "revoke")
+	if !valid {
 		return
 	}
 
@@ -118,43 +134,8 @@ func (h *SessionHandler) RevokeAllSessions(c *gin.Context) {
 
 // DisableSession temporarily disables a specific session by token ID
 func (h *SessionHandler) DisableSession(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.HTML(http.StatusUnauthorized, "error.html", gin.H{
-			"Error": "User not authenticated",
-		})
-		return
-	}
-
-	tokenID := c.Param("id")
-	if tokenID == "" {
-		c.HTML(http.StatusBadRequest, "error.html", gin.H{
-			"Error": "Token ID is required",
-		})
-		return
-	}
-
-	// Verify that this token belongs to the current user
-	tokens, err := h.tokenService.GetUserTokens(userID.(string))
-	if err != nil {
-		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
-			"Error": "Failed to retrieve sessions",
-		})
-		return
-	}
-
-	found := false
-	for _, token := range tokens {
-		if token.ID == tokenID {
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		c.HTML(http.StatusForbidden, "error.html", gin.H{
-			"Error": "You don't have permission to disable this token",
-		})
+	tokenID, valid := h.validateTokenOwnership(c, "disable")
+	if !valid {
 		return
 	}
 
@@ -171,43 +152,8 @@ func (h *SessionHandler) DisableSession(c *gin.Context) {
 
 // EnableSession re-enables a previously disabled session by token ID
 func (h *SessionHandler) EnableSession(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.HTML(http.StatusUnauthorized, "error.html", gin.H{
-			"Error": "User not authenticated",
-		})
-		return
-	}
-
-	tokenID := c.Param("id")
-	if tokenID == "" {
-		c.HTML(http.StatusBadRequest, "error.html", gin.H{
-			"Error": "Token ID is required",
-		})
-		return
-	}
-
-	// Verify that this token belongs to the current user
-	tokens, err := h.tokenService.GetUserTokens(userID.(string))
-	if err != nil {
-		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
-			"Error": "Failed to retrieve sessions",
-		})
-		return
-	}
-
-	found := false
-	for _, token := range tokens {
-		if token.ID == tokenID {
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		c.HTML(http.StatusForbidden, "error.html", gin.H{
-			"Error": "You don't have permission to enable this token",
-		})
+	tokenID, valid := h.validateTokenOwnership(c, "enable")
+	if !valid {
 		return
 	}
 
