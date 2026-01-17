@@ -50,6 +50,12 @@
       - [Why Local Storage is Retained](#why-local-storage-is-retained)
       - [Use Cases](#use-cases)
       - [Migration Path](#migration-path)
+    - [Service-to-Service Authentication](#service-to-service-authentication)
+      - [Why Service-to-Service Authentication?](#why-service-to-service-authentication)
+      - [Authentication Modes](#authentication-modes)
+      - [Configuration per Service](#configuration-per-service)
+      - [Server-Side Verification Example](#server-side-verification-example)
+      - [Example: Securing External Authentication API](#example-securing-external-authentication-api)
   - [Architecture](#architecture-1)
     - [Project Structure](#project-structure)
     - [Technology Stack](#technology-stack)
@@ -322,7 +328,6 @@ go run main.go
 The CLI demonstrates:
 
 1. **First Run (Device Flow)**:
-
    - Requests a device code
    - Displays a URL and user code
    - Waits for authorization
@@ -331,7 +336,6 @@ The CLI demonstrates:
    - Verifies the token
 
 2. **Subsequent Runs (Token Reuse)**:
-
    - Loads existing tokens from file
    - Uses access token if still valid
    - Automatically refreshes if expired
@@ -490,12 +494,10 @@ sequenceDiagram
 ##### Session Management (Web UI)
 
 - `GET /account/sessions` - View all active sessions for current user
-
   - Displays: Client name, Client ID, scopes, creation/expiration times, status
   - Requires: Valid user session (login required)
 
 - `POST /account/sessions/:id/revoke` - Revoke specific session
-
   - Parameters: `:id` - Token ID to revoke
   - Requires: Valid user session, token must belong to current user
   - Returns: Redirect to sessions page
@@ -728,6 +730,115 @@ Even when using external token providers, AuthGate stores token records locally 
 4. Switch to `TOKEN_PROVIDER_MODE=http_api`
 5. Monitor logs for errors
 6. Can rollback to local mode without data loss
+
+### Service-to-Service Authentication
+
+When AuthGate connects to external HTTP APIs (for authentication or token operations), you can secure these service-to-service communications with authentication headers.
+
+#### Why Service-to-Service Authentication?
+
+External HTTP API providers (authentication and token services) need to verify that incoming requests are from a trusted AuthGate instance. Without authentication, these endpoints would be vulnerable to unauthorized access.
+
+#### Authentication Modes
+
+AuthGate supports three authentication modes for securing HTTP API communications:
+
+**1. None Mode (Default)**
+
+No authentication headers are added. Suitable for development or when the external API is secured by other means (e.g., network isolation).
+
+```bash
+# No configuration needed - this is the default
+HTTP_API_AUTH_MODE=none
+TOKEN_API_AUTH_MODE=none
+```
+
+**2. Simple Mode**
+
+Adds a shared secret in a custom header (default: `X-API-Secret`). Quick to set up but less secure than HMAC.
+
+```bash
+# HTTP API Authentication
+HTTP_API_AUTH_MODE=simple
+HTTP_API_AUTH_SECRET=your-shared-secret-here
+HTTP_API_AUTH_HEADER=X-API-Secret  # Optional, default shown
+
+# Token API Authentication
+TOKEN_API_AUTH_MODE=simple
+TOKEN_API_AUTH_SECRET=your-token-secret-here
+TOKEN_API_AUTH_HEADER=X-API-Secret  # Optional, default shown
+```
+
+**3. HMAC Mode (Recommended)**
+
+Uses HMAC-SHA256 signature with timestamp validation to prevent replay attacks. Provides the highest security for production environments.
+
+```bash
+# HTTP API Authentication
+HTTP_API_AUTH_MODE=hmac
+HTTP_API_AUTH_SECRET=your-hmac-secret-here
+
+# Token API Authentication
+TOKEN_API_AUTH_MODE=hmac
+TOKEN_API_AUTH_SECRET=your-hmac-token-secret
+```
+
+HMAC mode automatically adds these headers to each request:
+
+- `X-Signature`: HMAC-SHA256 signature of `timestamp + method + path + body`
+- `X-Timestamp`: Unix timestamp (validated within 5-minute window)
+- `X-Nonce`: Unique request identifier
+
+#### Configuration per Service
+
+Authentication is configured **separately** for each external service:
+
+| Environment Variable    | Purpose                           | Service       |
+| ----------------------- | --------------------------------- | ------------- |
+| `HTTP_API_AUTH_MODE`    | Auth mode for user authentication | HTTP API Auth |
+| `HTTP_API_AUTH_SECRET`  | Shared secret for authentication  | HTTP API Auth |
+| `HTTP_API_AUTH_HEADER`  | Custom header name (simple mode)  | HTTP API Auth |
+| `TOKEN_API_AUTH_MODE`   | Auth mode for token operations    | Token API     |
+| `TOKEN_API_AUTH_SECRET` | Shared secret for token API       | Token API     |
+| `TOKEN_API_AUTH_HEADER` | Custom header name (simple mode)  | Token API     |
+
+#### Server-Side Verification Example
+
+Your external API must verify incoming requests. Here's a Go example for HMAC verification:
+
+```go
+import "github.com/appleboy/authgate/internal/httpclient"
+
+// Initialize auth config (server side)
+authConfig := httpclient.NewAuthConfig("hmac", "your-hmac-secret")
+
+// Verify incoming request
+err := authConfig.VerifyHMACSignature(req, 5*time.Minute)
+if err != nil {
+    http.Error(w, "Authentication failed", http.StatusUnauthorized)
+    return
+}
+```
+
+#### Example: Securing External Authentication API
+
+**Scenario**: Your company has a central authentication service that AuthGate should use for user login.
+
+**Setup**:
+
+1. Configure AuthGate to use external authentication with HMAC:
+
+```bash
+# .env file
+AUTH_MODE=http_api
+HTTP_API_URL=https://auth.company.com/api/verify
+HTTP_API_AUTH_MODE=hmac
+HTTP_API_AUTH_SECRET=shared-secret-between-services
+```
+
+2. Your authentication API validates the HMAC signature before processing login requests.
+
+3. When users log into AuthGate, their credentials are forwarded to your API with HMAC signature verification.
 
 ---
 

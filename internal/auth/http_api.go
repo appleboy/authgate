@@ -10,12 +10,14 @@ import (
 	"net/http"
 
 	"github.com/appleboy/authgate/internal/config"
+	"github.com/appleboy/authgate/internal/httpclient"
 )
 
 // HTTPAPIAuthProvider handles HTTP API-based authentication
 type HTTPAPIAuthProvider struct {
-	config *config.Config
-	client *http.Client
+	config     *config.Config
+	client     *http.Client
+	authConfig *httpclient.AuthConfig
 }
 
 // NewHTTPAPIAuthProvider creates a new HTTP API authentication provider
@@ -32,9 +34,17 @@ func NewHTTPAPIAuthProvider(cfg *config.Config) *HTTPAPIAuthProvider {
 		Transport: transport,
 	}
 
+	// Initialize authentication config
+	authConfig := &httpclient.AuthConfig{
+		Mode:       cfg.HTTPAPIAuthMode,
+		Secret:     cfg.HTTPAPIAuthSecret,
+		HeaderName: cfg.HTTPAPIAuthHeader,
+	}
+
 	return &HTTPAPIAuthProvider{
-		config: cfg,
-		client: client,
+		config:     cfg,
+		client:     client,
+		authConfig: authConfig,
 	}
 }
 
@@ -79,6 +89,11 @@ func (p *HTTPAPIAuthProvider) Authenticate(
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+
+	// Add authentication headers
+	if err := p.authConfig.AddAuthHeaders(req, jsonData); err != nil {
+		return nil, fmt.Errorf("failed to add auth headers: %w", err)
+	}
 
 	resp, err := p.client.Do(req)
 	if err != nil {

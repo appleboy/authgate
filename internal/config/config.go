@@ -46,6 +46,9 @@ type Config struct {
 	HTTPAPIURL                string
 	HTTPAPITimeout            time.Duration
 	HTTPAPIInsecureSkipVerify bool
+	HTTPAPIAuthMode           string // Authentication mode: "none", "simple", or "hmac"
+	HTTPAPIAuthSecret         string // Shared secret for authentication
+	HTTPAPIAuthHeader         string // Custom header name for simple mode (default: "X-API-Secret")
 
 	// Token Provider
 	TokenProviderMode string // "local" or "http_api"
@@ -54,6 +57,9 @@ type Config struct {
 	TokenAPIURL                string
 	TokenAPITimeout            time.Duration
 	TokenAPIInsecureSkipVerify bool
+	TokenAPIAuthMode           string // Authentication mode: "none", "simple", or "hmac"
+	TokenAPIAuthSecret         string // Shared secret for authentication
+	TokenAPIAuthHeader         string // Custom header name for simple mode (default: "X-API-Secret")
 
 	// Refresh Token settings
 	RefreshTokenExpiration time.Duration // Refresh token lifetime (default: 720h = 30 days)
@@ -92,6 +98,9 @@ func Load() *Config {
 		HTTPAPIURL:                getEnv("HTTP_API_URL", ""),
 		HTTPAPITimeout:            getEnvDuration("HTTP_API_TIMEOUT", 10*time.Second),
 		HTTPAPIInsecureSkipVerify: getEnvBool("HTTP_API_INSECURE_SKIP_VERIFY", false),
+		HTTPAPIAuthMode:           getEnv("HTTP_API_AUTH_MODE", "none"),
+		HTTPAPIAuthSecret:         getEnv("HTTP_API_AUTH_SECRET", ""),
+		HTTPAPIAuthHeader:         getEnv("HTTP_API_AUTH_HEADER", "X-API-Secret"),
 
 		// Token Provider
 		TokenProviderMode: getEnv("TOKEN_PROVIDER_MODE", TokenProviderModeLocal),
@@ -100,6 +109,9 @@ func Load() *Config {
 		TokenAPIURL:                getEnv("TOKEN_API_URL", ""),
 		TokenAPITimeout:            getEnvDuration("TOKEN_API_TIMEOUT", 10*time.Second),
 		TokenAPIInsecureSkipVerify: getEnvBool("TOKEN_API_INSECURE_SKIP_VERIFY", false),
+		TokenAPIAuthMode:           getEnv("TOKEN_API_AUTH_MODE", "none"),
+		TokenAPIAuthSecret:         getEnv("TOKEN_API_AUTH_SECRET", ""),
+		TokenAPIAuthHeader:         getEnv("TOKEN_API_AUTH_HEADER", "X-API-Secret"),
 
 		// Refresh Token settings
 		RefreshTokenExpiration: getEnvDuration(
