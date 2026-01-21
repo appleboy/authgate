@@ -56,7 +56,7 @@
       - [Configuration per Service](#configuration-per-service)
       - [Server-Side Verification Example](#server-side-verification-example)
       - [Example: Securing External Authentication API](#example-securing-external-authentication-api)
-  - [Architecture](#architecture-1)
+  - [AuthGate Architecture](#authgate-architecture)
     - [Project Structure](#project-structure)
     - [Technology Stack](#technology-stack)
   - [Development](#development)
@@ -99,7 +99,7 @@
     - [Common Issues](#common-issues)
       - [Issue: "Client not found" error](#issue-client-not-found-error)
       - [Issue: Database locked errors](#issue-database-locked-errors)
-      - [Issue: "authorization\_pending" never resolves](#issue-authorization_pending-never-resolves)
+      - [Issue: "authorization_pending" never resolves](#issue-authorization_pending-never-resolves)
       - [Issue: "Username conflict with existing user" error](#issue-username-conflict-with-existing-user-error)
       - [Issue: JWT signature verification fails](#issue-jwt-signature-verification-fails)
       - [Issue: Session not persisting](#issue-session-not-persisting)
@@ -842,7 +842,7 @@ HTTP_API_AUTH_SECRET=shared-secret-between-services
 
 ---
 
-## Architecture
+## AuthGate Architecture
 
 ### Project Structure
 
