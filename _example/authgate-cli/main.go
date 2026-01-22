@@ -420,17 +420,10 @@ func makeAPICallWithAutoRefresh(storage *TokenStorage) error {
 		}
 
 		// Update storage in memory
+		// Note: newStorage has already been saved to disk by refreshAccessToken()
 		storage.AccessToken = newStorage.AccessToken
 		storage.RefreshToken = newStorage.RefreshToken
 		storage.ExpiresAt = newStorage.ExpiresAt
-
-		// CRITICAL: Persist the updated tokens to disk
-		// This is essential when ENABLE_TOKEN_ROTATION=true, otherwise the new
-		// refresh token will be lost and the next refresh attempt will fail
-		if err := saveTokens(storage); err != nil {
-			fmt.Printf("Warning: Failed to save refreshed tokens: %v\n", err)
-			// Continue anyway - we have tokens in memory for this session
-		}
 
 		fmt.Println("Token refreshed, retrying API call...")
 
