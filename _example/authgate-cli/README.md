@@ -206,6 +206,82 @@ You can still use different token files if preferred:
 5. **Automatic Refresh**: Expired tokens are refreshed automatically
 6. **Token Verification**: Each run verifies the token is still valid
 
+## Advanced Features
+
+### Intelligent Polling with Exponential Backoff
+
+The CLI implements RFC 8628-compliant polling with smart error handling:
+
+#### Polling Behavior
+
+- **Initial Interval**: Defaults to 5 seconds (configurable by server)
+- **UI Updates**: Progress dots appear every 2 seconds (reduces visual clutter)
+- **Automatic Formatting**: Adds a newline every 50 dots for readability
+
+#### Error Handling
+
+The CLI handles all OAuth 2.0 Device Authorization Grant error codes:
+
+| Error Type              | Description                               | CLI Behavior                                                |
+| ----------------------- | ----------------------------------------- | ----------------------------------------------------------- |
+| `authorization_pending` | User hasn't authorized yet                | Continues polling, shows progress dots                      |
+| `slow_down`             | Server requests slower polling            | **Triggers exponential backoff** (1.5x multiplier, max 60s) |
+| `expired_token`         | Device code expired (default: 30 minutes) | Stops and prompts to restart authentication                 |
+| `access_denied`         | User explicitly denied authorization      | Stops and displays denial message                           |
+| Other errors            | Unexpected server errors                  | Stops and displays detailed error information               |
+
+#### Exponential Backoff Example
+
+When the server returns `slow_down`, the CLI automatically adjusts its polling interval:
+
+```txt
+Initial:  5 seconds
+1st slow_down:  5 × 1.5 = 7.5 seconds
+2nd slow_down:  7.5 × 1.5 = 11.25 seconds
+3rd slow_down:  11.25 × 1.5 = 16.875 seconds
+...
+Maximum:  60 seconds (capped)
+```
+
+This prevents overwhelming the server while maintaining responsiveness.
+
+#### Context Support
+
+The polling mechanism respects context cancellation:
+
+- Supports timeout configuration
+- Graceful shutdown on interrupt (Ctrl+C)
+- Proper cleanup of resources
+
+### Security Features
+
+The CLI includes several security enhancements:
+
+#### HTTP Client Security
+
+- **Timeout Protection**: All requests timeout after 30 seconds (prevents hanging)
+- **TLS 1.2+**: Minimum TLS version enforced
+- **HTTPS Warning**: Automatically warns when using HTTP (insecure)
+- **Connection Pooling**: Efficient resource usage with idle connection management
+
+#### Input Validation
+
+- **SERVER_URL Validation**: Checks URL format and scheme (http/https only)
+- **CLIENT_ID Validation**: Warns if CLIENT_ID is not a valid UUID
+- **Error Messages**: Clear, actionable error messages without exposing sensitive data
+
+#### Token File Security
+
+- **File Permissions**: Created with `0600` (owner read/write only)
+- **Atomic Writes**: Uses temporary file + rename pattern to prevent corruption
+- **Concurrent Access**: File locking prevents race conditions when multiple processes access the same token file
+
+#### Secure Error Handling
+
+- **No Ignored Errors**: All error conditions are checked and handled
+- **Wrapped Errors**: Error chains preserve context for debugging
+- **Safe Logging**: Token values are truncated or redacted in logs
+
 ## Troubleshooting
 
 ### "CLIENT_ID not set" Error
@@ -243,12 +319,22 @@ rm .authgate-tokens.json
 
 If token refresh fails, the tool will automatically start a new device flow. Follow the authorization steps again.
 
+### "slow_down" Error During Polling
+
+If you see slower progress dots during authorization, the CLI has detected a `slow_down` signal from the server and automatically adjusted its polling interval. This is normal behavior to prevent server overload.
+
+### "context deadline exceeded" Error
+
+This indicates the operation timed out (default: 30 seconds for requests). Check your network connection and server availability.
+
 ## Security Best Practices
 
-1. **Protect Your Token File**: Never commit `.authgate-tokens.json` to version control
-2. **Use HTTPS in Production**: Always use HTTPS server URLs in production environments
-3. **Secure Client ID**: While not a secret, treat your client ID as sensitive
+1. **Protect Your Token File**: Never commit `.authgate-tokens.json` to version control. Add it to `.gitignore`
+2. **Use HTTPS in Production**: The CLI will warn you if using HTTP. Always use HTTPS server URLs in production
+3. **Secure Client ID**: While not a secret, treat your client ID as sensitive configuration
 4. **Regular Cleanup**: Delete token files when no longer needed
+5. **File Permissions**: The CLI automatically sets token file permissions to `0600` (owner-only access)
+6. **Review Warnings**: Pay attention to security warnings about HTTP usage and invalid UUIDs
 
 ## Learn More
 
