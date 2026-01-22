@@ -235,6 +235,8 @@ func BenchmarkFileLock_AcquireRelease(b *testing.B) {
 		if err != nil {
 			b.Fatalf("Failed to acquire lock: %v", err)
 		}
-		lock.release()
+		if err := lock.release(); err != nil {
+			b.Fatalf("Failed to release lock: %v", err)
+		}
 	}
 }
