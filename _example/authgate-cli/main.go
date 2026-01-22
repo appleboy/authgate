@@ -30,6 +30,14 @@ var (
 	httpClient        *http.Client
 )
 
+// Timeout configuration for different operations
+const (
+	deviceCodeRequestTimeout = 10 * time.Second
+	tokenExchangeTimeout     = 5 * time.Second
+	tokenVerificationTimeout = 10 * time.Second
+	refreshTokenTimeout      = 10 * time.Second
+)
+
 func init() {
 	// Load .env file if exists (ignore error if not found)
 	_ = godotenv.Load()
@@ -105,9 +113,8 @@ func initConfig() {
 		fmt.Fprintln(os.Stderr)
 	}
 
-	// Initialize secure HTTP client
+	// Initialize secure HTTP client (no global timeout - we use per-request timeouts)
 	httpClient = &http.Client{
-		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
 				MinVersion: tls.VersionTLS12,
@@ -289,6 +296,67 @@ func main() {
 	}
 }
 
+// requestDeviceCode requests a device code from the OAuth server with retry logic
+func requestDeviceCode(ctx context.Context) (*oauth2.DeviceAuthResponse, error) {
+	// Create request with timeout
+	reqCtx, cancel := context.WithTimeout(ctx, deviceCodeRequestTimeout)
+	defer cancel()
+
+	data := url.Values{}
+	data.Set("client_id", clientID)
+	data.Set("scope", "read write")
+
+	req, err := http.NewRequestWithContext(
+		reqCtx,
+		"POST",
+		serverURL+"/oauth/device/code",
+		strings.NewReader(data.Encode()),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create device code request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	// Execute request with retry logic
+	resp, err := retryableHTTPRequest(reqCtx, httpClient, req)
+	if err != nil {
+		return nil, fmt.Errorf("device code request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("device code request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response
+	var deviceResp struct {
+		DeviceCode              string `json:"device_code"`
+		UserCode                string `json:"user_code"`
+		VerificationURI         string `json:"verification_uri"`
+		VerificationURIComplete string `json:"verification_uri_complete"`
+		ExpiresIn               int    `json:"expires_in"`
+		Interval                int    `json:"interval"`
+	}
+
+	if err := json.Unmarshal(body, &deviceResp); err != nil {
+		return nil, fmt.Errorf("failed to parse device code response: %w", err)
+	}
+
+	return &oauth2.DeviceAuthResponse{
+		DeviceCode:              deviceResp.DeviceCode,
+		UserCode:                deviceResp.UserCode,
+		VerificationURI:         deviceResp.VerificationURI,
+		VerificationURIComplete: deviceResp.VerificationURIComplete,
+		Expiry:                  time.Now().Add(time.Duration(deviceResp.ExpiresIn) * time.Second),
+		Interval:                int64(deviceResp.Interval),
+	}, nil
+}
+
 // performDeviceFlow performs the OAuth device authorization flow
 func performDeviceFlow(ctx context.Context) (*TokenStorage, error) {
 	config := &oauth2.Config{
@@ -300,9 +368,9 @@ func performDeviceFlow(ctx context.Context) (*TokenStorage, error) {
 		Scopes: []string{"read", "write"},
 	}
 
-	// Step 1: Request device code
+	// Step 1: Request device code (with retry logic)
 	fmt.Println("Step 1: Requesting device code...")
-	deviceAuth, err := config.DeviceAuth(ctx)
+	deviceAuth, err := requestDeviceCode(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("device code request failed: %w", err)
 	}
@@ -453,12 +521,16 @@ func exchangeDeviceCode(
 	ctx context.Context,
 	tokenURL, clientID, deviceCode string,
 ) (*oauth2.Token, error) {
+	// Create request with timeout
+	reqCtx, cancel := context.WithTimeout(ctx, tokenExchangeTimeout)
+	defer cancel()
+
 	data := url.Values{}
 	data.Set("grant_type", "urn:ietf:params:oauth:grant-type:device_code")
 	data.Set("device_code", deviceCode)
 	data.Set("client_id", clientID)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", tokenURL, strings.NewReader(data.Encode()))
+	req, err := http.NewRequestWithContext(reqCtx, "POST", tokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -512,13 +584,18 @@ func exchangeDeviceCode(
 }
 
 func verifyToken(accessToken string) error {
-	req, err := http.NewRequest("GET", serverURL+"/oauth/tokeninfo", nil)
+	// Create request with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), tokenVerificationTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", serverURL+"/oauth/tokeninfo", nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 
-	resp, err := httpClient.Do(req)
+	// Execute request with retry logic
+	resp, err := retryableHTTPRequest(ctx, httpClient, req)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
@@ -628,12 +705,28 @@ func saveTokens(storage *TokenStorage) error {
 
 // refreshAccessToken refreshes the access token using refresh token
 func refreshAccessToken(refreshToken string) (*TokenStorage, error) {
+	// Create request with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), refreshTokenTimeout)
+	defer cancel()
+
 	data := url.Values{}
 	data.Set("grant_type", "refresh_token")
 	data.Set("refresh_token", refreshToken)
 	data.Set("client_id", clientID)
 
-	resp, err := httpClient.PostForm(serverURL+"/oauth/token", data)
+	req, err := http.NewRequestWithContext(
+		ctx,
+		"POST",
+		serverURL+"/oauth/token",
+		strings.NewReader(data.Encode()),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	// Execute request with retry logic
+	resp, err := retryableHTTPRequest(ctx, httpClient, req)
 	if err != nil {
 		return nil, fmt.Errorf("refresh request failed: %w", err)
 	}

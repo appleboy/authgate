@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -23,11 +25,9 @@ func init() {
 	if tokenFile == "" {
 		tokenFile = ".authgate-tokens.json"
 	}
-	// Initialize httpClient for tests
+	// Initialize httpClient for tests (no global timeout - we use per-request timeouts)
 	if httpClient == nil {
-		httpClient = &http.Client{
-			Timeout: 30 * time.Second,
-		}
+		httpClient = &http.Client{}
 	}
 }
 
@@ -537,5 +537,59 @@ func TestRefreshAccessToken_ValidationErrors(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestRequestDeviceCode_WithRetry(t *testing.T) {
+	// Save original values
+	origServerURL := serverURL
+	origClientID := clientID
+
+	defer func() {
+		serverURL = origServerURL
+		clientID = origClientID
+	}()
+
+	clientID = "test-client"
+
+	var attemptCount atomic.Int32
+	var testServer *httptest.Server
+
+	testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := attemptCount.Add(1)
+		if count < 2 {
+			// Fail first attempt
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		// Succeed on second attempt
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"device_code":               "test-device-code",
+			"user_code":                 "TEST-CODE",
+			"verification_uri":          testServer.URL + "/device",
+			"verification_uri_complete": testServer.URL + "/device?user_code=TEST-CODE",
+			"expires_in":                600,
+			"interval":                  5,
+		})
+	}))
+	defer testServer.Close()
+
+	serverURL = testServer.URL
+
+	ctx := context.Background()
+	resp, err := requestDeviceCode(ctx)
+	if err != nil {
+		t.Fatalf("requestDeviceCode() error = %v", err)
+	}
+
+	if resp.DeviceCode != "test-device-code" {
+		t.Errorf("Expected device_code 'test-device-code', got %s", resp.DeviceCode)
+	}
+
+	finalCount := attemptCount.Load()
+	if finalCount != 2 {
+		t.Errorf("Expected 2 attempts (1 retry), got %d", finalCount)
 	}
 }
