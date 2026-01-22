@@ -16,19 +16,33 @@ import (
 )
 
 var (
-	serverURL string
-	clientID  string
-	tokenFile string
+	serverURL        string
+	clientID         string
+	tokenFile        string
+	flagServerURL    *string
+	flagClientID     *string
+	flagTokenFile    *string
+	configInitialized bool
 )
 
 func init() {
 	// Load .env file if exists (ignore error if not found)
 	_ = godotenv.Load()
 
-	// Define flags
-	flagServerURL := flag.String("server-url", "", "OAuth server URL (default: http://localhost:8080 or SERVER_URL env)")
-	flagClientID := flag.String("client-id", "", "OAuth client ID (required, or set CLIENT_ID env)")
-	flagTokenFile := flag.String("token-file", "", "Token storage file (default: .authgate-tokens.json or TOKEN_FILE env)")
+	// Define flags (but don't parse yet to avoid conflicts with test flags)
+	flagServerURL = flag.String("server-url", "", "OAuth server URL (default: http://localhost:8080 or SERVER_URL env)")
+	flagClientID = flag.String("client-id", "", "OAuth client ID (required, or set CLIENT_ID env)")
+	flagTokenFile = flag.String("token-file", "", "Token storage file (default: .authgate-tokens.json or TOKEN_FILE env)")
+}
+
+// initConfig parses flags and initializes configuration
+// Separated from init() to avoid conflicts with test flag parsing
+func initConfig() {
+	if configInitialized {
+		return
+	}
+	configInitialized = true
+
 	flag.Parse()
 
 	// Priority: flag > env > default
@@ -84,6 +98,8 @@ type TokenStorageMap struct {
 }
 
 func main() {
+	initConfig() // Parse flags and initialize configuration
+
 	fmt.Printf("=== OAuth Device Code Flow CLI Demo (with Refresh Token) ===\n\n")
 
 	ctx := context.Background()
@@ -305,13 +321,21 @@ func loadTokens() (*TokenStorage, error) {
 }
 
 // saveTokens saves tokens to file (merges with existing tokens for other clients)
+// Uses file locking to prevent race conditions when multiple processes access the same file
 func saveTokens(storage *TokenStorage) error {
 	// Ensure ClientID is set
 	if storage.ClientID == "" {
 		storage.ClientID = clientID
 	}
 
-	// Load existing token map
+	// Acquire file lock to prevent concurrent access
+	lock, err := acquireFileLock(tokenFile)
+	if err != nil {
+		return fmt.Errorf("failed to acquire lock: %w", err)
+	}
+	defer lock.release()
+
+	// Load existing token map (inside lock to ensure consistency)
 	var storageMap TokenStorageMap
 	existingData, err := os.ReadFile(tokenFile)
 	if err == nil {
@@ -330,13 +354,25 @@ func saveTokens(storage *TokenStorage) error {
 	// Add or update token for current client
 	storageMap.Tokens[storage.ClientID] = storage
 
-	// Marshal and save
+	// Marshal data
 	data, err := json.MarshalIndent(storageMap, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(tokenFile, data, 0o600) // 0600 = read/write for owner only
+	// Write to temp file first (atomic write pattern)
+	tempFile := tokenFile + ".tmp"
+	if err := os.WriteFile(tempFile, data, 0o600); err != nil {
+		return fmt.Errorf("failed to write temp file: %w", err)
+	}
+
+	// Atomic rename (replaces old file)
+	if err := os.Rename(tempFile, tokenFile); err != nil {
+		os.Remove(tempFile) // Clean up temp file on error
+		return fmt.Errorf("failed to rename temp file: %w", err)
+	}
+
+	return nil
 }
 
 // refreshAccessToken refreshes the access token using refresh token
