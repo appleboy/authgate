@@ -368,7 +368,9 @@ func saveTokens(storage *TokenStorage) error {
 
 	// Atomic rename (replaces old file)
 	if err := os.Rename(tempFile, tokenFile); err != nil {
-		os.Remove(tempFile) // Clean up temp file on error
+		if removeErr := os.Remove(tempFile); removeErr != nil {
+			return fmt.Errorf("failed to rename temp file: %v; additionally failed to remove temp file: %w", err, removeErr)
+		}
 		return fmt.Errorf("failed to rename temp file: %w", err)
 	}
 
