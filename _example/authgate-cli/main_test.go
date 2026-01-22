@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
@@ -20,6 +21,12 @@ func init() {
 	}
 	if tokenFile == "" {
 		tokenFile = ".authgate-tokens.json"
+	}
+	// Initialize httpClient for tests
+	if httpClient == nil {
+		httpClient = &http.Client{
+			Timeout: 30 * time.Second,
+		}
 	}
 }
 
@@ -78,7 +85,12 @@ func TestSaveTokens_ConcurrentWrites(t *testing.T) {
 
 		expectedAccessToken := fmt.Sprintf("access-token-%d", i)
 		if token.AccessToken != expectedAccessToken {
-			t.Errorf("Client %s: Expected access token %s, got %s", clientID, expectedAccessToken, token.AccessToken)
+			t.Errorf(
+				"Client %s: Expected access token %s, got %s",
+				clientID,
+				expectedAccessToken,
+				token.AccessToken,
+			)
 		}
 	}
 

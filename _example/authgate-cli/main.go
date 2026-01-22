@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -16,13 +18,14 @@ import (
 )
 
 var (
-	serverURL        string
-	clientID         string
-	tokenFile        string
-	flagServerURL    *string
-	flagClientID     *string
-	flagTokenFile    *string
+	serverURL         string
+	clientID          string
+	tokenFile         string
+	flagServerURL     *string
+	flagClientID      *string
+	flagTokenFile     *string
 	configInitialized bool
+	httpClient        *http.Client
 )
 
 func init() {
@@ -30,9 +33,17 @@ func init() {
 	_ = godotenv.Load()
 
 	// Define flags (but don't parse yet to avoid conflicts with test flags)
-	flagServerURL = flag.String("server-url", "", "OAuth server URL (default: http://localhost:8080 or SERVER_URL env)")
+	flagServerURL = flag.String(
+		"server-url",
+		"",
+		"OAuth server URL (default: http://localhost:8080 or SERVER_URL env)",
+	)
 	flagClientID = flag.String("client-id", "", "OAuth client ID (required, or set CLIENT_ID env)")
-	flagTokenFile = flag.String("token-file", "", "Token storage file (default: .authgate-tokens.json or TOKEN_FILE env)")
+	flagTokenFile = flag.String(
+		"token-file",
+		"",
+		"Token storage file (default: .authgate-tokens.json or TOKEN_FILE env)",
+	)
 }
 
 // initConfig parses flags and initializes configuration
@@ -50,6 +61,25 @@ func initConfig() {
 	clientID = getConfig(*flagClientID, "CLIENT_ID", "")
 	tokenFile = getConfig(*flagTokenFile, "TOKEN_FILE", ".authgate-tokens.json")
 
+	// Validate SERVER_URL format
+	if err := validateServerURL(serverURL); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Invalid SERVER_URL: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Warn if using HTTP instead of HTTPS
+	if strings.HasPrefix(strings.ToLower(serverURL), "http://") {
+		fmt.Fprintln(
+			os.Stderr,
+			"⚠️  WARNING: Using HTTP instead of HTTPS. Tokens will be transmitted in plaintext!",
+		)
+		fmt.Fprintln(
+			os.Stderr,
+			"⚠️  This is only safe for local development. Use HTTPS in production.",
+		)
+		fmt.Fprintln(os.Stderr)
+	}
+
 	if clientID == "" {
 		fmt.Println("Error: CLIENT_ID not set. Please provide it via:")
 		fmt.Println("  1. Command line flag: -client-id=<your-client-id>")
@@ -57,6 +87,20 @@ func initConfig() {
 		fmt.Println("  3. .env file: CLIENT_ID=<your-client-id>")
 		fmt.Println("\nYou can find the client_id in the server startup logs.")
 		os.Exit(1)
+	}
+
+	// Initialize secure HTTP client
+	httpClient = &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				MinVersion: tls.VersionTLS12,
+			},
+			MaxIdleConns:        10,
+			IdleConnTimeout:     90 * time.Second,
+			TLSHandshakeTimeout: 10 * time.Second,
+			DisableKeepAlives:   false,
+		},
 	}
 }
 
@@ -73,6 +117,28 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// validateServerURL validates that the server URL is properly formatted
+func validateServerURL(rawURL string) error {
+	if rawURL == "" {
+		return fmt.Errorf("server URL cannot be empty")
+	}
+
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL format: %w", err)
+	}
+
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("URL scheme must be http or https, got: %s", u.Scheme)
+	}
+
+	if u.Host == "" {
+		return fmt.Errorf("URL must include a host")
+	}
+
+	return nil
 }
 
 type ErrorResponse struct {
@@ -275,20 +341,28 @@ func pollForTokenWithProgress(
 }
 
 func verifyToken(accessToken string) error {
-	req, _ := http.NewRequest("GET", serverURL+"/oauth/tokeninfo", nil)
+	req, err := http.NewRequest("GET", serverURL+"/oauth/tokeninfo", nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		var errResp ErrorResponse
-		json.Unmarshal(body, &errResp)
+		if err := json.Unmarshal(body, &errResp); err != nil {
+			return fmt.Errorf("server returned status %d: %s", resp.StatusCode, string(body))
+		}
 		return fmt.Errorf("%s: %s", errResp.Error, errResp.ErrorDescription)
 	}
 
@@ -369,7 +443,11 @@ func saveTokens(storage *TokenStorage) error {
 	// Atomic rename (replaces old file)
 	if err := os.Rename(tempFile, tokenFile); err != nil {
 		if removeErr := os.Remove(tempFile); removeErr != nil {
-			return fmt.Errorf("failed to rename temp file: %v; additionally failed to remove temp file: %w", err, removeErr)
+			return fmt.Errorf(
+				"failed to rename temp file: %v; additionally failed to remove temp file: %w",
+				err,
+				removeErr,
+			)
 		}
 		return fmt.Errorf("failed to rename temp file: %w", err)
 	}
@@ -384,13 +462,16 @@ func refreshAccessToken(refreshToken string) (*TokenStorage, error) {
 	data.Set("refresh_token", refreshToken)
 	data.Set("client_id", clientID)
 
-	resp, err := http.PostForm(serverURL+"/oauth/token", data)
+	resp, err := httpClient.PostForm(serverURL+"/oauth/token", data)
 	if err != nil {
 		return nil, fmt.Errorf("refresh request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		var errResp ErrorResponse
@@ -401,7 +482,7 @@ func refreshAccessToken(refreshToken string) (*TokenStorage, error) {
 			}
 			return nil, fmt.Errorf("%s: %s", errResp.Error, errResp.ErrorDescription)
 		}
-		return nil, fmt.Errorf("refresh failed with status %d", resp.StatusCode)
+		return nil, fmt.Errorf("refresh failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
 	// Parse token response
@@ -435,10 +516,13 @@ func refreshAccessToken(refreshToken string) (*TokenStorage, error) {
 // makeAPICallWithAutoRefresh demonstrates automatic refresh on 401
 func makeAPICallWithAutoRefresh(storage *TokenStorage) error {
 	// Try with current access token
-	req, _ := http.NewRequest("GET", serverURL+"/oauth/tokeninfo", nil)
+	req, err := http.NewRequest("GET", serverURL+"/oauth/tokeninfo", nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
 	req.Header.Set("Authorization", "Bearer "+storage.AccessToken)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("API request failed: %w", err)
 	}
@@ -466,17 +550,23 @@ func makeAPICallWithAutoRefresh(storage *TokenStorage) error {
 		fmt.Println("Token refreshed, retrying API call...")
 
 		// Retry with new token
-		req, _ = http.NewRequest("GET", serverURL+"/oauth/tokeninfo", nil)
+		req, err = http.NewRequest("GET", serverURL+"/oauth/tokeninfo", nil)
+		if err != nil {
+			return fmt.Errorf("failed to create retry request: %w", err)
+		}
 		req.Header.Set("Authorization", "Bearer "+storage.AccessToken)
 
-		resp, err = http.DefaultClient.Do(req)
+		resp, err = httpClient.Do(req)
 		if err != nil {
 			return fmt.Errorf("retry failed: %w", err)
 		}
 		defer resp.Body.Close()
 	}
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("API call failed with status %d: %s", resp.StatusCode, string(body))

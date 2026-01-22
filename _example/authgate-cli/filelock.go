@@ -21,7 +21,7 @@ func acquireFileLock(filePath string) (*fileLock, error) {
 
 	for i := 0; i < maxRetries; i++ {
 		// Try to create lock file exclusively (fails if already exists)
-		lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+		lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 		if err == nil {
 			// Successfully acquired lock
 			// Write PID to lock file for debugging
@@ -40,7 +40,11 @@ func acquireFileLock(filePath string) (*fileLock, error) {
 				if age > 30*time.Second {
 					// Stale lock, try to remove it; handle races and real errors
 					if remErr := os.Remove(lockPath); remErr != nil && !os.IsNotExist(remErr) {
-						return nil, fmt.Errorf("failed to remove stale lock file %s: %w", lockPath, remErr)
+						return nil, fmt.Errorf(
+							"failed to remove stale lock file %s: %w",
+							lockPath,
+							remErr,
+						)
 					}
 					continue
 				}
@@ -55,7 +59,10 @@ func acquireFileLock(filePath string) (*fileLock, error) {
 		return nil, fmt.Errorf("failed to acquire file lock: %w", err)
 	}
 
-	return nil, fmt.Errorf("timeout waiting for file lock after %v", time.Duration(maxRetries)*retryDelay)
+	return nil, fmt.Errorf(
+		"timeout waiting for file lock after %v",
+		time.Duration(maxRetries)*retryDelay,
+	)
 }
 
 // release releases the file lock

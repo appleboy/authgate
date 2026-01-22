@@ -93,7 +93,7 @@ func TestFileLock_StaleLocksCleanup(t *testing.T) {
 	lockPath := testFile + ".lock"
 
 	// Create a stale lock file (older than 30 seconds)
-	staleLock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	staleLock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
 		t.Fatalf("Failed to create stale lock: %v", err)
 	}
@@ -176,7 +176,7 @@ func TestFileLock_Timeout(t *testing.T) {
 	lockPath := testFile + ".lock"
 
 	// Create a fresh lock file (not stale)
-	freshLock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	freshLock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
 		t.Fatalf("Failed to create fresh lock: %v", err)
 	}
