@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -318,41 +319,169 @@ func performDeviceFlow(ctx context.Context) (*TokenStorage, error) {
 }
 
 // pollForTokenWithProgress polls for token while showing progress dots
+// Implements exponential backoff for slow_down errors per RFC 8628
 func pollForTokenWithProgress(
 	ctx context.Context,
 	config *oauth2.Config,
 	deviceAuth *oauth2.DeviceAuthResponse,
 ) (*oauth2.Token, error) {
-	// Create a channel to receive the token
-	tokenChan := make(chan *oauth2.Token, 1)
-	errChan := make(chan error, 1)
+	// Initial polling interval (from DeviceAuthResponse)
+	interval := deviceAuth.Interval
+	if interval == 0 {
+		interval = 5 // Default to 5 seconds per RFC 8628
+	}
 
-	// Start polling in a goroutine
-	go func() {
-		token, err := config.DeviceAccessToken(ctx, deviceAuth)
-		if err != nil {
-			errChan <- err
-			return
-		}
-		tokenChan <- token
-	}()
+	// UI update interval (less frequent than polling to reduce flicker)
+	uiUpdateInterval := 2 * time.Second
 
-	// Show progress dots while waiting
-	ticker := time.NewTicker(time.Second)
+	// Exponential backoff state
+	pollInterval := time.Duration(interval) * time.Second
+	backoffMultiplier := 1.0
+
+	ticker := time.NewTicker(uiUpdateInterval)
 	defer ticker.Stop()
+
+	pollTicker := time.NewTicker(pollInterval)
+	defer pollTicker.Stop()
+
+	dotCount := 0
+	lastUpdate := time.Now()
 
 	for {
 		select {
-		case token := <-tokenChan:
-			fmt.Println() // New line after dots
+		case <-ctx.Done():
+			fmt.Println()
+			return nil, ctx.Err()
+
+		case <-pollTicker.C:
+			// Attempt to exchange device code for token
+			token, err := exchangeDeviceCode(
+				ctx,
+				config.Endpoint.TokenURL,
+				config.ClientID,
+				deviceAuth.DeviceCode,
+			)
+			if err != nil {
+				var oauthErr *oauth2.RetrieveError
+				if errors.As(err, &oauthErr) {
+					// Parse OAuth error response
+					var errResp ErrorResponse
+					if jsonErr := json.Unmarshal(oauthErr.Body, &errResp); jsonErr == nil {
+						switch errResp.Error {
+						case "authorization_pending":
+							// User hasn't authorized yet, continue polling
+							continue
+
+						case "slow_down":
+							// Server requests slower polling - increase interval
+							backoffMultiplier *= 1.5
+							newInterval := time.Duration(float64(pollInterval) * backoffMultiplier)
+							if newInterval > 60*time.Second {
+								newInterval = 60 * time.Second // Cap at 60 seconds
+							}
+							pollInterval = newInterval
+							pollTicker.Reset(pollInterval)
+							continue
+
+						case "expired_token":
+							fmt.Println()
+							return nil, fmt.Errorf("device code expired, please restart the flow")
+
+						case "access_denied":
+							fmt.Println()
+							return nil, fmt.Errorf("user denied authorization")
+
+						default:
+							fmt.Println()
+							return nil, fmt.Errorf(
+								"authorization failed: %s - %s",
+								errResp.Error,
+								errResp.ErrorDescription,
+							)
+						}
+					}
+				}
+				// Unknown error
+				fmt.Println()
+				return nil, fmt.Errorf("token exchange failed: %w", err)
+			}
+
+			// Success!
+			fmt.Println()
 			return token, nil
-		case err := <-errChan:
-			fmt.Println() // New line after dots
-			return nil, err
+
 		case <-ticker.C:
-			fmt.Print(".")
+			// Update UI (show progress dots)
+			if time.Since(lastUpdate) >= uiUpdateInterval {
+				fmt.Print(".")
+				dotCount++
+				lastUpdate = time.Now()
+
+				// Add newline every 50 dots for readability
+				if dotCount%50 == 0 {
+					fmt.Println()
+				}
+			}
 		}
 	}
+}
+
+// exchangeDeviceCode exchanges device code for access token
+func exchangeDeviceCode(
+	ctx context.Context,
+	tokenURL, clientID, deviceCode string,
+) (*oauth2.Token, error) {
+	data := url.Values{}
+	data.Set("grant_type", "urn:ietf:params:oauth:grant-type:device_code")
+	data.Set("device_code", deviceCode)
+	data.Set("client_id", clientID)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", tokenURL, strings.NewReader(data.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// Handle non-200 responses
+	if resp.StatusCode != http.StatusOK {
+		return nil, &oauth2.RetrieveError{
+			Response: resp,
+			Body:     body,
+		}
+	}
+
+	// Parse successful token response
+	var tokenResp struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		TokenType    string `json:"token_type"`
+		ExpiresIn    int    `json:"expires_in"`
+		Scope        string `json:"scope"`
+	}
+
+	if err := json.Unmarshal(body, &tokenResp); err != nil {
+		return nil, fmt.Errorf("failed to parse token response: %w", err)
+	}
+
+	token := &oauth2.Token{
+		AccessToken:  tokenResp.AccessToken,
+		RefreshToken: tokenResp.RefreshToken,
+		TokenType:    tokenResp.TokenType,
+		Expiry:       time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second),
+	}
+
+	return token, nil
 }
 
 func verifyToken(accessToken string) error {
