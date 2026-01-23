@@ -1,5 +1,6 @@
 GO ?= go
 EXECUTABLE := authgate
+EXECUTABLE_CLI := authgate-cli
 GOFILES := $(shell find . -type f -name "*.go")
 TAGS ?=
 
@@ -29,6 +30,15 @@ build: $(EXECUTABLE)
 $(EXECUTABLE): $(GOFILES)
 	$(GO) build -v -tags '$(TAGS)' -ldflags '$(EXTLDFLAGS)-s -w $(LDFLAGS)' -o bin/$@ .
 
+## build-cli: build the authgate-cli binary
+build-cli: $(EXECUTABLE_CLI)
+
+$(EXECUTABLE_CLI):
+	cd _example/authgate-cli && $(GO) build -v -o ../../bin/$@ .
+
+## build-all: build both authgate and authgate-cli binaries
+build-all: build build-cli
+
 ## install: install the authgate binary
 install: $(GOFILES)
 	$(GO) install -v -tags '$(TAGS)' -ldflags '$(EXTLDFLAGS)-s -w $(LDFLAGS)'
@@ -55,12 +65,27 @@ build_linux_amd64:
 build_linux_arm64:
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build -a -tags '$(TAGS)' -ldflags '$(EXTLDFLAGS)-s -w $(LDFLAGS)' -o release/linux/arm64/$(EXECUTABLE) .
 
+## build_cli_linux_amd64: build the authgate-cli binary for linux amd64
+build_cli_linux_amd64:
+	cd _example/authgate-cli && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -a -o ../../release/linux/amd64/$(EXECUTABLE_CLI) .
+
+## build_cli_linux_arm64: build the authgate-cli binary for linux arm64
+build_cli_linux_arm64:
+	cd _example/authgate-cli && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build -a -o ../../release/linux/arm64/$(EXECUTABLE_CLI) .
+
+## build_all_linux_amd64: build both binaries for linux amd64
+build_all_linux_amd64: build_linux_amd64 build_cli_linux_amd64
+
+## build_all_linux_arm64: build both binaries for linux arm64
+build_all_linux_arm64: build_linux_arm64 build_cli_linux_arm64
+
 ## clean: remove build artifacts and test coverage
 clean:
 	rm -rf bin/ release/ coverage.txt
 
-.PHONY: help build install test fmt lint clean
-.PHONY: build_linux_amd64 build_linux_arm64
+.PHONY: help build build-cli build-all install test fmt lint clean
+.PHONY: build_linux_amd64 build_linux_arm64 build_cli_linux_amd64 build_cli_linux_arm64
+.PHONY: build_all_linux_amd64 build_all_linux_arm64
 
 ## help: print this help message
 help:
