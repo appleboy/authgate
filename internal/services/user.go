@@ -2,8 +2,6 @@ package services
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"log"
@@ -14,6 +12,7 @@ import (
 	"github.com/appleboy/authgate/internal/models"
 	"github.com/appleboy/authgate/internal/store"
 
+	"github.com/appleboy/com/random"
 	"github.com/google/uuid"
 	"golang.org/x/oauth2"
 	"gorm.io/gorm"
@@ -405,7 +404,7 @@ func (s *UserService) generateUniqueUsername(baseUsername, provider string) stri
 	}
 
 	// Last resort: random suffix
-	randomSuffix := generateShortRandomString(6)
+	randomSuffix := random.String(6)
 	return fmt.Sprintf("%s-%s", username, randomSuffix)
 }
 
@@ -421,14 +420,4 @@ func sanitizeUsername(username string) string {
 		}
 		return -1
 	}, username))
-}
-
-// generateShortRandomString generates a short random string
-func generateShortRandomString(length int) string {
-	bytes := make([]byte, length)
-	if _, err := rand.Read(bytes); err != nil {
-		// Fallback to timestamp-based generation if crypto rand fails
-		return fmt.Sprintf("%d", time.Now().UnixNano())[:length]
-	}
-	return base64.RawURLEncoding.EncodeToString(bytes)[:length]
 }
