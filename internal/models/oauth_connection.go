@@ -28,7 +28,7 @@ type OAuthConnection struct {
 	UpdatedAt time.Time
 }
 
-// TableName overrides the table name used by OAuthClient to `oauth_client`
+// TableName overrides the table name used by  OAuthConnection to `oauth_connections`
 func (OAuthConnection) TableName() string {
 	return "oauth_connections"
 }

@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"regexp"
 	"strings"
 	"time"
 
@@ -396,12 +395,18 @@ func (s *UserService) generateUniqueUsername(baseUsername, provider string) stri
 	return fmt.Sprintf("%s-%s", username, randomSuffix)
 }
 
-// sanitizeUsername removes special characters from username
+// sanitizeUsername removes special characters, keeps only alphanumeric, '_' and '-'.
 func sanitizeUsername(username string) string {
-	// Only keep alphanumeric, underscore, and hyphen
-	reg := regexp.MustCompile(`[^a-zA-Z0-9_-]+`)
-	cleaned := reg.ReplaceAllString(username, "")
-	return strings.ToLower(cleaned)
+	return strings.ToLower(strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') ||
+			(r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') ||
+			r == '_' ||
+			r == '-' {
+			return r
+		}
+		return -1
+	}, username))
 }
 
 // generateShortRandomString generates a short random string
