@@ -145,6 +145,7 @@ func testBasicOperations(t *testing.T, driver string, pgContainer *postgres.Post
 			ClientSecret: "secret",
 			ClientName:   "Test Client",
 			Description:  "Test Description",
+			UserID:       uuid.New().String(),
 			Scopes:       "read write",
 			GrantTypes:   "device_code",
 			IsActive:     true,

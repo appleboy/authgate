@@ -71,6 +71,7 @@ func (h *ClientHandler) CreateClient(c *gin.Context) {
 	req := services.CreateClientRequest{
 		ClientName:   c.PostForm("client_name"),
 		Description:  c.PostForm("description"),
+		UserID:       userID.(string),
 		Scopes:       c.PostForm("scopes"),
 		GrantTypes:   c.PostForm("grant_types"),
 		RedirectURIs: c.PostForm("redirect_uris"),

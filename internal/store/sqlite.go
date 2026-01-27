@@ -68,6 +68,7 @@ func (s *Store) seedData() error {
 	// Create default user if not exists
 	var userCount int64
 	s.db.Model(&models.User{}).Count(&userCount)
+	userID := uuid.New().String()
 	if userCount == 0 {
 		// Generate random password
 		password, err := generateRandomPassword(16)
@@ -79,7 +80,7 @@ func (s *Store) seedData() error {
 			return err
 		}
 		user := &models.User{
-			ID:           uuid.New().String(),
+			ID:           userID,
 			Username:     "admin",
 			Email:        "admin@localhost", // Default email for admin
 			PasswordHash: string(hash),
@@ -102,6 +103,7 @@ func (s *Store) seedData() error {
 			return err
 		}
 		client := &models.OAuthClient{
+			UserID:       userID,
 			ClientID:     clientID,
 			ClientSecret: string(secretHash),
 			ClientName:   "AuthGate CLI",

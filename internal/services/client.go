@@ -28,6 +28,7 @@ func NewClientService(s *store.Store) *ClientService {
 type CreateClientRequest struct {
 	ClientName   string
 	Description  string
+	UserID       string
 	Scopes       string
 	GrantTypes   string
 	RedirectURIs string
@@ -80,6 +81,7 @@ func (s *ClientService) CreateClient(req CreateClientRequest) (*ClientResponse, 
 		ClientSecret: string(secretHash),
 		ClientName:   strings.TrimSpace(req.ClientName),
 		Description:  strings.TrimSpace(req.Description),
+		UserID:       req.UserID,
 		Scopes:       strings.TrimSpace(scopes),
 		GrantTypes:   strings.TrimSpace(grantTypes),
 		RedirectURIs: strings.TrimSpace(req.RedirectURIs),

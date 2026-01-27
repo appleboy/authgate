@@ -9,6 +9,7 @@ type OAuthClient struct {
 	ClientSecret string `gorm:"not null"` // bcrypt hashed secret
 	ClientName   string `gorm:"not null"`
 	Description  string `gorm:"type:text"`
+	UserID       string `gorm:"not null"`                       // User ID who owns this client
 	Scopes       string `gorm:"not null"`                       // space-separated scopes
 	GrantTypes   string `gorm:"not null;default:'device_code'"` // comma-separated grant types
 	RedirectURIs string `gorm:"type:text"`                      // comma-separated redirect URIs

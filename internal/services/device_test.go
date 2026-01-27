@@ -26,6 +26,7 @@ func createTestClient(t *testing.T, s *store.Store, isActive bool) *models.OAuth
 		ClientSecret: "secret",
 		ClientName:   "Test Client",
 		Description:  "Test client for testing",
+		UserID:       uuid.New().String(),
 		Scopes:       "read write",
 		GrantTypes:   "device_code",
 		IsActive:     true, // Create with default value first
