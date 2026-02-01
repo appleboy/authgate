@@ -36,7 +36,7 @@ func New(driver, dsn string) (*Store, error) {
 	// Auto migrate
 	if err := db.AutoMigrate(
 		&models.User{},
-		&models.OAuthClient{},
+		&models.OAuthApplication{},
 		&models.DeviceCode{},
 		&models.AccessToken{},
 		&models.OAuthConnection{},
@@ -94,7 +94,7 @@ func (s *Store) seedData() error {
 
 	// Create default OAuth client if not exists
 	var clientCount int64
-	s.db.Model(&models.OAuthClient{}).Count(&clientCount)
+	s.db.Model(&models.OAuthApplication{}).Count(&clientCount)
 	if clientCount == 0 {
 		clientID := uuid.New().String()
 		clientSecret := uuid.New().String()
@@ -102,15 +102,17 @@ func (s *Store) seedData() error {
 		if err != nil {
 			return err
 		}
-		client := &models.OAuthClient{
-			UserID:       userID,
-			ClientID:     clientID,
-			ClientSecret: string(secretHash),
-			ClientName:   "AuthGate CLI",
-			Description:  "Default CLI client for device authorization flow",
-			Scopes:       "read write",
-			GrantTypes:   "device_code",
-			IsActive:     true,
+		client := &models.OAuthApplication{
+			UserID:           userID,
+			ClientID:         clientID,
+			ClientSecret:     string(secretHash),
+			ClientName:       "AuthGate CLI",
+			Description:      "Default CLI client for device authorization flow",
+			Scopes:           "read write",
+			GrantTypes:       "device_code",
+			RedirectURIs:     models.StringArray{},
+			EnableDeviceFlow: true,
+			IsActive:         true,
 		}
 		if err := s.db.Create(client).Error; err != nil {
 			return err
@@ -227,34 +229,34 @@ func (s *Store) UpsertExternalUser(
 }
 
 // OAuth Client operations
-func (s *Store) GetClient(clientID string) (*models.OAuthClient, error) {
-	var client models.OAuthClient
+func (s *Store) GetClient(clientID string) (*models.OAuthApplication, error) {
+	var client models.OAuthApplication
 	if err := s.db.Where("client_id = ?", clientID).First(&client).Error; err != nil {
 		return nil, err
 	}
 	return &client, nil
 }
 
-func (s *Store) ListClients() ([]models.OAuthClient, error) {
-	var clients []models.OAuthClient
+func (s *Store) ListClients() ([]models.OAuthApplication, error) {
+	var clients []models.OAuthApplication
 	if err := s.db.Order("created_at DESC").Find(&clients).Error; err != nil {
 		return nil, err
 	}
 	return clients, nil
 }
 
-func (s *Store) GetClientsByIDs(clientIDs []string) (map[string]*models.OAuthClient, error) {
+func (s *Store) GetClientsByIDs(clientIDs []string) (map[string]*models.OAuthApplication, error) {
 	if len(clientIDs) == 0 {
-		return make(map[string]*models.OAuthClient), nil
+		return make(map[string]*models.OAuthApplication), nil
 	}
 
-	var clients []models.OAuthClient
+	var clients []models.OAuthApplication
 	if err := s.db.Where("client_id IN ?", clientIDs).Find(&clients).Error; err != nil {
 		return nil, err
 	}
 
 	// Convert to map for easy lookup
-	clientMap := make(map[string]*models.OAuthClient, len(clients))
+	clientMap := make(map[string]*models.OAuthApplication, len(clients))
 	for i := range clients {
 		clientMap[clients[i].ClientID] = &clients[i]
 	}
@@ -262,16 +264,16 @@ func (s *Store) GetClientsByIDs(clientIDs []string) (map[string]*models.OAuthCli
 	return clientMap, nil
 }
 
-func (s *Store) CreateClient(client *models.OAuthClient) error {
+func (s *Store) CreateClient(client *models.OAuthApplication) error {
 	return s.db.Create(client).Error
 }
 
-func (s *Store) UpdateClient(client *models.OAuthClient) error {
+func (s *Store) UpdateClient(client *models.OAuthApplication) error {
 	return s.db.Save(client).Error
 }
 
 func (s *Store) DeleteClient(clientID string) error {
-	return s.db.Where("client_id = ?", clientID).Delete(&models.OAuthClient{}).Error
+	return s.db.Where("client_id = ?", clientID).Delete(&models.OAuthApplication{}).Error
 }
 
 // Device Code operations

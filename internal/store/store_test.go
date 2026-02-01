@@ -140,15 +140,17 @@ func testBasicOperations(t *testing.T, driver string, pgContainer *postgres.Post
 	t.Run("CreateAndGetClient", func(t *testing.T) {
 		store := createFreshStore(t, driver, pgContainer)
 
-		client := &models.OAuthClient{
-			ClientID:     uuid.New().String(),
-			ClientSecret: "secret",
-			ClientName:   "Test Client",
-			Description:  "Test Description",
-			UserID:       uuid.New().String(),
-			Scopes:       "read write",
-			GrantTypes:   "device_code",
-			IsActive:     true,
+		client := &models.OAuthApplication{
+			ClientID:         uuid.New().String(),
+			ClientSecret:     "secret",
+			ClientName:       "Test Client",
+			Description:      "Test Description",
+			UserID:           uuid.New().String(),
+			Scopes:           "read write",
+			GrantTypes:       "device_code",
+			RedirectURIs:     models.StringArray{"http://localhost:3000/callback"},
+			EnableDeviceFlow: true,
+			IsActive:         true,
 		}
 		err := store.CreateClient(client)
 		require.NoError(t, err)

@@ -53,6 +53,16 @@
                 </div>
                 {{end}}
                 <div class="info-row">
+                    <div class="info-label">🔄 Device Flow:</div>
+                    <div class="info-value">
+                        {{if .client.EnableDeviceFlow}}
+                        <span class="status-badge status-active">✓ Enabled</span>
+                        {{else}}
+                        <span class="status-badge status-inactive">✗ Disabled</span>
+                        {{end}}
+                    </div>
+                </div>
+                <div class="info-row">
                     <div class="info-label">📊 Status:</div>
                     <div class="info-value">
                         {{if .client.IsActive}}

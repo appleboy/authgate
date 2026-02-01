@@ -31,7 +31,7 @@ type CreateClientRequest struct {
 	UserID       string
 	Scopes       string
 	GrantTypes   string
-	RedirectURIs string
+	RedirectURIs []string
 	CreatedBy    string
 }
 
@@ -40,12 +40,12 @@ type UpdateClientRequest struct {
 	Description  string
 	Scopes       string
 	GrantTypes   string
-	RedirectURIs string
+	RedirectURIs []string
 	IsActive     bool
 }
 
 type ClientResponse struct {
-	*models.OAuthClient
+	*models.OAuthApplication
 	ClientSecretPlain string // Only populated on creation
 }
 
@@ -76,17 +76,18 @@ func (s *ClientService) CreateClient(req CreateClientRequest) (*ClientResponse, 
 		scopes = "read write"
 	}
 
-	client := &models.OAuthClient{
-		ClientID:     clientID,
-		ClientSecret: string(secretHash),
-		ClientName:   strings.TrimSpace(req.ClientName),
-		Description:  strings.TrimSpace(req.Description),
-		UserID:       req.UserID,
-		Scopes:       strings.TrimSpace(scopes),
-		GrantTypes:   strings.TrimSpace(grantTypes),
-		RedirectURIs: strings.TrimSpace(req.RedirectURIs),
-		IsActive:     true,
-		CreatedBy:    req.CreatedBy,
+	client := &models.OAuthApplication{
+		ClientID:         clientID,
+		ClientSecret:     string(secretHash),
+		ClientName:       strings.TrimSpace(req.ClientName),
+		Description:      strings.TrimSpace(req.Description),
+		UserID:           req.UserID,
+		Scopes:           strings.TrimSpace(scopes),
+		GrantTypes:       strings.TrimSpace(grantTypes),
+		RedirectURIs:     models.StringArray(req.RedirectURIs),
+		EnableDeviceFlow: true,
+		IsActive:         true,
+		CreatedBy:        req.CreatedBy,
 	}
 
 	if err := s.store.CreateClient(client); err != nil {
@@ -94,7 +95,7 @@ func (s *ClientService) CreateClient(req CreateClientRequest) (*ClientResponse, 
 	}
 
 	return &ClientResponse{
-		OAuthClient:       client,
+		OAuthApplication:  client,
 		ClientSecretPlain: clientSecret,
 	}, nil
 }
@@ -113,7 +114,7 @@ func (s *ClientService) UpdateClient(clientID string, req UpdateClientRequest) e
 	client.Description = strings.TrimSpace(req.Description)
 	client.Scopes = strings.TrimSpace(req.Scopes)
 	client.GrantTypes = strings.TrimSpace(req.GrantTypes)
-	client.RedirectURIs = strings.TrimSpace(req.RedirectURIs)
+	client.RedirectURIs = models.StringArray(req.RedirectURIs)
 	client.IsActive = req.IsActive
 
 	return s.store.UpdateClient(client)
@@ -129,11 +130,11 @@ func (s *ClientService) DeleteClient(clientID string) error {
 	return s.store.DeleteClient(clientID)
 }
 
-func (s *ClientService) ListClients() ([]models.OAuthClient, error) {
+func (s *ClientService) ListClients() ([]models.OAuthApplication, error) {
 	return s.store.ListClients()
 }
 
-func (s *ClientService) GetClient(clientID string) (*models.OAuthClient, error) {
+func (s *ClientService) GetClient(clientID string) (*models.OAuthApplication, error) {
 	client, err := s.store.GetClient(clientID)
 	if err != nil {
 		return nil, ErrClientNotFound
