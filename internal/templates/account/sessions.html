@@ -38,6 +38,38 @@
 
             <p class="subtitle">Manage devices that have access to your account</p>
 
+            <!-- Search and Filters -->
+            <form method="GET" action="/account/sessions" class="search-filters">
+                <div class="search-group">
+                    <label for="search" class="search-label">Search</label>
+                    <div class="search-input-wrapper">
+                        <span class="search-icon">🔍</span>
+                        <input
+                            type="text"
+                            id="search"
+                            name="search"
+                            class="search-input"
+                            placeholder="Search by client name or scopes..."
+                            value="{{.Search}}"
+                        >
+                    </div>
+                </div>
+
+                <div class="page-size-group">
+                    <label for="page_size" class="search-label">Items per page</label>
+                    <select name="page_size" id="page_size" class="page-size-select" onchange="this.form.submit()">
+                        <option value="10" {{if eq .PageSize 10}}selected{{end}}>10 items</option>
+                        <option value="20" {{if eq .PageSize 20}}selected{{end}}>20 items</option>
+                        <option value="50" {{if eq .PageSize 50}}selected{{end}}>50 items</option>
+                    </select>
+                </div>
+
+                <div class="search-actions">
+                    <button type="submit" class="btn-search">Search</button>
+                    <a href="/account/sessions" class="btn-clear">Clear</a>
+                </div>
+            </form>
+
             {{if .Sessions}}
             <div class="sessions-list">
                 <div class="sessions-header">
@@ -119,11 +151,67 @@
                     </div>
                     {{end}}
                 </div>
+
+                <!-- Pagination Controls -->
+                {{if .Pagination}}
+                <div class="pagination-container">
+                    <div class="pagination-info">
+                        <span>Showing</span>
+                        <span class="pagination-info-total">{{.Pagination.Total}}</span>
+                        <span>total sessions</span>
+                    </div>
+
+                    <div class="pagination-controls">
+                        {{if .Pagination.HasPrev}}
+                        <a href="/account/sessions?page={{.Pagination.PrevPage}}&page_size={{.PageSize}}{{if .Search}}&search={{.Search}}{{end}}"
+                           class="pagination-button">
+                            <span class="pagination-button-icon">←</span>
+                            <span>Previous</span>
+                        </a>
+                        {{else}}
+                        <button class="pagination-button" disabled>
+                            <span class="pagination-button-icon">←</span>
+                            <span>Previous</span>
+                        </button>
+                        {{end}}
+
+                        <span class="pagination-current">
+                            Page {{.Pagination.CurrentPage}} of {{.Pagination.TotalPages}}
+                        </span>
+
+                        {{if .Pagination.HasNext}}
+                        <a href="/account/sessions?page={{.Pagination.NextPage}}&page_size={{.PageSize}}{{if .Search}}&search={{.Search}}{{end}}"
+                           class="pagination-button">
+                            <span>Next</span>
+                            <span class="pagination-button-icon">→</span>
+                        </a>
+                        {{else}}
+                        <button class="pagination-button" disabled>
+                            <span>Next</span>
+                            <span class="pagination-button-icon">→</span>
+                        </button>
+                        {{end}}
+                    </div>
+                </div>
+                {{end}}
             </div>
             {{else}}
-            <div class="alert alert-info sessions-empty">
-                <p><strong>No Active Sessions</strong></p>
-                <p>You don't have any active sessions. Authorize a device to see it here.</p>
+            <div class="empty-state-with-search">
+                <div class="empty-state-icon-large">📭</div>
+                <h3 class="empty-state-title-large">
+                    {{if .Search}}
+                    No sessions found
+                    {{else}}
+                    No Active Sessions
+                    {{end}}
+                </h3>
+                <p class="empty-state-text">
+                    {{if .Search}}
+                    Try adjusting your search terms or clear the filter.
+                    {{else}}
+                    You don't have any active sessions. Authorize a device to see it here.
+                    {{end}}
+                </p>
             </div>
             {{end}}
             </div>

@@ -245,6 +245,45 @@ func (s *Store) ListClients() ([]models.OAuthApplication, error) {
 	return clients, nil
 }
 
+// ListClientsPaginated returns paginated OAuth clients with search support
+func (s *Store) ListClientsPaginated(
+	params PaginationParams,
+) ([]models.OAuthApplication, PaginationResult, error) {
+	var clients []models.OAuthApplication
+	var total int64
+
+	// Build base query
+	query := s.db.Model(&models.OAuthApplication{})
+
+	// Apply search filter if provided
+	if params.Search != "" {
+		searchPattern := "%" + params.Search + "%"
+		query = query.Where(
+			"client_name LIKE ? OR client_id LIKE ? OR description LIKE ?",
+			searchPattern, searchPattern, searchPattern,
+		)
+	}
+
+	// Count total records
+	if err := query.Count(&total).Error; err != nil {
+		return nil, PaginationResult{}, err
+	}
+
+	// Calculate pagination
+	pagination := CalculatePagination(total, params.Page, params.PageSize)
+
+	// Apply pagination and fetch results
+	offset := (params.Page - 1) * params.PageSize
+	if err := query.Order("created_at DESC").
+		Limit(params.PageSize).
+		Offset(offset).
+		Find(&clients).Error; err != nil {
+		return nil, PaginationResult{}, err
+	}
+
+	return clients, pagination, nil
+}
+
 func (s *Store) GetClientsByIDs(clientIDs []string) (map[string]*models.OAuthApplication, error) {
 	if len(clientIDs) == 0 {
 		return make(map[string]*models.OAuthApplication), nil
@@ -341,6 +380,51 @@ func (s *Store) GetTokensByUserID(userID string) ([]models.AccessToken, error) {
 		return nil, err
 	}
 	return tokens, nil
+}
+
+// GetTokensByUserIDPaginated returns paginated tokens for a user with search support
+func (s *Store) GetTokensByUserIDPaginated(
+	userID string,
+	params PaginationParams,
+) ([]models.AccessToken, PaginationResult, error) {
+	var tokens []models.AccessToken
+	var total int64
+
+	// Build base query
+	query := s.db.Model(&models.AccessToken{}).Where("user_id = ?", userID)
+
+	// Apply search filter if provided (search in scopes or join with clients for client_name)
+	if params.Search != "" {
+		searchPattern := "%" + params.Search + "%"
+		// Search in scopes or client_id
+		// For client_name search, we'll need to join with oauth_applications
+		query = query.Where(
+			"scopes LIKE ? OR client_id IN (?)",
+			searchPattern,
+			s.db.Model(&models.OAuthApplication{}).
+				Select("client_id").
+				Where("client_name LIKE ?", searchPattern),
+		)
+	}
+
+	// Count total records
+	if err := query.Count(&total).Error; err != nil {
+		return nil, PaginationResult{}, err
+	}
+
+	// Calculate pagination
+	pagination := CalculatePagination(total, params.Page, params.PageSize)
+
+	// Apply pagination and fetch results
+	offset := (params.Page - 1) * params.PageSize
+	if err := query.Order("created_at DESC").
+		Limit(params.PageSize).
+		Offset(offset).
+		Find(&tokens).Error; err != nil {
+		return nil, PaginationResult{}, err
+	}
+
+	return tokens, pagination, nil
 }
 
 func (s *Store) RevokeToken(tokenID string) error {

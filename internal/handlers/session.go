@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/appleboy/authgate/internal/services"
+	"github.com/appleboy/authgate/internal/store"
 
 	"github.com/gin-gonic/gin"
 )
@@ -30,7 +32,19 @@ func (h *SessionHandler) ListSessions(c *gin.Context) {
 		return
 	}
 
-	tokens, err := h.tokenService.GetUserTokensWithClient(userID.(string))
+	// Parse pagination parameters
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+	search := c.Query("search")
+
+	// Create pagination params
+	params := store.NewPaginationParams(page, pageSize, search)
+
+	// Get paginated tokens
+	tokens, pagination, err := h.tokenService.GetUserTokensWithClientPaginated(
+		userID.(string),
+		params,
+	)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"Error": "Failed to retrieve sessions",
@@ -52,6 +66,9 @@ func (h *SessionHandler) ListSessions(c *gin.Context) {
 
 	c.HTML(http.StatusOK, "account/sessions.html", gin.H{
 		"Sessions":   tokens,
+		"Pagination": pagination,
+		"Search":     search,
+		"PageSize":   pageSize,
 		"csrf_token": csrfToken,
 		"username":   user.Username,
 		"is_admin":   user.IsAdmin(),

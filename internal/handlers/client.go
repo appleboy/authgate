@@ -2,10 +2,12 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/appleboy/authgate/internal/middleware"
 	"github.com/appleboy/authgate/internal/services"
+	"github.com/appleboy/authgate/internal/store"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
@@ -37,7 +39,16 @@ func parseRedirectURIs(input string) []string {
 
 // ShowClientsPage displays the list of all OAuth clients
 func (h *ClientHandler) ShowClientsPage(c *gin.Context) {
-	clients, err := h.clientService.ListClients()
+	// Parse pagination parameters
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+	search := c.Query("search")
+
+	// Create pagination params
+	params := store.NewPaginationParams(page, pageSize, search)
+
+	// Get paginated clients
+	clients, pagination, err := h.clientService.ListClientsPaginated(params)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": "Failed to load clients: " + err.Error(),
@@ -63,6 +74,9 @@ func (h *ClientHandler) ShowClientsPage(c *gin.Context) {
 	user, _ := c.Get("user")
 	c.HTML(http.StatusOK, "admin/clients.html", gin.H{
 		"clients":    clients,
+		"Pagination": pagination,
+		"Search":     search,
+		"PageSize":   pageSize,
 		"user":       user,
 		"success":    successMsg,
 		"csrf_token": middleware.GetCSRFToken(c),

@@ -334,6 +334,54 @@ func (s *TokenService) GetUserTokensWithClient(userID string) ([]TokenWithClient
 	return result, nil
 }
 
+// GetUserTokensWithClientPaginated returns paginated tokens for a user with client information
+func (s *TokenService) GetUserTokensWithClientPaginated(
+	userID string,
+	params store.PaginationParams,
+) ([]TokenWithClient, store.PaginationResult, error) {
+	tokens, pagination, err := s.store.GetTokensByUserIDPaginated(userID, params)
+	if err != nil {
+		return nil, store.PaginationResult{}, err
+	}
+
+	if len(tokens) == 0 {
+		return []TokenWithClient{}, pagination, nil
+	}
+
+	// Collect unique client IDs
+	clientIDSet := make(map[string]bool)
+	for _, token := range tokens {
+		clientIDSet[token.ClientID] = true
+	}
+
+	clientIDs := make([]string, 0, len(clientIDSet))
+	for clientID := range clientIDSet {
+		clientIDs = append(clientIDs, clientID)
+	}
+
+	// Batch query all clients using WHERE IN
+	clientMap, err := s.store.GetClientsByIDs(clientIDs)
+	if err != nil {
+		return nil, store.PaginationResult{}, err
+	}
+
+	// Combine tokens with client information
+	result := make([]TokenWithClient, 0, len(tokens))
+	for _, token := range tokens {
+		clientName := token.ClientID // Default to ClientID if not found
+		if client, ok := clientMap[token.ClientID]; ok && client != nil {
+			clientName = client.ClientName
+		}
+
+		result = append(result, TokenWithClient{
+			AccessToken: token,
+			ClientName:  clientName,
+		})
+	}
+
+	return result, pagination, nil
+}
+
 // RevokeAllUserTokens revokes all tokens for a user
 func (s *TokenService) RevokeAllUserTokens(userID string) error {
 	return s.store.RevokeTokensByUserID(userID)

@@ -134,6 +134,13 @@ func (s *ClientService) ListClients() ([]models.OAuthApplication, error) {
 	return s.store.ListClients()
 }
 
+// ListClientsPaginated returns paginated OAuth clients with search support
+func (s *ClientService) ListClientsPaginated(
+	params store.PaginationParams,
+) ([]models.OAuthApplication, store.PaginationResult, error) {
+	return s.store.ListClientsPaginated(params)
+}
+
 func (s *ClientService) GetClient(clientID string) (*models.OAuthApplication, error) {
 	client, err := s.store.GetClient(clientID)
 	if err != nil {
