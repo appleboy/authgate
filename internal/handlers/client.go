@@ -19,6 +19,22 @@ func NewClientHandler(cs *services.ClientService) *ClientHandler {
 	return &ClientHandler{clientService: cs}
 }
 
+// parseRedirectURIs parses a comma-separated string into a slice of trimmed URIs
+func parseRedirectURIs(input string) []string {
+	var redirectURIs []string
+	if strings.TrimSpace(input) == "" {
+		return redirectURIs
+	}
+
+	parts := strings.Split(input, ",")
+	for _, uri := range parts {
+		if trimmed := strings.TrimSpace(uri); trimmed != "" {
+			redirectURIs = append(redirectURIs, trimmed)
+		}
+	}
+	return redirectURIs
+}
+
 // ShowClientsPage displays the list of all OAuth clients
 func (h *ClientHandler) ShowClientsPage(c *gin.Context) {
 	clients, err := h.clientService.ListClients()
@@ -69,25 +85,13 @@ func (h *ClientHandler) ShowCreateClientPage(c *gin.Context) {
 func (h *ClientHandler) CreateClient(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 
-	// Parse redirect URIs from comma-separated string
-	redirectURIsStr := c.PostForm("redirect_uris")
-	var redirectURIs []string
-	if strings.TrimSpace(redirectURIsStr) != "" {
-		parts := strings.Split(redirectURIsStr, ",")
-		for _, uri := range parts {
-			if trimmed := strings.TrimSpace(uri); trimmed != "" {
-				redirectURIs = append(redirectURIs, trimmed)
-			}
-		}
-	}
-
 	req := services.CreateClientRequest{
 		ClientName:   c.PostForm("client_name"),
 		Description:  c.PostForm("description"),
 		UserID:       userID.(string),
 		Scopes:       c.PostForm("scopes"),
 		GrantTypes:   c.PostForm("grant_types"),
-		RedirectURIs: redirectURIs,
+		RedirectURIs: parseRedirectURIs(c.PostForm("redirect_uris")),
 		CreatedBy:    userID.(string),
 	}
 
@@ -177,24 +181,12 @@ func (h *ClientHandler) ShowEditClientPage(c *gin.Context) {
 func (h *ClientHandler) UpdateClient(c *gin.Context) {
 	clientID := c.Param("id")
 
-	// Parse redirect URIs from comma-separated string
-	redirectURIsStr := c.PostForm("redirect_uris")
-	var redirectURIs []string
-	if strings.TrimSpace(redirectURIsStr) != "" {
-		parts := strings.Split(redirectURIsStr, ",")
-		for _, uri := range parts {
-			if trimmed := strings.TrimSpace(uri); trimmed != "" {
-				redirectURIs = append(redirectURIs, trimmed)
-			}
-		}
-	}
-
 	req := services.UpdateClientRequest{
 		ClientName:   c.PostForm("client_name"),
 		Description:  c.PostForm("description"),
 		Scopes:       c.PostForm("scopes"),
 		GrantTypes:   c.PostForm("grant_types"),
-		RedirectURIs: redirectURIs,
+		RedirectURIs: parseRedirectURIs(c.PostForm("redirect_uris")),
 		IsActive:     c.PostForm("is_active") == "true",
 	}
 
