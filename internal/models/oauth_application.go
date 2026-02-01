@@ -48,6 +48,21 @@ func (s StringArray) Value() (driver.Value, error) {
 	return json.Marshal(s)
 }
 
+// Join returns a string with elements joined by the specified separator
+func (s StringArray) Join(sep string) string {
+	if len(s) == 0 {
+		return ""
+	}
+	result := ""
+	for i, str := range s {
+		if i > 0 {
+			result += sep
+		}
+		result += str
+	}
+	return result
+}
+
 // TableName overrides the table name used by OAuthApplication to `oauth_applications`
 func (OAuthApplication) TableName() string {
 	return "oauth_applications"
