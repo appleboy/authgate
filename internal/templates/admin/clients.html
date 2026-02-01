@@ -7,31 +7,47 @@
     <link rel="stylesheet" href="/static/style.css">
     <link rel="stylesheet" href="/static/admin.css">
 </head>
-<body class="admin-layout">
-    <div class="container">
-        <div class="card">
-            <div class="header">
-                <h1 class="title-with-icon">
-                    <span>🔑</span>
-                    <span>OAuth Clients</span>
-                </h1>
-                {{if .user}}
-                <div class="user-info">
-                    Logged in as <strong>{{.user.Username}}</strong> (Admin)
-                    <a href="/logout" class="logout-link">Logout</a>
-                </div>
-                {{end}}
+<body class="admin-layout has-navbar">
+    <nav class="navbar">
+        <div class="navbar-container">
+            <div class="navbar-brand">
+                <a href="/device">AuthGate</a>
             </div>
+            <button class="navbar-toggle" onclick="toggleMenu()">☰</button>
+            <div class="navbar-menu" id="navbarMenu">
+                <div class="navbar-links">
+                    <a href="/device" class="navbar-link">Device Authorization</a>
+                    <a href="/account/sessions" class="navbar-link">Active Sessions</a>
+                    <a href="/admin/clients" class="navbar-link admin active">OAuth Clients</a>
+                </div>
+                <div class="navbar-user">
+                    {{if .user}}
+                    <span class="navbar-username">{{.user.Username}}</span>
+                    {{end}}
+                    <a href="/logout" class="navbar-logout">Logout</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        <div class="container">
+            <div class="card">
+                <div class="header">
+                    <h1 class="title-with-icon">
+                        <span>OAuth Clients</span>
+                    </h1>
+                </div>
 
             <div class="page-actions">
                 <a href="/admin/clients/new" class="btn btn-primary">
-                    ➕ Create New Client
+                    Create New Client
                 </a>
             </div>
 
             {{if .success}}
             <div class="alert alert-success alert-success-spaced">
-                ✅ {{.success}}
+                {{.success}}
             </div>
             {{end}}
 
@@ -42,32 +58,32 @@
                         <tr>
                             <th class="col-client-name">
                                 <div class="table-header-with-icon">
-                                    📝 <span>Client Name</span>
+                                    <span>Client Name</span>
                                 </div>
                             </th>
                             <th class="col-client-id">
                                 <div class="table-header-with-icon">
-                                    🆔 <span>Client ID</span>
+                                    <span>Client ID</span>
                                 </div>
                             </th>
                             <th class="col-grant-types">
                                 <div class="table-header-with-icon">
-                                    🔐 <span>Grant Types</span>
+                                    <span>Grant Types</span>
                                 </div>
                             </th>
                             <th class="col-status">
                                 <div class="table-header-with-icon">
-                                    📊 <span>Status</span>
+                                    <span>Status</span>
                                 </div>
                             </th>
                             <th class="col-created">
                                 <div class="table-header-with-icon">
-                                    📅 <span>Created</span>
+                                    <span>Created</span>
                                 </div>
                             </th>
                             <th class="col-actions">
                                 <div class="table-header-with-icon">
-                                    ⚙️ <span>Actions</span>
+                                    <span>Actions</span>
                                 </div>
                             </th>
                         </tr>
@@ -95,9 +111,9 @@
                             </td>
                             <td>
                                 {{if .IsActive}}
-                                <span class="status-badge status-active">✓ Active</span>
+                                <span class="status-badge status-active">Active</span>
                                 {{else}}
-                                <span class="status-badge status-inactive">✗ Inactive</span>
+                                <span class="status-badge status-inactive">Inactive</span>
                                 {{end}}
                             </td>
                             <td class="created-date-cell">
@@ -109,12 +125,12 @@
                             <td>
                                 <div class="actions">
                                     <a href="/admin/clients/{{.ClientID}}/edit" class="btn btn-secondary btn-small" title="Edit client">
-                                        ✏️ Edit
+                                        Edit
                                     </a>
-                                    <form method="POST" action="/admin/clients/{{.ClientID}}/delete" onsubmit="return confirm('⚠️ Are you sure you want to delete this client?\n\nThis action cannot be undone and will revoke all access tokens.');">
+                                    <form method="POST" action="/admin/clients/{{.ClientID}}/delete" onsubmit="return confirm('Are you sure you want to delete this client?\n\nThis action cannot be undone and will revoke all access tokens.');">
                                         <input type="hidden" name="csrf_token" value="{{$.csrf_token}}">
                                         <button type="submit" class="btn btn-danger btn-small" title="Delete client">
-                                            🗑️ Delete
+                                            Delete
                                         </button>
                                     </form>
                                 </div>
@@ -126,7 +142,7 @@
             </div>
 
             <div class="client-count-info">
-                <strong>📊 Total Clients:</strong> {{len .clients}}
+                <strong>Total Clients:</strong> {{len .clients}}
             </div>
             {{else}}
             <div class="empty-state">
@@ -137,17 +153,30 @@
                     Clients are used to authenticate applications that access your resources.
                 </p>
                 <a href="/admin/clients/new" class="btn btn-primary empty-state-button">
-                    ➕ Create Your First Client
+                    Create Your First Client
                 </a>
             </div>
             {{end}}
-
-            <div class="back-button-section">
-                <a href="/device" class="btn btn-secondary">
-                    ← Back to Device Page
-                </a>
             </div>
         </div>
     </div>
+
+    <script>
+        // Mobile menu toggle
+        function toggleMenu() {
+            const menu = document.getElementById('navbarMenu');
+            menu.classList.toggle('active');
+        }
+
+        // Close menu when clicking outside
+        document.addEventListener('click', function(event) {
+            const navbar = document.querySelector('.navbar');
+            const menu = document.getElementById('navbarMenu');
+
+            if (menu && navbar && !navbar.contains(event.target)) {
+                menu.classList.remove('active');
+            }
+        });
+    </script>
 </body>
 </html>

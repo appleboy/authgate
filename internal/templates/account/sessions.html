@@ -6,16 +6,35 @@
     <title>Active Sessions - OAuth Device Flow</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
-<body>
-    <div class="container">
-        <div class="card">
-            <div class="header">
-                <h1>Active Sessions</h1>
-                <div class="header-actions">
-                    <a href="/device" class="btn btn-secondary">Back to Device Authorization</a>
-                    <a href="/logout" class="btn btn-secondary">Logout</a>
+<body class="has-navbar">
+    <nav class="navbar">
+        <div class="navbar-container">
+            <div class="navbar-brand">
+                <a href="/device">AuthGate</a>
+            </div>
+            <button class="navbar-toggle" onclick="toggleMenu()">☰</button>
+            <div class="navbar-menu" id="navbarMenu">
+                <div class="navbar-links">
+                    <a href="/device" class="navbar-link">Device Authorization</a>
+                    <a href="/account/sessions" class="navbar-link active">Active Sessions</a>
+                    {{if .is_admin}}
+                    <a href="/admin/clients" class="navbar-link admin">OAuth Clients</a>
+                    {{end}}
+                </div>
+                <div class="navbar-user">
+                    <span class="navbar-username">{{.username}}</span>
+                    <a href="/logout" class="navbar-logout">Logout</a>
                 </div>
             </div>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        <div class="container">
+            <div class="card">
+                <div class="header">
+                    <h1>Active Sessions</h1>
+                </div>
 
             <p class="subtitle">Manage devices that have access to your account</p>
 
@@ -23,7 +42,7 @@
             <div class="sessions-list">
                 <div class="sessions-header">
                     <h3>Authorized Devices</h3>
-                    <form method="POST" action="/account/sessions/revoke-all" style="display: inline;">
+                    <form method="POST" action="/account/sessions/revoke-all">
                         <input type="hidden" name="csrf_token" value="{{.csrf_token}}">
                         <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to revoke all sessions? This will log out all your devices.')">
                             Revoke All
@@ -33,17 +52,17 @@
 
                 <div class="sessions-grid">
                     {{range .Sessions}}
-                    <div class="session-item">
+                    <div class="session-item {{if .IsExpired}}expired{{else if eq .Status "disabled"}}disabled{{else if eq .Status "revoked"}}revoked{{end}}">
                         <div class="session-actions-top">
                             {{if eq .Status "active"}}
-                                <form method="POST" action="/account/sessions/{{.ID}}/disable" style="display: inline;">
+                                <form method="POST" action="/account/sessions/{{.ID}}/disable">
                                     <input type="hidden" name="csrf_token" value="{{$.csrf_token}}">
                                     <button type="submit" class="btn btn-warning btn-sm" onclick="return confirm('Disable this token? You can re-enable it later.')">
                                         Disable
                                     </button>
                                 </form>
                             {{else if eq .Status "disabled"}}
-                                <form method="POST" action="/account/sessions/{{.ID}}/enable" style="display: inline;">
+                                <form method="POST" action="/account/sessions/{{.ID}}/enable">
                                     <input type="hidden" name="csrf_token" value="{{$.csrf_token}}">
                                     <button type="submit" class="btn btn-success btn-sm">
                                         Enable
@@ -51,7 +70,7 @@
                                 </form>
                             {{end}}
                             {{if ne .Status "revoked"}}
-                            <form method="POST" action="/account/sessions/{{.ID}}/revoke" style="display: inline;">
+                            <form method="POST" action="/account/sessions/{{.ID}}/revoke">
                                 <input type="hidden" name="csrf_token" value="{{$.csrf_token}}">
                                 <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Permanently revoke this token? This action cannot be undone.')">
                                     Revoke
@@ -102,191 +121,31 @@
                 </div>
             </div>
             {{else}}
-            <div class="alert alert-info">
-                You don't have any active sessions. Authorize a device to see it here.
+            <div class="alert alert-info sessions-empty">
+                <p><strong>No Active Sessions</strong></p>
+                <p>You don't have any active sessions. Authorize a device to see it here.</p>
             </div>
             {{end}}
+            </div>
         </div>
     </div>
 
-    <style>
-        .sessions-list {
-            margin-top: 2rem;
+    <script>
+        // Mobile menu toggle
+        function toggleMenu() {
+            const menu = document.getElementById('navbarMenu');
+            menu.classList.toggle('active');
         }
 
-        .sessions-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-            padding-bottom: 1rem;
-            border-bottom: 2px solid #e5e7eb;
-        }
+        // Close menu when clicking outside
+        document.addEventListener('click', function(event) {
+            const navbar = document.querySelector('.navbar');
+            const menu = document.getElementById('navbarMenu');
 
-        .sessions-header h3 {
-            margin: 0;
-            color: #1f2937;
-        }
-
-        .sessions-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-        }
-
-        .session-item {
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
-            padding: 1.5rem;
-            background: #fafafa;
-            transition: box-shadow 0.2s;
-        }
-
-        .session-item:hover {
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        }
-
-        .session-actions-top {
-            display: flex;
-            gap: 0.5rem;
-            margin-bottom: 1rem;
-            padding-bottom: 0.75rem;
-            border-bottom: 1px solid #e5e7eb;
-        }
-
-        .session-info {
-            flex: 1;
-        }
-
-        .session-header-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 0.75rem;
-        }
-
-        .token-badges {
-            display: flex;
-            gap: 0.5rem;
-        }
-
-        .session-client,
-        .session-client-id,
-        .session-scopes,
-        .session-dates {
-            margin-bottom: 0.75rem;
-        }
-
-        .client-name {
-            color: #667eea;
-            font-weight: 600;
-            font-size: 1.1rem;
-        }
-
-        .client-id-text {
-            font-family: 'Monaco', 'Menlo', monospace;
-            font-size: 0.875rem;
-            color: #6b7280;
-        }
-
-        .session-dates {
-            display: flex;
-            gap: 2rem;
-            font-size: 0.875rem;
-            color: #6b7280;
-            flex-wrap: wrap;
-        }
-
-        .session-expiry-warning {
-            margin-top: 0.5rem;
-            color: #dc2626;
-            font-size: 0.875rem;
-            font-weight: 600;
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            border-radius: 12px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-
-        .badge-token-type {
-            padding: 0.25rem 0.75rem;
-        }
-
-        .badge-access {
-            background-color: #dbeafe;
-            color: #1e40af;
-        }
-
-        .badge-refresh {
-            background-color: #e0e7ff;
-            color: #4338ca;
-        }
-
-        .badge-status {
-            padding: 0.25rem 0.75rem;
-        }
-
-        .badge-active {
-            background-color: #d1fae5;
-            color: #065f46;
-        }
-
-        .badge-disabled {
-            background-color: #fef3c7;
-            color: #92400e;
-        }
-
-        .badge-revoked {
-            background-color: #fee2e2;
-            color: #991b1b;
-        }
-
-        .header-actions {
-            display: flex;
-            gap: 0.5rem;
-        }
-
-        .btn-sm {
-            padding: 0.5rem 1rem;
-            font-size: 0.875rem;
-            white-space: nowrap;
-        }
-
-        .btn-danger {
-            background-color: #dc2626;
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background-color: #b91c1c;
-        }
-
-        .btn-warning {
-            background-color: #f59e0b;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-
-        .btn-warning:hover {
-            background-color: #d97706;
-        }
-
-        .btn-success {
-            background-color: #10b981;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-
-        .btn-success:hover {
-            background-color: #059669;
-        }
-    </style>
+            if (menu && navbar && !navbar.contains(event.target)) {
+                menu.classList.remove('active');
+            }
+        });
+    </script>
 </body>
 </html>

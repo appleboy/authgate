@@ -10,10 +10,14 @@ import (
 
 type SessionHandler struct {
 	tokenService *services.TokenService
+	userService  *services.UserService
 }
 
-func NewSessionHandler(ts *services.TokenService) *SessionHandler {
-	return &SessionHandler{tokenService: ts}
+func NewSessionHandler(ts *services.TokenService, us *services.UserService) *SessionHandler {
+	return &SessionHandler{
+		tokenService: ts,
+		userService:  us,
+	}
 }
 
 // ListSessions shows all active sessions (tokens) for the current user
@@ -34,12 +38,23 @@ func (h *SessionHandler) ListSessions(c *gin.Context) {
 		return
 	}
 
+	// Get user info for navbar
+	user, err := h.userService.GetUserByID(userID.(string))
+	if err != nil {
+		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
+			"Error": "Failed to retrieve user information",
+		})
+		return
+	}
+
 	// Get CSRF token from context (set by middleware)
 	csrfToken, _ := c.Get("csrf_token")
 
 	c.HTML(http.StatusOK, "account/sessions.html", gin.H{
 		"Sessions":   tokens,
 		"csrf_token": csrfToken,
+		"username":   user.Username,
+		"is_admin":   user.IsAdmin(),
 	})
 }
 

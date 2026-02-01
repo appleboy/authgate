@@ -7,28 +7,44 @@
     <link rel="stylesheet" href="/static/style.css">
     <link rel="stylesheet" href="/static/admin.css">
 </head>
-<body class="admin-layout">
-    <div class="container">
-        <div class="card">
-            <div class="header">
-                <h1 class="page-title-with-icon">
-                    <span>✅</span>
-                    <span>OAuth Client Created Successfully</span>
-                </h1>
-                {{if .user}}
-                <div class="user-info">
-                    Logged in as <strong>{{.user.Username}}</strong> (Admin)
-                    <a href="/logout" class="logout-link">Logout</a>
-                </div>
-                {{end}}
+<body class="admin-layout has-navbar">
+    <nav class="navbar">
+        <div class="navbar-container">
+            <div class="navbar-brand">
+                <a href="/device">AuthGate</a>
             </div>
+            <button class="navbar-toggle" onclick="toggleMenu()">☰</button>
+            <div class="navbar-menu" id="navbarMenu">
+                <div class="navbar-links">
+                    <a href="/device" class="navbar-link">Device Authorization</a>
+                    <a href="/account/sessions" class="navbar-link">Active Sessions</a>
+                    <a href="/admin/clients" class="navbar-link admin active">OAuth Clients</a>
+                </div>
+                <div class="navbar-user">
+                    {{if .user}}
+                    <span class="navbar-username">{{.user.Username}}</span>
+                    {{end}}
+                    <a href="/logout" class="navbar-logout">Logout</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        <div class="container">
+            <div class="card">
+                <div class="header">
+                    <h1 class="page-title-with-icon">
+                        <span>OAuth Client Created Successfully</span>
+                    </h1>
+                </div>
 
             <div class="alert alert-success alert-success-spaced">
-                ✅ Client "<strong>{{.client.ClientName}}</strong>" has been created successfully!
+                Client "<strong>{{.client.ClientName}}</strong>" has been created successfully!
             </div>
 
             <div class="warning-box warning-box-enhanced">
-                <div class="warning-icon">⚠️</div>
+                <div class="warning-icon">⚠</div>
                 <div class="warning-content">
                     <strong>Important Security Notice</strong>
                     <p>
@@ -40,61 +56,62 @@
 
             <div class="secret-box secret-box-enhanced">
                 <div class="secret-header">
-                    <strong class="secret-title">🔑 Client Secret</strong>
+                    <strong class="secret-title">Client Secret</strong>
                     <p class="secret-description">
                         Copy this secret and store it securely. You won't be able to see it again.
                     </p>
                 </div>
                 <div class="secret-value secret-value-enhanced" id="clientSecret">{{.client_secret}}</div>
                 <button onclick="copySecret()" class="btn btn-secondary btn-small copy-button-spaced">
-                    📋 Copy to Clipboard
+                    Copy to Clipboard
                 </button>
             </div>
 
-            <h3 class="client-details-title">📋 Client Details</h3>
+            <h3 class="client-details-title">Client Details</h3>
             <div class="client-details-section">
                 <div class="info-row">
-                    <div class="info-label">🆔 Client ID:</div>
+                    <div class="info-label">Client ID:</div>
                     <div class="info-value">{{.client.ClientID}}</div>
                 </div>
                 <div class="info-row">
-                    <div class="info-label">📝 Client Name:</div>
+                    <div class="info-label">Client Name:</div>
                     <div class="info-value">{{.client.ClientName}}</div>
                 </div>
                 {{if .client.Description}}
                 <div class="info-row">
-                    <div class="info-label">📄 Description:</div>
+                    <div class="info-label">Description:</div>
                     <div class="info-value">{{.client.Description}}</div>
                 </div>
                 {{end}}
                 <div class="info-row">
-                    <div class="info-label">🔓 Scopes:</div>
+                    <div class="info-label">Scopes:</div>
                     <div class="info-value">{{.client.Scopes}}</div>
                 </div>
                 <div class="info-row">
-                    <div class="info-label">🔐 Grant Types:</div>
+                    <div class="info-label">Grant Types:</div>
                     <div class="info-value">{{.client.GrantTypes}}</div>
                 </div>
                 {{if .client.RedirectURIs}}
                 <div class="info-row">
-                    <div class="info-label">🔗 Redirect URIs:</div>
+                    <div class="info-label">Redirect URIs:</div>
                     <div class="info-value">{{.client.RedirectURIs}}</div>
                 </div>
                 {{end}}
                 <div class="info-row">
-                    <div class="info-label">📊 Status:</div>
+                    <div class="info-label">Status:</div>
                     <div class="info-value">
                         {{if .client.IsActive}}
-                        <span class="status-badge status-active">✓ Active</span>
+                        <span class="status-badge status-active">Active</span>
                         {{else}}
-                        <span class="status-badge status-inactive">✗ Inactive</span>
+                        <span class="status-badge status-inactive">Inactive</span>
                         {{end}}
                     </div>
                 </div>
             </div>
 
             <div class="back-button-section">
-                <a href="/admin/clients" class="btn btn-primary">← Back to Clients List</a>
+                <a href="/admin/clients" class="btn btn-primary">Back to Clients List</a>
+            </div>
             </div>
         </div>
     </div>
@@ -118,6 +135,22 @@
                 alert('Client secret copied to clipboard!');
             });
         }
+
+        // Mobile menu toggle
+        function toggleMenu() {
+            const menu = document.getElementById('navbarMenu');
+            menu.classList.toggle('active');
+        }
+
+        // Close menu when clicking outside
+        document.addEventListener('click', function(event) {
+            const navbar = document.querySelector('.navbar');
+            const menu = document.getElementById('navbarMenu');
+
+            if (menu && navbar && !navbar.contains(event.target)) {
+                menu.classList.remove('active');
+            }
+        });
     </script>
 </body>
 </html>

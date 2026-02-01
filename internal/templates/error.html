@@ -7,21 +7,21 @@
     <link rel="stylesheet" href="/static/style.css">
     <link rel="stylesheet" href="/static/admin.css">
 </head>
-<body>
+<body class="no-navbar">
     <div class="container container-narrow">
         <div class="card">
-            <div style="text-align: center; margin-bottom: 20px;">
-                <div style="font-size: 64px; margin-bottom: 16px;">❌</div>
-                <h1 style="color: #dc3545; margin-bottom: 8px;">Error</h1>
+            <div class="error-icon-container">
+                <span class="error-icon">✕</span>
+                <h1 class="error-title">Error</h1>
             </div>
             <div class="alert alert-error">
                 <strong>{{.error}}</strong>
                 {{if .message}}
-                <p style="margin-top: 8px; margin-bottom: 0;">{{.message}}</p>
+                <p class="error-message">{{.message}}</p>
                 {{end}}
             </div>
-            <div style="text-align: center; margin-top: 24px;">
-                <a href="/" class="btn btn-secondary">← Go Back</a>
+            <div class="error-actions">
+                <a href="/" class="btn btn-secondary">Go Back</a>
             </div>
         </div>
     </div>

@@ -177,7 +177,7 @@ func runServer() {
 	deviceHandler := handlers.NewDeviceHandler(deviceService, userService, cfg)
 	tokenHandler := handlers.NewTokenHandler(tokenService, cfg)
 	clientHandler := handlers.NewClientHandler(clientService)
-	sessionHandler := handlers.NewSessionHandler(tokenService)
+	sessionHandler := handlers.NewSessionHandler(tokenService, userService)
 	oauthHandler := handlers.NewOAuthHandler(oauthProviders, userService, oauthHTTPClient)
 
 	// Setup Gin
