@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupTestService(t *testing.T) (*DeviceService, *models.OAuthClient) {
+func setupTestService(t *testing.T) (*DeviceService, *models.OAuthApplication) {
 	st, err := store.New("sqlite", ":memory:")
 	require.NoError(t, err)
 
@@ -25,10 +25,12 @@ func setupTestService(t *testing.T) (*DeviceService, *models.OAuthClient) {
 	service := NewDeviceService(st, cfg)
 
 	// Create test client
-	client := &models.OAuthClient{
-		ClientID:   "test-client-id",
-		ClientName: "Test Client",
-		IsActive:   true,
+	client := &models.OAuthApplication{
+		ClientID:         "test-client-id",
+		ClientName:       "Test Client",
+		RedirectURIs:     models.StringArray{},
+		EnableDeviceFlow: true,
+		IsActive:         true,
 	}
 	err = st.CreateClient(client)
 	require.NoError(t, err)

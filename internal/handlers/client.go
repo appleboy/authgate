@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/appleboy/authgate/internal/middleware"
 	"github.com/appleboy/authgate/internal/services"
@@ -68,13 +69,25 @@ func (h *ClientHandler) ShowCreateClientPage(c *gin.Context) {
 func (h *ClientHandler) CreateClient(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 
+	// Parse redirect URIs from comma-separated string
+	redirectURIsStr := c.PostForm("redirect_uris")
+	var redirectURIs []string
+	if strings.TrimSpace(redirectURIsStr) != "" {
+		parts := strings.Split(redirectURIsStr, ",")
+		for _, uri := range parts {
+			if trimmed := strings.TrimSpace(uri); trimmed != "" {
+				redirectURIs = append(redirectURIs, trimmed)
+			}
+		}
+	}
+
 	req := services.CreateClientRequest{
 		ClientName:   c.PostForm("client_name"),
 		Description:  c.PostForm("description"),
 		UserID:       userID.(string),
 		Scopes:       c.PostForm("scopes"),
 		GrantTypes:   c.PostForm("grant_types"),
-		RedirectURIs: c.PostForm("redirect_uris"),
+		RedirectURIs: redirectURIs,
 		CreatedBy:    userID.(string),
 	}
 
@@ -93,17 +106,30 @@ func (h *ClientHandler) CreateClient(c *gin.Context) {
 				"description":   req.Description,
 				"scopes":        req.Scopes,
 				"grant_types":   req.GrantTypes,
-				"redirect_uris": req.RedirectURIs,
+				"redirect_uris": strings.Join(req.RedirectURIs, ", "),
 			},
 		})
 		return
 	}
 
 	// Show the newly created client with the plain secret (only shown once)
+	// Prepare client data for template
+	clientData := gin.H{
+		"ID":               resp.ID,
+		"ClientID":         resp.ClientID,
+		"ClientName":       resp.ClientName,
+		"Description":      resp.Description,
+		"Scopes":           resp.Scopes,
+		"GrantTypes":       resp.GrantTypes,
+		"RedirectURIs":     strings.Join(resp.RedirectURIs, ", "),
+		"EnableDeviceFlow": resp.EnableDeviceFlow,
+		"IsActive":         resp.IsActive,
+	}
+
 	user, _ := c.Get("user")
 	c.HTML(http.StatusOK, "admin/client_created.html", gin.H{
 		"user":          user,
-		"client":        resp.OAuthClient,
+		"client":        clientData,
 		"client_secret": resp.ClientSecretPlain,
 		"csrf_token":    middleware.GetCSRFToken(c),
 	})
@@ -121,10 +147,25 @@ func (h *ClientHandler) ShowEditClientPage(c *gin.Context) {
 		return
 	}
 
+	// Prepare client data for template
+	clientData := gin.H{
+		"ID":               client.ID,
+		"ClientID":         client.ClientID,
+		"ClientName":       client.ClientName,
+		"Description":      client.Description,
+		"Scopes":           client.Scopes,
+		"GrantTypes":       client.GrantTypes,
+		"RedirectURIs":     strings.Join(client.RedirectURIs, ", "),
+		"EnableDeviceFlow": client.EnableDeviceFlow,
+		"IsActive":         client.IsActive,
+		"CreatedAt":        client.CreatedAt,
+		"UpdatedAt":        client.UpdatedAt,
+	}
+
 	user, _ := c.Get("user")
 	c.HTML(http.StatusOK, "admin/client_form.html", gin.H{
 		"user":       user,
-		"client":     client,
+		"client":     clientData,
 		"action":     "/admin/clients/" + clientID,
 		"method":     "POST",
 		"title":      "Edit OAuth Client",
@@ -136,23 +177,49 @@ func (h *ClientHandler) ShowEditClientPage(c *gin.Context) {
 func (h *ClientHandler) UpdateClient(c *gin.Context) {
 	clientID := c.Param("id")
 
+	// Parse redirect URIs from comma-separated string
+	redirectURIsStr := c.PostForm("redirect_uris")
+	var redirectURIs []string
+	if strings.TrimSpace(redirectURIsStr) != "" {
+		parts := strings.Split(redirectURIsStr, ",")
+		for _, uri := range parts {
+			if trimmed := strings.TrimSpace(uri); trimmed != "" {
+				redirectURIs = append(redirectURIs, trimmed)
+			}
+		}
+	}
+
 	req := services.UpdateClientRequest{
 		ClientName:   c.PostForm("client_name"),
 		Description:  c.PostForm("description"),
 		Scopes:       c.PostForm("scopes"),
 		GrantTypes:   c.PostForm("grant_types"),
-		RedirectURIs: c.PostForm("redirect_uris"),
+		RedirectURIs: redirectURIs,
 		IsActive:     c.PostForm("is_active") == "true",
 	}
 
 	err := h.clientService.UpdateClient(clientID, req)
 	if err != nil {
 		client, _ := h.clientService.GetClient(clientID)
+
+		// Prepare client data for template
+		clientData := gin.H{
+			"ID":               client.ID,
+			"ClientID":         client.ClientID,
+			"ClientName":       req.ClientName,
+			"Description":      req.Description,
+			"Scopes":           req.Scopes,
+			"GrantTypes":       req.GrantTypes,
+			"RedirectURIs":     strings.Join(req.RedirectURIs, ", "),
+			"EnableDeviceFlow": client.EnableDeviceFlow,
+			"IsActive":         req.IsActive,
+		}
+
 		user, _ := c.Get("user")
 		c.HTML(http.StatusBadRequest, "admin/client_form.html", gin.H{
 			"user":       user,
 			"error":      err.Error(),
-			"client":     client,
+			"client":     clientData,
 			"action":     "/admin/clients/" + clientID,
 			"method":     "POST",
 			"title":      "Edit OAuth Client",
@@ -234,10 +301,25 @@ func (h *ClientHandler) ViewClient(c *gin.Context) {
 		return
 	}
 
+	// Prepare client data for template
+	clientData := gin.H{
+		"ID":               client.ID,
+		"ClientID":         client.ClientID,
+		"ClientName":       client.ClientName,
+		"Description":      client.Description,
+		"Scopes":           client.Scopes,
+		"GrantTypes":       client.GrantTypes,
+		"RedirectURIs":     strings.Join(client.RedirectURIs, ", "),
+		"EnableDeviceFlow": client.EnableDeviceFlow,
+		"IsActive":         client.IsActive,
+		"CreatedAt":        client.CreatedAt,
+		"UpdatedAt":        client.UpdatedAt,
+	}
+
 	user, _ := c.Get("user")
 	c.HTML(http.StatusOK, "admin/client_detail.html", gin.H{
 		"user":       user,
-		"client":     client,
+		"client":     clientData,
 		"csrf_token": middleware.GetCSRFToken(c),
 	})
 }

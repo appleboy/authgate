@@ -20,16 +20,18 @@ func setupTestStore(t *testing.T) *store.Store {
 	return s
 }
 
-func createTestClient(t *testing.T, s *store.Store, isActive bool) *models.OAuthClient {
-	client := &models.OAuthClient{
-		ClientID:     uuid.New().String(),
-		ClientSecret: "secret",
-		ClientName:   "Test Client",
-		Description:  "Test client for testing",
-		UserID:       uuid.New().String(),
-		Scopes:       "read write",
-		GrantTypes:   "device_code",
-		IsActive:     true, // Create with default value first
+func createTestClient(t *testing.T, s *store.Store, isActive bool) *models.OAuthApplication {
+	client := &models.OAuthApplication{
+		ClientID:         uuid.New().String(),
+		ClientSecret:     "secret",
+		ClientName:       "Test Client",
+		Description:      "Test client for testing",
+		UserID:           uuid.New().String(),
+		Scopes:           "read write",
+		GrantTypes:       "device_code",
+		RedirectURIs:     models.StringArray{},
+		EnableDeviceFlow: true,
+		IsActive:         true, // Create with default value first
 	}
 	err := s.CreateClient(client)
 	require.NoError(t, err)
