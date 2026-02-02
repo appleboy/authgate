@@ -82,6 +82,11 @@ func runServer() {
 	// Load configuration
 	cfg := config.Load()
 
+	// Validate configuration
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("Invalid configuration: %v", err)
+	}
+
 	// Validate authentication configuration
 	if err := validateAuthConfig(cfg); err != nil {
 		log.Fatalf("Invalid authentication configuration: %v", err)

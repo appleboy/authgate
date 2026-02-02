@@ -21,6 +21,12 @@ const (
 	TokenProviderModeHTTPAPI = "http_api"
 )
 
+// Rate limit store constants
+const (
+	RateLimitStoreMemory = "memory"
+	RateLimitStoreRedis  = "redis"
+)
+
 type Config struct {
 	// Server settings
 	ServerAddr string
@@ -268,4 +274,19 @@ func splitAndTrim(s, sep string) []string {
 		}
 	}
 	return out
+}
+
+// Validate checks the configuration for invalid values
+func (c *Config) Validate() error {
+	// Validate rate limit store type
+	if c.RateLimitStore != RateLimitStoreMemory && c.RateLimitStore != RateLimitStoreRedis {
+		return fmt.Errorf(
+			"invalid RATE_LIMIT_STORE value: %q (must be %q or %q)",
+			c.RateLimitStore,
+			RateLimitStoreMemory,
+			RateLimitStoreRedis,
+		)
+	}
+
+	return nil
 }
