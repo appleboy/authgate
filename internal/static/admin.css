@@ -380,6 +380,7 @@ select:focus {
 .table-wrapper {
     margin-top: var(--space-6);
     overflow-x: auto;
+    overflow-y: visible;
 }
 
 /* Table headers with icons */
@@ -413,6 +414,11 @@ select:focus {
     min-width: 140px;
 }
 
+.clients-table th.col-creator {
+    width: 120px;
+    min-width: 100px;
+}
+
 .clients-table th.col-actions {
     min-width: 180px;
 }
@@ -420,6 +426,14 @@ select:focus {
 /* Client name cell */
 .client-name-cell {
     padding: var(--space-1) 0;
+    overflow: visible;
+}
+
+.client-name-wrapper {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    position: relative;
 }
 
 .client-name-title {
@@ -427,12 +441,98 @@ select:focus {
     font-weight: var(--font-semibold);
 }
 
-.client-description {
-    color: var(--color-gray-600);
-    font-size: var(--text-sm);
-    line-height: var(--leading-snug);
-    display: block;
-    margin-top: var(--space-1);
+/* Info tooltip trigger and icon */
+.info-tooltip-trigger {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    cursor: help;
+}
+
+.info-icon {
+    color: var(--color-gray-400);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+}
+
+.info-tooltip-trigger:hover .info-icon {
+    color: var(--color-primary-500);
+    transform: scale(1.1);
+}
+
+/* Tooltip content */
+.info-tooltip {
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 12px);
+    transform: translateX(-50%) translateY(4px);
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    color: white;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+    font-weight: 400;
+    white-space: normal;
+    max-width: 320px;
+    min-width: 200px;
+    box-shadow:
+        0 10px 25px -5px rgba(0, 0, 0, 0.3),
+        0 4px 10px -2px rgba(0, 0, 0, 0.2),
+        0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: var(--z-tooltip);
+    text-align: left;
+}
+
+/* Tooltip arrow - pointing up since tooltip is below */
+.info-tooltip::after {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 7px solid transparent;
+    border-bottom-color: rgba(30, 41, 59, 0.98);
+    filter: drop-shadow(0 -2px 2px rgba(0, 0, 0, 0.1));
+    margin-bottom: 1px;
+}
+
+/* Show tooltip on hover */
+.info-tooltip-trigger:hover .info-tooltip {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* Prevent tooltip from triggering table hover */
+.clients-table tr:has(.info-tooltip-trigger:hover) {
+    background-color: transparent;
+}
+
+/* Adjust tooltip position if it would overflow left/right */
+@media (max-width: 768px) {
+    .info-tooltip {
+        left: auto;
+        right: 0;
+        transform: translateX(0) translateY(4px);
+        max-width: 280px;
+    }
+
+    .info-tooltip::after {
+        left: auto;
+        right: 20px;
+        transform: translateX(0);
+    }
+
+    .info-tooltip-trigger:hover .info-tooltip {
+        transform: translateX(0) translateY(0);
+    }
 }
 
 /* Client ID display box */
@@ -471,6 +571,17 @@ select:focus {
 .date-display-time {
     font-size: var(--text-xs);
     color: var(--color-gray-500);
+}
+
+/* Creator column */
+.creator-username {
+    font-weight: var(--font-medium);
+    color: var(--color-gray-700);
+}
+
+.creator-username-unknown {
+    color: var(--color-gray-500);
+    font-style: italic;
 }
 
 /* Client count info box */

@@ -303,6 +303,26 @@ func (s *Store) GetClientsByIDs(clientIDs []string) (map[string]*models.OAuthApp
 	return clientMap, nil
 }
 
+// GetUsersByIDs batch loads users by IDs using WHERE IN to prevent N+1 queries
+func (s *Store) GetUsersByIDs(userIDs []string) (map[string]*models.User, error) {
+	if len(userIDs) == 0 {
+		return make(map[string]*models.User), nil
+	}
+
+	var users []models.User
+	if err := s.db.Where("id IN ?", userIDs).Find(&users).Error; err != nil {
+		return nil, err
+	}
+
+	// Convert to map for O(1) lookup
+	userMap := make(map[string]*models.User, len(users))
+	for i := range users {
+		userMap[users[i].ID] = &users[i]
+	}
+
+	return userMap, nil
+}
+
 func (s *Store) CreateClient(client *models.OAuthApplication) error {
 	return s.db.Create(client).Error
 }

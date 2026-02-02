@@ -49,6 +49,12 @@ type ClientResponse struct {
 	ClientSecretPlain string // Only populated on creation
 }
 
+// ClientWithCreator combines OAuth client and creator user information for display
+type ClientWithCreator struct {
+	models.OAuthApplication
+	CreatorUsername string // Empty string if user not found or deleted
+}
+
 func (s *ClientService) CreateClient(req CreateClientRequest) (*ClientResponse, error) {
 	if strings.TrimSpace(req.ClientName) == "" {
 		return nil, ErrClientNameRequired
@@ -139,6 +145,60 @@ func (s *ClientService) ListClientsPaginated(
 	params store.PaginationParams,
 ) ([]models.OAuthApplication, store.PaginationResult, error) {
 	return s.store.ListClientsPaginated(params)
+}
+
+// ListClientsPaginatedWithCreator returns paginated OAuth clients with creator information
+// This method prevents N+1 queries by batch loading users via GetUsersByIDs
+func (s *ClientService) ListClientsPaginatedWithCreator(
+	params store.PaginationParams,
+) ([]ClientWithCreator, store.PaginationResult, error) {
+	// Step 1: Get paginated clients
+	clients, pagination, err := s.store.ListClientsPaginated(params)
+	if err != nil {
+		return nil, store.PaginationResult{}, err
+	}
+
+	if len(clients) == 0 {
+		return []ClientWithCreator{}, pagination, nil
+	}
+
+	// Step 2: Collect unique user IDs
+	userIDSet := make(map[string]bool)
+	for _, client := range clients {
+		if client.UserID != "" {
+			userIDSet[client.UserID] = true
+		}
+	}
+
+	// Step 3: Convert set to slice
+	userIDs := make([]string, 0, len(userIDSet))
+	for userID := range userIDSet {
+		userIDs = append(userIDs, userID)
+	}
+
+	// Step 4: Batch query all users using WHERE IN
+	userMap, err := s.store.GetUsersByIDs(userIDs)
+	if err != nil {
+		return nil, store.PaginationResult{}, err
+	}
+
+	// Step 5: Combine clients with user information
+	result := make([]ClientWithCreator, 0, len(clients))
+	for _, client := range clients {
+		username := "" // Default to empty if user not found
+		if client.UserID != "" {
+			if user, ok := userMap[client.UserID]; ok && user != nil {
+				username = user.Username
+			}
+		}
+
+		result = append(result, ClientWithCreator{
+			OAuthApplication: client,
+			CreatorUsername:  username,
+		})
+	}
+
+	return result, pagination, nil
 }
 
 func (s *ClientService) GetClient(clientID string) (*models.OAuthApplication, error) {

@@ -47,8 +47,8 @@ func (h *ClientHandler) ShowClientsPage(c *gin.Context) {
 	// Create pagination params
 	params := store.NewPaginationParams(page, pageSize, search)
 
-	// Get paginated clients
-	clients, pagination, err := h.clientService.ListClientsPaginated(params)
+	// Get paginated clients with creator information
+	clients, pagination, err := h.clientService.ListClientsPaginatedWithCreator(params)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": "Failed to load clients: " + err.Error(),
