@@ -130,18 +130,21 @@
                         <tr>
                             <td>
                                 <div class="client-name-cell">
-                                    <div class="client-name-wrapper">
+                                    <div class="client-name-row">
                                         <strong class="client-name-title">{{.ClientName}}</strong>
                                         {{if .Description}}
-                                        <span class="info-tooltip-trigger" data-tooltip="{{.Description}}">
-                                            <svg class="info-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/>
-                                                <path d="M8 7.5V11.5M8 4.5V5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                        <button type="button" class="description-toggle" onclick="toggleDescription(this)" aria-label="Toggle description">
+                                            <svg class="toggle-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <path d="M6 8L10 12L14 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                                             </svg>
-                                            <span class="info-tooltip">{{.Description}}</span>
-                                        </span>
+                                        </button>
                                         {{end}}
                                     </div>
+                                    {{if .Description}}
+                                    <div class="client-description" style="display: none;">
+                                        {{.Description}}
+                                    </div>
+                                    {{end}}
                                 </div>
                             </td>
                             <td>
@@ -286,6 +289,32 @@
                 menu.classList.remove('active');
             }
         });
+
+        // Toggle client description
+        function toggleDescription(button) {
+            const cell = button.closest('.client-name-cell');
+            const description = cell.querySelector('.client-description');
+            const icon = button.querySelector('.toggle-icon');
+
+            if (description.style.display === 'none') {
+                description.style.display = 'block';
+                button.classList.add('expanded');
+                // Animate height
+                description.style.maxHeight = '0';
+                description.style.opacity = '0';
+                setTimeout(() => {
+                    description.style.maxHeight = description.scrollHeight + 'px';
+                    description.style.opacity = '1';
+                }, 10);
+            } else {
+                description.style.maxHeight = '0';
+                description.style.opacity = '0';
+                button.classList.remove('expanded');
+                setTimeout(() => {
+                    description.style.display = 'none';
+                }, 300);
+            }
+        }
     </script>
 </body>
 </html>
