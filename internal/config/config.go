@@ -98,17 +98,13 @@ type Config struct {
 	OAuthInsecureSkipVerify bool          // Skip TLS verification for OAuth (dev/testing only, default: false)
 
 	// Rate Limiting settings
-	EnableRateLimit            bool   // Enable rate limiting (default: true)
-	RateLimitStore             string // Rate limit store: "memory" or "redis" (default: "memory")
-	RateLimitCleanupInterval   time.Duration
-	LoginRateLimit             int // Requests per minute for /login endpoint (default: 5)
-	LoginRateLimitBurst        int // Burst size for /login (default: 2, deprecated for redis)
-	DeviceCodeRateLimit        int // Requests per minute for /oauth/device/code (default: 10)
-	DeviceCodeRateLimitBurst   int // Burst size for device code (default: 3, deprecated for redis)
-	TokenRateLimit             int // Requests per minute for /oauth/token (default: 20)
-	TokenRateLimitBurst        int // Burst size for token endpoint (default: 5, deprecated for redis)
-	DeviceVerifyRateLimit      int // Requests per minute for /device/verify (default: 10)
-	DeviceVerifyRateLimitBurst int // Burst size for device verify (default: 3, deprecated for redis)
+	EnableRateLimit          bool   // Enable rate limiting (default: true)
+	RateLimitStore           string // Rate limit store: "memory" or "redis" (default: "memory")
+	RateLimitCleanupInterval time.Duration
+	LoginRateLimit           int // Requests per minute for /login endpoint (default: 5)
+	DeviceCodeRateLimit      int // Requests per minute for /oauth/device/code (default: 10)
+	TokenRateLimit           int // Requests per minute for /oauth/token (default: 20)
+	DeviceVerifyRateLimit    int // Requests per minute for /device/verify (default: 10)
 
 	// Redis settings (only used when RateLimitStore = "redis")
 	RedisAddr     string // Redis address for rate limiting (e.g., "localhost:6379")
@@ -200,17 +196,13 @@ func Load() *Config {
 		OAuthInsecureSkipVerify: getEnvBool("OAUTH_INSECURE_SKIP_VERIFY", false),
 
 		// Rate Limiting settings
-		EnableRateLimit:            getEnvBool("ENABLE_RATE_LIMIT", true),
-		RateLimitStore:             getEnv("RATE_LIMIT_STORE", "memory"),
-		RateLimitCleanupInterval:   getEnvDuration("RATE_LIMIT_CLEANUP_INTERVAL", 5*time.Minute),
-		LoginRateLimit:             getEnvInt("LOGIN_RATE_LIMIT", 5),
-		LoginRateLimitBurst:        getEnvInt("LOGIN_RATE_LIMIT_BURST", 2),
-		DeviceCodeRateLimit:        getEnvInt("DEVICE_CODE_RATE_LIMIT", 10),
-		DeviceCodeRateLimitBurst:   getEnvInt("DEVICE_CODE_RATE_LIMIT_BURST", 3),
-		TokenRateLimit:             getEnvInt("TOKEN_RATE_LIMIT", 20),
-		TokenRateLimitBurst:        getEnvInt("TOKEN_RATE_LIMIT_BURST", 5),
-		DeviceVerifyRateLimit:      getEnvInt("DEVICE_VERIFY_RATE_LIMIT", 10),
-		DeviceVerifyRateLimitBurst: getEnvInt("DEVICE_VERIFY_RATE_LIMIT_BURST", 3),
+		EnableRateLimit:          getEnvBool("ENABLE_RATE_LIMIT", true),
+		RateLimitStore:           getEnv("RATE_LIMIT_STORE", "memory"),
+		RateLimitCleanupInterval: getEnvDuration("RATE_LIMIT_CLEANUP_INTERVAL", 5*time.Minute),
+		LoginRateLimit:           getEnvInt("LOGIN_RATE_LIMIT", 5),
+		DeviceCodeRateLimit:      getEnvInt("DEVICE_CODE_RATE_LIMIT", 10),
+		TokenRateLimit:           getEnvInt("TOKEN_RATE_LIMIT", 20),
+		DeviceVerifyRateLimit:    getEnvInt("DEVICE_VERIFY_RATE_LIMIT", 10),
 
 		// Redis settings
 		RedisAddr:     getEnv("REDIS_ADDR", "localhost:6379"),

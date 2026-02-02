@@ -29,7 +29,6 @@ const (
 type RateLimitConfig struct {
 	// Rate limit settings
 	RequestsPerMinute int           // Number of requests allowed per minute
-	Burst             int           // Maximum burst size (not used by ulule/limiter, kept for compatibility)
 	CleanupInterval   time.Duration // How often to cleanup (only for memory store)
 
 	// Store settings
