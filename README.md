@@ -74,6 +74,10 @@
       - [Example: Aggressive Retry Configuration](#example-aggressive-retry-configuration)
       - [Example: Conservative Retry Configuration](#example-conservative-retry-configuration)
       - [Implementation Details](#implementation-details)
+    - [Rate Limiting](#rate-limiting)
+      - [Key Features](#key-features-1)
+      - [Quick Start](#quick-start-1)
+      - [Configuration Guide](#configuration-guide)
   - [AuthGate Architecture](#authgate-architecture)
     - [Project Structure](#project-structure)
     - [Technology Stack](#technology-stack)
@@ -182,6 +186,11 @@ Modern CLI tools and IoT devices need to access user resources securely, but tra
 - Secure Token Revocation endpoint (RFC 7009)
 - Built‑in JWT Access Tokens signed with HMAC‑SHA256
 - Status‑based token lifecycle control (active / disabled / revoked)
+- **Built-in Rate Limiting**: Protects against brute force attacks and API abuse
+  - Memory store for single-instance deployments
+  - Redis store for multi-pod/distributed deployments
+  - Per-endpoint configurable limits
+  - IP-based tracking
 
 🧩 Flexible Authentication & Token Flows
 
@@ -1122,6 +1131,73 @@ HTTP_API_TIMEOUT=15s
 - All authentication headers (Simple, HMAC) are preserved across retries
 - Request bodies are cloned for retries to avoid consumed stream issues
 
+### Rate Limiting
+
+AuthGate includes built-in rate limiting to protect against brute force attacks, credential stuffing, and API abuse. The rate limiting system is production-ready with support for both single-instance and distributed deployments.
+
+#### Key Features
+
+- **Dual Storage Backends**:
+  - **Memory Store**: Fast, in-memory storage for single-instance deployments
+  - **Redis Store**: Distributed storage for multi-pod Kubernetes/cloud deployments
+- **Per-Endpoint Configuration**: Different rate limits for different endpoints
+- **IP-Based Tracking**: Tracks requests per client IP address
+- **Hot Configuration**: Enable/disable without code changes
+- **Graceful Degradation**: Automatic fallback when Redis is unavailable
+
+#### Quick Start
+
+**Single Instance (Default):**
+
+```bash
+# Default configuration - rate limiting enabled with memory store
+./bin/authgate server
+```
+
+**Multi-Pod with Redis:**
+
+```bash
+# .env
+ENABLE_RATE_LIMIT=true
+RATE_LIMIT_STORE=redis
+REDIS_ADDR=redis-service:6379
+REDIS_PASSWORD=your-password
+```
+
+**Default Rate Limits:**
+
+| Endpoint | Limit | Purpose |
+|----------|-------|---------|
+| `POST /login` | 5 req/min | Prevent password brute force |
+| `POST /oauth/device/code` | 10 req/min | Prevent device code spam |
+| `POST /oauth/token` | 20 req/min | Allow polling while preventing abuse |
+| `POST /device/verify` | 10 req/min | Prevent user code guessing |
+
+#### Configuration Guide
+
+All rate limits are configurable via environment variables:
+
+```bash
+# Enable/disable rate limiting
+ENABLE_RATE_LIMIT=true              # Default: true
+
+# Storage backend
+RATE_LIMIT_STORE=memory             # Options: memory, redis
+
+# Redis configuration (only when RATE_LIMIT_STORE=redis)
+REDIS_ADDR=localhost:6379
+REDIS_PASSWORD=
+REDIS_DB=0
+
+# Per-endpoint limits (requests per minute)
+LOGIN_RATE_LIMIT=5
+DEVICE_CODE_RATE_LIMIT=10
+TOKEN_RATE_LIMIT=20
+DEVICE_VERIFY_RATE_LIMIT=10
+```
+
+**📖 For complete documentation, deployment scenarios, and troubleshooting, see [RATE_LIMITING.md](docs/RATE_LIMITING.md)**
+
 ---
 
 ## AuthGate Architecture
@@ -1140,7 +1216,8 @@ authgate/
 │   └── oauth_handler.go  # OAuth third-party login handlers
 ├── middleware/      # HTTP middleware
 │   ├── auth.go      # Session authentication (RequireAuth, RequireAdmin)
-│   └── csrf.go      # CSRF protection middleware
+│   ├── csrf.go      # CSRF protection middleware
+│   └── ratelimit.go # Rate limiting middleware (memory/Redis store)
 ├── models/          # Data models
 │   ├── user.go      # User accounts
 │   ├── client.go    # OAuth clients (OAuthClient)
@@ -1172,7 +1249,8 @@ authgate/
 ├── docker/          # Docker configuration
 │   └── Dockerfile   # Alpine-based multi-arch image
 ├── docs/            # Documentation
-│   └── OAUTH_SETUP.md  # OAuth provider setup guide
+│   ├── OAUTH_SETUP.md    # OAuth provider setup guide
+│   └── RATE_LIMITING.md  # Rate limiting configuration and deployment guide
 ├── _example/        # Example CLI client implementation
 │   └── authgate-cli/
 ├── version/         # Version information (embedded at build time)
@@ -1314,7 +1392,10 @@ curl http://localhost:8080/health
 - [ ] Set appropriate `DeviceCodeExpiration` (default: 30 minutes)
 - [ ] Set appropriate `JWTExpiration` (default: 1 hour)
 - [ ] Configure firewall rules
-- [ ] Enable rate limiting for token polling and revocation endpoints
+- [ ] **Configure rate limiting** (enabled by default)
+  - [ ] Use Redis store for multi-pod deployments (`RATE_LIMIT_STORE=redis`)
+  - [ ] Adjust limits based on your traffic patterns
+  - [ ] Monitor rate limit events in logs
 - [ ] Regularly backup `oauth.db`
 - [ ] Set up automated cleanup for expired tokens and device codes
 - [ ] Use Docker non-root user mode (already configured)
@@ -1331,6 +1412,8 @@ curl http://localhost:8080/health
 - ✅ Phishing attacks (user authorizes on trusted domain)
 - ✅ Replay attacks (device codes are single-use)
 - ✅ Token tampering (JWT signature verification)
+- ✅ Brute force attacks (rate limiting enabled by default)
+- ✅ API abuse and DoS attempts (per-endpoint rate limits)
 
 #### What You Must Secure
 

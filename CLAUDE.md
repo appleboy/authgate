@@ -154,6 +154,87 @@ AuthGate supports refresh tokens following RFC 6749 with configurable rotation m
   - Token family tracking enables detection of suspicious patterns
   - Optional rotation mode for high-security scenarios
 
+### Rate Limiting Architecture
+
+AuthGate includes built-in rate limiting to protect against brute force attacks and API abuse, with support for both single-instance and multi-pod deployments.
+
+- **Key Features**:
+  - **IP-based rate limiting**: Tracks requests per client IP address
+  - **Per-endpoint configuration**: Different limits for different endpoints
+  - **Pluggable storage backends**: Memory (single instance) or Redis (distributed)
+  - **Multi-pod support**: Redis backend enables shared rate limiting across multiple pods
+  - **Sliding window algorithm**: Uses github.com/ulule/limiter/v3 for accurate rate limiting
+  - **Automatic cleanup**: Old rate limiter entries are automatically removed
+  - **Configurable**: All limits can be adjusted via environment variables
+  - **Hot disable**: Can be disabled without code changes (ENABLE_RATE_LIMIT=false)
+
+- **Storage Backends**:
+  - **Memory Store** (default): Fast, in-memory storage for single-instance deployments
+  - **Redis Store**: Distributed storage for multi-pod/multi-instance deployments
+    - Requires Redis server (standalone or cluster)
+    - Shares rate limit state across all pods
+    - Ensures accurate global rate limiting (e.g., 10 req/min across 3 pods = 10 total, not 30)
+
+- **Default Rate Limits**:
+  - `/login` (POST): 5 requests/minute (prevents password brute force)
+  - `/oauth/device/code`: 10 requests/minute (prevents device code spam)
+  - `/oauth/token`: 20 requests/minute (allows polling, prevents abuse)
+  - `/device/verify`: 10 requests/minute (prevents user code brute force)
+
+- **Implementation Details**:
+  - Built on github.com/ulule/limiter/v3 for production-grade rate limiting
+  - Separate limiter instance per IP address
+  - Sliding window algorithm provides precise rate limiting
+  - Cleanup routine runs every 5 minutes to remove inactive limiters
+  - Returns HTTP 429 (Too Many Requests) when limit exceeded
+  - Redis connection pooling for optimal performance
+
+- **Environment Variables**:
+  - `ENABLE_RATE_LIMIT=true` - Master switch to enable/disable rate limiting
+  - `RATE_LIMIT_STORE=memory` - Storage backend: "memory" or "redis"
+  - `RATE_LIMIT_CLEANUP_INTERVAL=5m` - How often to cleanup old limiters
+  - `LOGIN_RATE_LIMIT=5` - Requests per minute for login endpoint
+  - `DEVICE_CODE_RATE_LIMIT=10` - Requests per minute for device code
+  - `TOKEN_RATE_LIMIT=20` - Requests per minute for token endpoint
+  - `DEVICE_VERIFY_RATE_LIMIT=10` - Requests per minute for device verify
+  - **Redis settings** (when RATE_LIMIT_STORE=redis):
+    - `REDIS_ADDR=localhost:6379` - Redis server address
+    - `REDIS_PASSWORD=` - Redis password (empty for no auth)
+    - `REDIS_DB=0` - Redis database number
+
+- **Deployment Scenarios**:
+  - **Single Instance**: Use `RATE_LIMIT_STORE=memory` (default, no Redis needed)
+  - **Multiple Pods (Kubernetes)**: Use `RATE_LIMIT_STORE=redis` for shared state
+  - **Load Balanced**: Use Redis to ensure global rate limits across all instances
+  - **Development**: Memory store is sufficient and requires no additional dependencies
+
+- **Security Benefits**:
+  - Prevents password brute force attacks
+  - Mitigates device code enumeration
+  - Prevents user code guessing attacks
+  - Protects against DoS attempts
+  - Per-IP tracking prevents single attacker from overwhelming service
+  - Multi-pod support prevents rate limit bypass via load balancer
+
+- **Example Configurations**:
+
+**Single Instance (Memory)**:
+
+```bash
+ENABLE_RATE_LIMIT=true
+RATE_LIMIT_STORE=memory
+```
+
+**Multi-Pod (Redis)**:
+
+```bash
+ENABLE_RATE_LIMIT=true
+RATE_LIMIT_STORE=redis
+REDIS_ADDR=redis-service:6379
+REDIS_PASSWORD=your-redis-password
+REDIS_DB=0
+```
+
 ### Key Implementation Details
 
 - Device codes expire after 30min (configurable via Config.DeviceCodeExpiration)
@@ -184,31 +265,41 @@ Services return typed errors (ErrInvalidClient, ErrDeviceCodeNotFound, etc.), ha
 
 ## Environment Variables
 
-| Variable                       | Default                 | Description                                                              |
-| ------------------------------ | ----------------------- | ------------------------------------------------------------------------ |
-| SERVER_ADDR                    | :8080                   | Listen address                                                           |
-| BASE_URL                       | `http://localhost:8080` | Public URL for verification_uri                                          |
-| JWT_SECRET                     | (default)               | JWT signing key (used when TOKEN_PROVIDER_MODE=local)                    |
-| SESSION_SECRET                 | (default)               | Cookie encryption key                                                    |
-| DATABASE_DRIVER                | sqlite                  | Database driver ("sqlite" or "postgres")                                 |
-| DATABASE_DSN                   | oauth.db                | Connection string (path for SQLite, DSN for PostgreSQL)                  |
-| **AUTH_MODE**                  | local                   | Authentication mode: `local` or `http_api`                               |
-| HTTP_API_URL                   | (none)                  | External auth API endpoint (required when AUTH_MODE=http_api)            |
-| HTTP_API_TIMEOUT               | 10s                     | HTTP API request timeout                                                 |
-| HTTP_API_INSECURE_SKIP_VERIFY  | false                   | Skip TLS verification (dev/testing only)                                 |
-| HTTP_API_AUTH_MODE             | none                    | Service-to-service auth mode: `none`, `simple`, or `hmac`                |
-| HTTP_API_AUTH_SECRET           | (none)                  | Shared secret for service-to-service authentication                      |
-| HTTP_API_AUTH_HEADER           | X-API-Secret            | Custom header name for simple auth mode                                  |
-| **TOKEN_PROVIDER_MODE**        | local                   | Token provider mode: `local` or `http_api`                               |
-| TOKEN_API_URL                  | (none)                  | External token API endpoint (required when TOKEN_PROVIDER_MODE=http_api) |
-| TOKEN_API_TIMEOUT              | 10s                     | Token API request timeout                                                |
-| TOKEN_API_INSECURE_SKIP_VERIFY | false                   | Skip TLS verification for token API (dev/testing only)                   |
-| TOKEN_API_AUTH_MODE            | none                    | Service-to-service auth mode: `none`, `simple`, or `hmac`                |
-| TOKEN_API_AUTH_SECRET          | (none)                  | Shared secret for service-to-service authentication                      |
-| TOKEN_API_AUTH_HEADER          | X-API-Secret            | Custom header name for simple auth mode                                  |
-| **REFRESH_TOKEN_EXPIRATION**   | 720h                    | Refresh token lifetime (default: 30 days)                                |
-| **ENABLE_REFRESH_TOKENS**      | true                    | Feature flag to enable/disable refresh tokens                            |
-| **ENABLE_TOKEN_ROTATION**      | false                   | Enable rotation mode (default: false, uses fixed mode)                   |
+| Variable                       | Default                 | Description                                                                   |
+| ------------------------------ | ----------------------- | ----------------------------------------------------------------------------- |
+| SERVER_ADDR                    | :8080                   | Listen address                                                                |
+| BASE_URL                       | `http://localhost:8080` | Public URL for verification_uri                                               |
+| JWT_SECRET                     | (default)               | JWT signing key (used when TOKEN_PROVIDER_MODE=local)                         |
+| SESSION_SECRET                 | (default)               | Cookie encryption key                                                         |
+| DATABASE_DRIVER                | sqlite                  | Database driver ("sqlite" or "postgres")                                      |
+| DATABASE_DSN                   | oauth.db                | Connection string (path for SQLite, DSN for PostgreSQL)                       |
+| **AUTH_MODE**                  | local                   | Authentication mode: `local` or `http_api`                                    |
+| HTTP_API_URL                   | (none)                  | External auth API endpoint (required when AUTH_MODE=http_api)                 |
+| HTTP_API_TIMEOUT               | 10s                     | HTTP API request timeout                                                      |
+| HTTP_API_INSECURE_SKIP_VERIFY  | false                   | Skip TLS verification (dev/testing only)                                      |
+| HTTP_API_AUTH_MODE             | none                    | Service-to-service auth mode: `none`, `simple`, or `hmac`                     |
+| HTTP_API_AUTH_SECRET           | (none)                  | Shared secret for service-to-service authentication                           |
+| HTTP_API_AUTH_HEADER           | X-API-Secret            | Custom header name for simple auth mode                                       |
+| **TOKEN_PROVIDER_MODE**        | local                   | Token provider mode: `local` or `http_api`                                    |
+| TOKEN_API_URL                  | (none)                  | External token API endpoint (required when TOKEN_PROVIDER_MODE=http_api)      |
+| TOKEN_API_TIMEOUT              | 10s                     | Token API request timeout                                                     |
+| TOKEN_API_INSECURE_SKIP_VERIFY | false                   | Skip TLS verification for token API (dev/testing only)                        |
+| TOKEN_API_AUTH_MODE            | none                    | Service-to-service auth mode: `none`, `simple`, or `hmac`                     |
+| TOKEN_API_AUTH_SECRET          | (none)                  | Shared secret for service-to-service authentication                           |
+| TOKEN_API_AUTH_HEADER          | X-API-Secret            | Custom header name for simple auth mode                                       |
+| **REFRESH_TOKEN_EXPIRATION**   | 720h                    | Refresh token lifetime (default: 30 days)                                     |
+| **ENABLE_REFRESH_TOKENS**      | true                    | Feature flag to enable/disable refresh tokens                                 |
+| **ENABLE_TOKEN_ROTATION**      | false                   | Enable rotation mode (default: false, uses fixed mode)                        |
+| **ENABLE_RATE_LIMIT**          | true                    | Enable rate limiting (protects against brute force and API abuse)             |
+| **RATE_LIMIT_STORE**           | memory                  | Rate limit storage backend: `memory` (single instance) or `redis` (multi-pod) |
+| RATE_LIMIT_CLEANUP_INTERVAL    | 5m                      | How often to cleanup old rate limiter entries                                 |
+| LOGIN_RATE_LIMIT               | 5                       | Requests per minute allowed for /login endpoint                               |
+| DEVICE_CODE_RATE_LIMIT         | 10                      | Requests per minute for /oauth/device/code endpoint                           |
+| TOKEN_RATE_LIMIT               | 20                      | Requests per minute for /oauth/token endpoint (includes polling)              |
+| DEVICE_VERIFY_RATE_LIMIT       | 10                      | Requests per minute for /device/verify endpoint                               |
+| **REDIS_ADDR**                 | localhost:6379          | Redis server address (required when RATE_LIMIT_STORE=redis)                   |
+| REDIS_PASSWORD                 | (empty)                 | Redis password (empty for no auth)                                            |
+| REDIS_DB                       | 0                       | Redis database number                                                         |
 
 ## Default Test Data
 
