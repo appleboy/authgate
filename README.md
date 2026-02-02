@@ -1166,12 +1166,12 @@ REDIS_PASSWORD=your-password
 
 **Default Rate Limits:**
 
-| Endpoint | Limit | Purpose |
-|----------|-------|---------|
-| `POST /login` | 5 req/min | Prevent password brute force |
-| `POST /oauth/device/code` | 10 req/min | Prevent device code spam |
-| `POST /oauth/token` | 20 req/min | Allow polling while preventing abuse |
-| `POST /device/verify` | 10 req/min | Prevent user code guessing |
+| Endpoint                  | Limit      | Purpose                              |
+| ------------------------- | ---------- | ------------------------------------ |
+| `POST /login`             | 5 req/min  | Prevent password brute force         |
+| `POST /oauth/device/code` | 10 req/min | Prevent device code spam             |
+| `POST /oauth/token`       | 20 req/min | Allow polling while preventing abuse |
+| `POST /device/verify`     | 10 req/min | Prevent user code guessing           |
 
 #### Configuration Guide
 
