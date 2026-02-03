@@ -559,7 +559,7 @@ MICROSOFT_OAUTH_ENABLED=true
 MICROSOFT_TENANT_ID=common                    # See tenant options below
 MICROSOFT_CLIENT_ID=12345678-1234-1234-1234-123456789abc
 MICROSOFT_CLIENT_SECRET=your-client-secret-value
-MICROSOFT_REDIRECT_URL=http://localhost:8080/oauth/callback/microsoft
+MICROSOFT_REDIRECT_URL=http://localhost:8080/auth/callback/microsoft
 MICROSOFT_SCOPES=openid,profile,email,User.Read
 ```
 
@@ -576,7 +576,7 @@ MICROSOFT_SCOPES=openid,profile,email,User.Read
 2. Click "New registration"
    - Name: `AuthGate` (or your app name)
    - Supported account types: Choose based on your tenant ID setting
-   - Redirect URI: `Web` → `http://localhost:8080/oauth/callback/microsoft`
+   - Redirect URI: `Web` → `http://localhost:8080/auth/callback/microsoft`
 3. Click "Register"
 4. Copy the "Application (client) ID" → set as `MICROSOFT_CLIENT_ID`
 5. Go to "Certificates & secrets" → "New client secret"

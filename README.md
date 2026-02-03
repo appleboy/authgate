@@ -637,7 +637,7 @@ MICROSOFT_OAUTH_ENABLED=false
 MICROSOFT_TENANT_ID=common
 MICROSOFT_CLIENT_ID=
 MICROSOFT_CLIENT_SECRET=
-MICROSOFT_REDIRECT_URL=http://localhost:8080/oauth/callback/microsoft
+MICROSOFT_REDIRECT_URL=http://localhost:8080/auth/callback/microsoft
 MICROSOFT_SCOPES=openid,profile,email,User.Read
 
 # OAuth Settings
@@ -719,7 +719,7 @@ MICROSOFT_OAUTH_ENABLED=true
 MICROSOFT_TENANT_ID=common
 MICROSOFT_CLIENT_ID=your_client_id
 MICROSOFT_CLIENT_SECRET=your_client_secret
-MICROSOFT_REDIRECT_URL=http://localhost:8080/oauth/callback/microsoft
+MICROSOFT_REDIRECT_URL=http://localhost:8080/auth/callback/microsoft
 ```
 
 3. **Restart server** and visit `/login` to see OAuth buttons
