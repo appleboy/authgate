@@ -61,7 +61,7 @@ func (h *DeviceHandler) DeviceCodeRequest(c *gin.Context) {
 		}
 	}
 
-	dc, err := h.deviceService.GenerateDeviceCode(clientID, scope)
+	dc, err := h.deviceService.GenerateDeviceCode(c.Request.Context(), clientID, scope)
 	if err != nil {
 		if errors.Is(err, services.ErrInvalidClient) {
 			c.JSON(http.StatusBadRequest, gin.H{
@@ -139,10 +139,11 @@ func (h *DeviceHandler) DeviceVerify(c *gin.Context) {
 		return
 	}
 
+	username := session.Get(SessionUsername)
 	userCode := c.PostForm("user_code")
 	if userCode == "" {
 		c.HTML(http.StatusBadRequest, "device.html", gin.H{
-			"username":   session.Get(SessionUsername),
+			"username":   username,
 			"error":      "Please enter a user code",
 			"csrf_token": middleware.GetCSRFToken(c),
 		})
@@ -152,7 +153,12 @@ func (h *DeviceHandler) DeviceVerify(c *gin.Context) {
 	// Get client name before authorizing
 	clientName, _ := h.deviceService.GetClientNameByUserCode(userCode)
 
-	err := h.deviceService.AuthorizeDeviceCode(userCode, userID.(string))
+	err := h.deviceService.AuthorizeDeviceCode(
+		c.Request.Context(),
+		userCode,
+		userID.(string),
+		username.(string),
+	)
 	if err != nil {
 		var errorMsg string
 		switch {

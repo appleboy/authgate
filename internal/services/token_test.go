@@ -16,9 +16,9 @@ import (
 )
 
 func createTestTokenService(s *store.Store, cfg *config.Config) *TokenService {
-	deviceService := NewDeviceService(s, cfg)
+	deviceService := NewDeviceService(s, cfg, nil)
 	localProvider := token.NewLocalTokenProvider(cfg)
-	return NewTokenService(s, cfg, deviceService, localProvider, nil, "local")
+	return NewTokenService(s, cfg, deviceService, localProvider, nil, "local", nil)
 }
 
 func createAuthorizedDeviceCode(t *testing.T, s *store.Store, clientID string) *models.DeviceCode {
@@ -26,15 +26,15 @@ func createAuthorizedDeviceCode(t *testing.T, s *store.Store, clientID string) *
 		DeviceCodeExpiration: 30 * time.Minute,
 		PollingInterval:      5,
 	}
-	deviceService := NewDeviceService(s, cfg)
+	deviceService := NewDeviceService(s, cfg, nil)
 
 	// Generate device code
-	dc, err := deviceService.GenerateDeviceCode(clientID, "read write")
+	dc, err := deviceService.GenerateDeviceCode(context.Background(), clientID, "read write")
 	require.NoError(t, err)
 
 	// Authorize it
 	userID := uuid.New().String()
-	err = deviceService.AuthorizeDeviceCode(dc.UserCode, userID)
+	err = deviceService.AuthorizeDeviceCode(context.Background(), dc.UserCode, userID, "testuser")
 	require.NoError(t, err)
 
 	// Return the authorized device code
@@ -144,11 +144,11 @@ func TestExchangeDeviceCode_NotAuthorized(t *testing.T) {
 		BaseURL:              "http://localhost:8080",
 	}
 	tokenService := createTestTokenService(s, cfg)
-	deviceService := NewDeviceService(s, cfg)
+	deviceService := NewDeviceService(s, cfg, nil)
 
 	// Create an active client and device code but don't authorize it
 	client := createTestClient(t, s, true)
-	dc, err := deviceService.GenerateDeviceCode(client.ClientID, "read write")
+	dc, err := deviceService.GenerateDeviceCode(context.Background(), client.ClientID, "read write")
 	require.NoError(t, err)
 
 	// Try to exchange without authorization
@@ -174,11 +174,11 @@ func TestExchangeDeviceCode_ExpiredCode(t *testing.T) {
 		BaseURL:              "http://localhost:8080",
 	}
 	tokenService := createTestTokenService(s, cfg)
-	deviceService := NewDeviceService(s, cfg)
+	deviceService := NewDeviceService(s, cfg, nil)
 
 	// Create an active client and device code (it will be expired)
 	client := createTestClient(t, s, true)
-	dc, err := deviceService.GenerateDeviceCode(client.ClientID, "read write")
+	dc, err := deviceService.GenerateDeviceCode(context.Background(), client.ClientID, "read write")
 	require.NoError(t, err)
 
 	// Try to exchange expired device code
@@ -369,7 +369,7 @@ func TestRevokeTokenByID_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	// Revoke the token by ID
-	err = tokenService.RevokeTokenByID(token.ID)
+	err = tokenService.RevokeTokenByID(context.Background(), token.ID, dc.UserID)
 
 	// Assert
 	assert.NoError(t, err)
@@ -389,21 +389,21 @@ func TestGetUserTokens_Success(t *testing.T) {
 		BaseURL:              "http://localhost:8080",
 	}
 	tokenService := createTestTokenService(s, cfg)
-	deviceService := NewDeviceService(s, cfg)
+	deviceService := NewDeviceService(s, cfg, nil)
 
 	// Create an active client
 	client := createTestClient(t, s, true)
 	userID := uuid.New().String()
 
 	// Generate and authorize multiple device codes
-	dc1, err := deviceService.GenerateDeviceCode(client.ClientID, "read")
+	dc1, err := deviceService.GenerateDeviceCode(context.Background(), client.ClientID, "read")
 	require.NoError(t, err)
-	err = deviceService.AuthorizeDeviceCode(dc1.UserCode, userID)
+	err = deviceService.AuthorizeDeviceCode(context.Background(), dc1.UserCode, userID, "testuser")
 	require.NoError(t, err)
 
-	dc2, err := deviceService.GenerateDeviceCode(client.ClientID, "write")
+	dc2, err := deviceService.GenerateDeviceCode(context.Background(), client.ClientID, "write")
 	require.NoError(t, err)
-	err = deviceService.AuthorizeDeviceCode(dc2.UserCode, userID)
+	err = deviceService.AuthorizeDeviceCode(context.Background(), dc2.UserCode, userID, "testuser")
 	require.NoError(t, err)
 
 	// Exchange for tokens
@@ -445,21 +445,21 @@ func TestRevokeAllUserTokens_Success(t *testing.T) {
 		BaseURL:              "http://localhost:8080",
 	}
 	tokenService := createTestTokenService(s, cfg)
-	deviceService := NewDeviceService(s, cfg)
+	deviceService := NewDeviceService(s, cfg, nil)
 
 	// Create an active client
 	client := createTestClient(t, s, true)
 	userID := uuid.New().String()
 
 	// Generate and authorize multiple device codes
-	dc1, err := deviceService.GenerateDeviceCode(client.ClientID, "read")
+	dc1, err := deviceService.GenerateDeviceCode(context.Background(), client.ClientID, "read")
 	require.NoError(t, err)
-	err = deviceService.AuthorizeDeviceCode(dc1.UserCode, userID)
+	err = deviceService.AuthorizeDeviceCode(context.Background(), dc1.UserCode, userID, "testuser")
 	require.NoError(t, err)
 
-	dc2, err := deviceService.GenerateDeviceCode(client.ClientID, "write")
+	dc2, err := deviceService.GenerateDeviceCode(context.Background(), client.ClientID, "write")
 	require.NoError(t, err)
-	err = deviceService.AuthorizeDeviceCode(dc2.UserCode, userID)
+	err = deviceService.AuthorizeDeviceCode(context.Background(), dc2.UserCode, userID, "testuser")
 	require.NoError(t, err)
 
 	// Exchange for tokens
@@ -496,16 +496,16 @@ func TestGetUserTokensWithClient_Success(t *testing.T) {
 		BaseURL:              "http://localhost:8080",
 	}
 	tokenService := createTestTokenService(s, cfg)
-	deviceService := NewDeviceService(s, cfg)
+	deviceService := NewDeviceService(s, cfg, nil)
 
 	// Create an active client
 	client := createTestClient(t, s, true)
 	userID := uuid.New().String()
 
 	// Generate and authorize device code
-	dc, err := deviceService.GenerateDeviceCode(client.ClientID, "read write")
+	dc, err := deviceService.GenerateDeviceCode(context.Background(), client.ClientID, "read write")
 	require.NoError(t, err)
-	err = deviceService.AuthorizeDeviceCode(dc.UserCode, userID)
+	err = deviceService.AuthorizeDeviceCode(context.Background(), dc.UserCode, userID, "testuser")
 	require.NoError(t, err)
 
 	// Exchange for token (returns both access and refresh tokens)
@@ -541,7 +541,7 @@ func TestGetUserTokensWithClient_MultipleClients(t *testing.T) {
 		BaseURL:              "http://localhost:8080",
 	}
 	tokenService := createTestTokenService(s, cfg)
-	deviceService := NewDeviceService(s, cfg)
+	deviceService := NewDeviceService(s, cfg, nil)
 
 	// Create two different clients
 	client1 := createTestClient(t, s, true)
@@ -549,14 +549,14 @@ func TestGetUserTokensWithClient_MultipleClients(t *testing.T) {
 	userID := uuid.New().String()
 
 	// Generate and authorize tokens for both clients
-	dc1, err := deviceService.GenerateDeviceCode(client1.ClientID, "read")
+	dc1, err := deviceService.GenerateDeviceCode(context.Background(), client1.ClientID, "read")
 	require.NoError(t, err)
-	err = deviceService.AuthorizeDeviceCode(dc1.UserCode, userID)
+	err = deviceService.AuthorizeDeviceCode(context.Background(), dc1.UserCode, userID, "testuser")
 	require.NoError(t, err)
 
-	dc2, err := deviceService.GenerateDeviceCode(client2.ClientID, "write")
+	dc2, err := deviceService.GenerateDeviceCode(context.Background(), client2.ClientID, "write")
 	require.NoError(t, err)
-	err = deviceService.AuthorizeDeviceCode(dc2.UserCode, userID)
+	err = deviceService.AuthorizeDeviceCode(context.Background(), dc2.UserCode, userID, "testuser")
 	require.NoError(t, err)
 
 	// Exchange for tokens

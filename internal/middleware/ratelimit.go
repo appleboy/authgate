@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/appleboy/authgate/internal/models"
+	"github.com/appleboy/authgate/internal/services"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"github.com/ulule/limiter/v3"
@@ -39,6 +41,9 @@ type RateLimitConfig struct {
 	RedisAddr     string        // Redis address (e.g., "localhost:6379")
 	RedisPassword string        // Redis password (empty for no auth)
 	RedisDB       int           // Redis database number (default: 0)
+
+	// Audit settings
+	AuditService *services.AuditService // Optional: audit service for logging rate limit events
 }
 
 // NewRateLimiter creates a new rate limiter with configurable store backend
@@ -96,6 +101,35 @@ func NewRateLimiter(config RateLimitConfig) (gin.HandlerFunc, error) {
 
 	// Create Gin middleware with custom limit reached handler
 	middleware := mgin.NewMiddleware(instance, mgin.WithLimitReachedHandler(func(c *gin.Context) {
+		// Log rate limit exceeded event
+		if config.AuditService != nil {
+			// Extract user info if available
+			var actorUserID, actorUsername string
+			if userID, exists := c.Get("user_id"); exists {
+				actorUserID = userID.(string)
+			}
+			if username, exists := c.Get("username"); exists {
+				actorUsername = username.(string)
+			}
+
+			config.AuditService.Log(c.Request.Context(), services.AuditLogEntry{
+				EventType:     models.EventRateLimitExceeded,
+				Severity:      models.SeverityWarning,
+				ActorUserID:   actorUserID,
+				ActorUsername: actorUsername,
+				Action:        "Rate limit exceeded",
+				Details: models.AuditDetails{
+					"endpoint":            c.Request.URL.Path,
+					"requests_per_minute": config.RequestsPerMinute,
+				},
+				Success:       false,
+				ErrorMessage:  "Too many requests",
+				RequestPath:   c.Request.URL.Path,
+				RequestMethod: c.Request.Method,
+				UserAgent:     c.Request.UserAgent(),
+			})
+		}
+
 		// Check if the request accepts HTML (browser request)
 		acceptHeader := c.GetHeader("Accept")
 		if strings.Contains(acceptHeader, "text/html") {

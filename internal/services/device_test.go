@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -52,13 +53,13 @@ func TestGenerateDeviceCode_ActiveClient(t *testing.T) {
 		DeviceCodeExpiration: 30 * time.Minute,
 		PollingInterval:      5,
 	}
-	deviceService := NewDeviceService(s, cfg)
+	deviceService := NewDeviceService(s, cfg, nil)
 
 	// Create an active client
 	client := createTestClient(t, s, true)
 
 	// Generate device code
-	dc, err := deviceService.GenerateDeviceCode(client.ClientID, "read write")
+	dc, err := deviceService.GenerateDeviceCode(context.Background(), client.ClientID, "read write")
 
 	// Assert
 	assert.NoError(t, err)
@@ -76,7 +77,7 @@ func TestGenerateDeviceCode_InactiveClient(t *testing.T) {
 		DeviceCodeExpiration: 30 * time.Minute,
 		PollingInterval:      5,
 	}
-	deviceService := NewDeviceService(s, cfg)
+	deviceService := NewDeviceService(s, cfg, nil)
 
 	// Create an inactive client
 	client := createTestClient(t, s, false)
@@ -87,7 +88,7 @@ func TestGenerateDeviceCode_InactiveClient(t *testing.T) {
 	require.False(t, storedClient.IsActive, "Client should be inactive")
 
 	// Try to generate device code
-	dc, err := deviceService.GenerateDeviceCode(client.ClientID, "read write")
+	dc, err := deviceService.GenerateDeviceCode(context.Background(), client.ClientID, "read write")
 
 	// Assert
 	assert.Error(t, err)
@@ -101,10 +102,14 @@ func TestGenerateDeviceCode_InvalidClient(t *testing.T) {
 		DeviceCodeExpiration: 30 * time.Minute,
 		PollingInterval:      5,
 	}
-	deviceService := NewDeviceService(s, cfg)
+	deviceService := NewDeviceService(s, cfg, nil)
 
 	// Try to generate device code with non-existent client
-	dc, err := deviceService.GenerateDeviceCode("non-existent-client-id", "read write")
+	dc, err := deviceService.GenerateDeviceCode(
+		context.Background(),
+		"non-existent-client-id",
+		"read write",
+	)
 
 	// Assert
 	assert.Error(t, err)
@@ -118,16 +123,17 @@ func TestAuthorizeDeviceCode_Success(t *testing.T) {
 		DeviceCodeExpiration: 30 * time.Minute,
 		PollingInterval:      5,
 	}
-	deviceService := NewDeviceService(s, cfg)
+	deviceService := NewDeviceService(s, cfg, nil)
 
 	// Create an active client and device code
 	client := createTestClient(t, s, true)
-	dc, err := deviceService.GenerateDeviceCode(client.ClientID, "read write")
+	dc, err := deviceService.GenerateDeviceCode(context.Background(), client.ClientID, "read write")
 	require.NoError(t, err)
 
 	// Authorize the device code
 	userID := uuid.New().String()
-	err = deviceService.AuthorizeDeviceCode(dc.UserCode, userID)
+	username := "testuser"
+	err = deviceService.AuthorizeDeviceCode(context.Background(), dc.UserCode, userID, username)
 
 	// Assert
 	assert.NoError(t, err)
@@ -145,10 +151,15 @@ func TestAuthorizeDeviceCode_InvalidUserCode(t *testing.T) {
 		DeviceCodeExpiration: 30 * time.Minute,
 		PollingInterval:      5,
 	}
-	deviceService := NewDeviceService(s, cfg)
+	deviceService := NewDeviceService(s, cfg, nil)
 
 	// Try to authorize with invalid user code
-	err := deviceService.AuthorizeDeviceCode("INVALID", uuid.New().String())
+	err := deviceService.AuthorizeDeviceCode(
+		context.Background(),
+		"INVALID",
+		uuid.New().String(),
+		"testuser",
+	)
 
 	// Assert
 	assert.Error(t, err)
@@ -161,11 +172,11 @@ func TestGetClientNameByUserCode_Success(t *testing.T) {
 		DeviceCodeExpiration: 30 * time.Minute,
 		PollingInterval:      5,
 	}
-	deviceService := NewDeviceService(s, cfg)
+	deviceService := NewDeviceService(s, cfg, nil)
 
 	// Create an active client and device code
 	client := createTestClient(t, s, true)
-	dc, err := deviceService.GenerateDeviceCode(client.ClientID, "read write")
+	dc, err := deviceService.GenerateDeviceCode(context.Background(), client.ClientID, "read write")
 	require.NoError(t, err)
 
 	// Get client name by user code
@@ -182,11 +193,11 @@ func TestUserCodeNormalization(t *testing.T) {
 		DeviceCodeExpiration: 30 * time.Minute,
 		PollingInterval:      5,
 	}
-	deviceService := NewDeviceService(s, cfg)
+	deviceService := NewDeviceService(s, cfg, nil)
 
 	// Create an active client and device code
 	client := createTestClient(t, s, true)
-	dc, err := deviceService.GenerateDeviceCode(client.ClientID, "read write")
+	dc, err := deviceService.GenerateDeviceCode(context.Background(), client.ClientID, "read write")
 	require.NoError(t, err)
 
 	// Test normalization: lowercase with dashes should work

@@ -133,8 +133,10 @@ func (h *SessionHandler) RevokeSession(c *gin.Context) {
 		return
 	}
 
+	userID, _ := c.Get("user_id")
+
 	// Revoke the token
-	if err := h.tokenService.RevokeTokenByID(tokenID); err != nil {
+	if err := h.tokenService.RevokeTokenByID(c.Request.Context(), tokenID, userID.(string)); err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"Error": "Failed to revoke session",
 		})
@@ -171,8 +173,10 @@ func (h *SessionHandler) DisableSession(c *gin.Context) {
 		return
 	}
 
+	userID, _ := c.Get("user_id")
+
 	// Disable the token
-	if err := h.tokenService.DisableToken(tokenID); err != nil {
+	if err := h.tokenService.DisableToken(c.Request.Context(), tokenID, userID.(string)); err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"Error": "Failed to disable session",
 		})
@@ -189,8 +193,10 @@ func (h *SessionHandler) EnableSession(c *gin.Context) {
 		return
 	}
 
+	userID, _ := c.Get("user_id")
+
 	// Enable the token
-	if err := h.tokenService.EnableToken(tokenID); err != nil {
+	if err := h.tokenService.EnableToken(c.Request.Context(), tokenID, userID.(string)); err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"Error": "Failed to enable session",
 		})

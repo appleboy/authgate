@@ -13,7 +13,7 @@ import (
 
 func TestListClientsPaginatedWithCreator(t *testing.T) {
 	s := setupTestStore(t)
-	clientService := NewClientService(s)
+	clientService := NewClientService(s, nil)
 
 	// Create test users
 	user1 := &models.User{
