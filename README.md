@@ -94,6 +94,12 @@
     - [Monitoring Best Practices](#monitoring-best-practices)
       - [Key Metrics to Monitor](#key-metrics-to-monitor)
       - [Logging](#logging)
+    - [Audit Logging](#audit-logging)
+      - [Key Features](#key-features-2)
+      - [Configuration](#configuration-2)
+      - [Web Interface](#web-interface)
+      - [Event Types](#event-types)
+      - [Best Practices](#best-practices-1)
   - [Security Considerations](#security-considerations-1)
     - [Production Deployment Checklist](#production-deployment-checklist)
     - [Threat Model](#threat-model)
@@ -191,6 +197,12 @@ Modern CLI tools and IoT devices need to access user resources securely, but tra
   - Redis store for multi-pod/distributed deployments
   - Per-endpoint configurable limits
   - IP-based tracking
+- **Comprehensive Audit Logging**: Track all critical operations and security events
+  - Asynchronous batch writing for high performance
+  - Automatic sensitive data masking (passwords, tokens, secrets)
+  - Configurable retention with automatic cleanup
+  - Web UI with search, filtering, and CSV export
+  - Covers authentication, tokens, device authorization, and admin operations
 
 🧩 Flexible Authentication & Token Flows
 
@@ -502,6 +514,10 @@ sequenceDiagram
 | `/logout`                      | GET      | Yes (Session) | User logout (destroys session)                                      |
 | `/auth/login/:provider`        | GET      | No            | Initiate OAuth login (provider: github, gitea, microsoft)           |
 | `/auth/callback/:provider`     | GET      | No            | OAuth callback endpoint                                             |
+| `/admin/audit`                 | GET      | Yes (Admin)   | View audit logs (HTML interface)                                    |
+| `/admin/audit/export`          | GET      | Yes (Admin)   | Export audit logs as CSV                                            |
+| `/admin/audit/api`             | GET      | Yes (Admin)   | List audit logs (JSON API)                                          |
+| `/admin/audit/api/stats`       | GET      | Yes (Admin)   | Get audit log statistics                                            |
 
 #### Endpoint Details
 
@@ -644,6 +660,13 @@ MICROSOFT_SCOPES=openid,profile,email,User.Read
 OAUTH_AUTO_REGISTER=true         # Allow OAuth to auto-create accounts (default: true)
 OAUTH_TIMEOUT=15s                # HTTP client timeout for OAuth requests (default: 15s)
 OAUTH_INSECURE_SKIP_VERIFY=false # Skip TLS verification for OAuth (dev/testing only, default: false)
+
+# Audit Logging
+# Comprehensive audit logging for security and compliance
+ENABLE_AUDIT_LOGGING=true               # Enable audit logging (default: true)
+AUDIT_LOG_RETENTION=2160h               # Retention period: 90 days (default: 90 days = 2160h)
+AUDIT_LOG_BUFFER_SIZE=1000              # Async buffer size (default: 1000)
+AUDIT_LOG_CLEANUP_INTERVAL=24h          # Cleanup frequency (default: 24h)
 ```
 
 #### Generate Strong Secrets
@@ -1229,7 +1252,8 @@ authgate/
 │   ├── token.go     # Token issuance (/oauth/token), verification (/oauth/tokeninfo), and revocation (/oauth/revoke)
 │   ├── session.go   # Session management (/account/sessions)
 │   ├── client.go    # Admin client management
-│   └── oauth_handler.go  # OAuth third-party login handlers
+│   ├── oauth_handler.go  # OAuth third-party login handlers
+│   └── audit.go     # Audit log viewing and export (/admin/audit)
 ├── middleware/      # HTTP middleware
 │   ├── auth.go      # Session authentication (RequireAuth, RequireAdmin)
 │   ├── csrf.go      # CSRF protection middleware
@@ -1239,7 +1263,8 @@ authgate/
 │   ├── client.go    # OAuth clients (OAuthClient)
 │   ├── device.go    # Device codes (DeviceCode)
 │   ├── token.go     # Access tokens (AccessToken)
-│   └── oauth_connection.go  # OAuth provider connections
+│   ├── oauth_connection.go  # OAuth provider connections
+│   └── audit_log.go # Audit log entries (AuditLog)
 ├── auth/            # Authentication providers (pluggable design)
 │   ├── local.go     # Local authentication (database)
 │   ├── http_api.go  # External HTTP API authentication
@@ -1253,10 +1278,12 @@ authgate/
 │   ├── user.go      # User management (integrates auth providers)
 │   ├── device.go    # Device code generation and validation
 │   ├── token.go     # Token service (integrates token providers)
-│   └── client.go    # OAuth client management
+│   ├── client.go    # OAuth client management
+│   └── audit.go     # Audit logging service (async batch writing, sensitive data masking)
 ├── store/           # Database layer (GORM)
 │   ├── driver.go    # Database driver factory (SQLite, PostgreSQL)
-│   └── sqlite.go    # Database initialization, migrations, seed data, batch queries
+│   ├── sqlite.go    # Database initialization, migrations, seed data, batch queries
+│   └── audit_filters.go  # Audit log filtering and pagination
 ├── templates/       # HTML templates (embedded via go:embed)
 │   ├── account/     # User account templates
 │   │   └── sessions.html  # Active sessions management page
@@ -1334,6 +1361,7 @@ The application automatically creates these tables:
 - `device_codes` - Active device authorization requests
 - `access_tokens` - Issued JWT tokens
 - `oauth_connections` - OAuth provider connections (GitHub, Gitea, etc.)
+- `audit_logs` - Comprehensive audit trail of all operations (authentication, tokens, admin actions, security events)
 
 ### Extending the Server
 
@@ -1388,12 +1416,139 @@ curl http://localhost:8080/health
 - Session count
 - HTTP response times
 - Failed login attempts
+- Audit log events per hour (track via `/admin/audit/api/stats`)
+- Critical/Error severity audit events (security incidents)
+- Rate limit exceeded events (potential attacks)
 
 #### Logging
 
 - Gin framework logs all HTTP requests
 - Include request ID for tracing
 - Log authentication failures for security monitoring
+
+### Audit Logging
+
+AuthGate includes a comprehensive audit logging system that tracks all critical operations and security events. The system is designed for high performance with asynchronous batch writing and automatic sensitive data masking.
+
+#### Key Features
+
+- **Comprehensive Event Coverage**: Tracks authentication, device authorization, token operations, admin actions, and security events
+- **Asynchronous Processing**: Non-blocking batch writes (every 1 second or 100 records) for minimal performance impact
+- **Automatic Data Masking**: Sensitive fields (passwords, tokens, secrets) are automatically redacted in audit logs
+- **Flexible Filtering**: Search and filter by event type, severity, actor, resource, time range, success/failure status
+- **Web Interface**: View, search, filter, and export audit logs through the admin panel
+- **CSV Export**: Export filtered audit logs for external analysis or compliance reporting
+- **Statistics Dashboard**: View event counts by type, severity, and success rate
+- **Automatic Cleanup**: Configurable retention period with automatic deletion of old logs
+- **Graceful Shutdown**: Ensures all buffered logs are written before server stops
+
+#### Configuration
+
+Configure audit logging via environment variables in `.env`:
+
+```bash
+# Audit Logging
+ENABLE_AUDIT_LOGGING=true                # Enable audit logging (default: true)
+AUDIT_LOG_RETENTION=2160h               # Retention period: 90 days (default: 90 days = 2160h)
+AUDIT_LOG_BUFFER_SIZE=1000              # Async buffer size (default: 1000)
+AUDIT_LOG_CLEANUP_INTERVAL=24h          # Cleanup frequency (default: 24h)
+```
+
+**Configuration Options:**
+
+- `ENABLE_AUDIT_LOGGING`: Master switch to enable/disable audit logging (default: `true`)
+- `AUDIT_LOG_RETENTION`: How long to keep audit logs before automatic deletion (default: `90 days`)
+- `AUDIT_LOG_BUFFER_SIZE`: Size of the async buffer for audit events (default: `1000`)
+- `AUDIT_LOG_CLEANUP_INTERVAL`: How often to run the cleanup job (default: `24h`)
+
+**Performance Notes:**
+
+- Audit events are written asynchronously via buffered channel (non-blocking)
+- Batch writes occur every 1 second or when 100 records accumulate
+- Buffer overflow drops events with warning log (extremely rare in normal operation)
+- Typical overhead: < 1% CPU, < 10 MB memory for 100k events
+
+#### Web Interface
+
+Access audit logs through the admin panel:
+
+**Endpoints:**
+
+- `GET /admin/audit` - View audit logs in web interface (requires admin login)
+- `GET /admin/audit/export` - Export filtered logs as CSV
+- `GET /admin/audit/api` - JSON API for programmatic access
+- `GET /admin/audit/api/stats` - Statistics and event counts
+
+**Web UI Features:**
+
+- **Search**: Full-text search across action, resource name, and actor username
+- **Filters**: Event type, severity, success/failure, actor IP, resource type, time range
+- **Pagination**: Configurable page size (default: 20 records per page)
+- **CSV Export**: Download filtered results for analysis in Excel/spreadsheet tools
+- **Real-time Updates**: New events appear after page refresh
+
+#### Event Types
+
+**Authentication Events:**
+
+- `AUTHENTICATION_SUCCESS` - User successfully logged in
+- `AUTHENTICATION_FAILURE` - Failed login attempt
+- `LOGOUT` - User logged out
+- `OAUTH_AUTHENTICATION` - OAuth provider authentication (GitHub, Gitea, Microsoft)
+
+**Device Authorization Events:**
+
+- `DEVICE_CODE_GENERATED` - Device code created for CLI/device
+- `DEVICE_CODE_AUTHORIZED` - User authorized device in browser
+
+**Token Events:**
+
+- `ACCESS_TOKEN_ISSUED` - Access token generated
+- `REFRESH_TOKEN_ISSUED` - Refresh token generated
+- `TOKEN_REFRESHED` - Access token refreshed using refresh token
+- `TOKEN_REVOKED` - Token permanently revoked
+- `TOKEN_DISABLED` - Token temporarily disabled (can be re-enabled)
+- `TOKEN_ENABLED` - Disabled token re-enabled
+
+**Admin Operations:**
+
+- `CLIENT_CREATED` - OAuth client created
+- `CLIENT_UPDATED` - OAuth client modified
+- `CLIENT_DELETED` - OAuth client removed
+- `CLIENT_SECRET_REGENERATED` - Client secret rotated
+
+**Security Events:**
+
+- `RATE_LIMIT_EXCEEDED` - Request blocked by rate limiter
+- `SUSPICIOUS_ACTIVITY` - Anomalous behavior detected
+
+**Severity Levels:**
+
+- `INFO` - Normal operations (login, token issuance)
+- `WARNING` - Potentially concerning events (failed authentication, rate limit exceeded)
+- `ERROR` - Operation failures (token refresh failure)
+- `CRITICAL` - Security incidents (suspicious activity)
+
+#### Best Practices
+
+**Security & Compliance:**
+
+1. **Monitor Critical Events**: Set up alerts for `CRITICAL` and `ERROR` severity events
+2. **Regular Review**: Periodically review `AUTHENTICATION_FAILURE` and `RATE_LIMIT_EXCEEDED` events for attack patterns
+3. **Compliance Exports**: Use CSV export for compliance audits (SOC 2, ISO 27001, GDPR)
+4. **Retention Policy**: Adjust `AUDIT_LOG_RETENTION` based on compliance requirements (90 days typical, some require 1+ year)
+
+**Performance Optimization:**
+
+1. **Database Indexes**: Audit logs table includes indexes on `event_time`, `event_type`, `actor_user_id`, `actor_ip`, `severity`, `success`
+2. **Regular Cleanup**: Enable automatic cleanup to prevent database bloat
+3. **Monitor Buffer**: Watch for "buffer full" warnings in logs (indicates need to increase `AUDIT_LOG_BUFFER_SIZE`)
+
+**Operational:**
+
+1. **Backup Strategy**: Include audit logs in regular database backups
+2. **Separate Storage**: Consider moving old audit logs to cold storage for long-term retention
+3. **Access Control**: Audit log viewing requires admin role (protect sensitive operational data)
 
 ---
 
@@ -1412,7 +1567,12 @@ curl http://localhost:8080/health
   - [ ] Use Redis store for multi-pod deployments (`RATE_LIMIT_STORE=redis`)
   - [ ] Adjust limits based on your traffic patterns
   - [ ] Monitor rate limit events in logs
-- [ ] Regularly backup `oauth.db`
+- [ ] **Configure audit logging** (enabled by default)
+  - [ ] Set appropriate retention period (`AUDIT_LOG_RETENTION`, default: 90 days)
+  - [ ] Monitor audit log storage growth
+  - [ ] Set up regular exports for compliance (CSV export available)
+  - [ ] Review audit logs regularly for security incidents
+- [ ] Regularly backup `oauth.db` (includes audit logs)
 - [ ] Set up automated cleanup for expired tokens and device codes
 - [ ] Use Docker non-root user mode (already configured)
 - [ ] Configure timeouts for HTTP server (ReadTimeout, WriteTimeout)
