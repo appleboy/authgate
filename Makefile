@@ -45,7 +45,7 @@ install: $(GOFILES)
 	$(GO) install -v -tags '$(TAGS)' -ldflags '$(EXTLDFLAGS)-s -w $(LDFLAGS)'
 
 ## test: run tests
-test:
+test: generate
 	@$(GO) test -v -cover -coverprofile coverage.txt ./... && echo "\n==>\033[32m Ok\033[m\n" || exit 1
 
 ## fmt: format go files using golangci-lint
