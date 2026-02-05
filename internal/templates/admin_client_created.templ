@@ -1,0 +1,106 @@
+package templates
+
+templ AdminClientCreated(props ClientCreatedPageProps) {
+	@Layout("OAuth Client", LayoutAdminNavbar, &props.NavbarProps) {
+		<div class="main-content">
+			<div class="container">
+				<div class="card">
+					<div class="header">
+						<h1 class="page-title-with-icon">
+							<span>OAuth Client Created Successfully</span>
+						</h1>
+					</div>
+					<div class="alert alert-success alert-success-spaced">
+						Client "<strong>{ props.Client.ClientName }</strong>" has been created successfully!
+					</div>
+					<div class="warning-box warning-box-enhanced">
+						<div class="warning-icon">⚠</div>
+						<div class="warning-content">
+							<strong>Important Security Notice</strong>
+							<p>
+								The client secret is shown only once for security reasons.
+								Please copy and save it securely now.
+							</p>
+						</div>
+					</div>
+					<div class="secret-box secret-box-enhanced">
+						<div class="secret-header">
+							<strong class="secret-title">Client Secret</strong>
+							<p class="secret-description">
+								Copy this secret and store it securely. You won't be able to see it again.
+							</p>
+						</div>
+						<div class="secret-value secret-value-enhanced" id="clientSecret">{ props.ClientSecret }</div>
+						<button onclick="copySecret()" class="btn btn-secondary btn-small copy-button-spaced">
+							Copy to Clipboard
+						</button>
+					</div>
+					<h3 class="client-details-title">Client Details</h3>
+					<div class="client-details-section">
+						<div class="info-row">
+							<div class="info-label">Client ID:</div>
+							<div class="info-value">{ props.Client.ClientID }</div>
+						</div>
+						<div class="info-row">
+							<div class="info-label">Client Name:</div>
+							<div class="info-value">{ props.Client.ClientName }</div>
+						</div>
+						if props.Client.Description != "" {
+							<div class="info-row">
+								<div class="info-label">Description:</div>
+								<div class="info-value">{ props.Client.Description }</div>
+							</div>
+						}
+						<div class="info-row">
+							<div class="info-label">Scopes:</div>
+							<div class="info-value">{ props.Client.Scopes }</div>
+						</div>
+						<div class="info-row">
+							<div class="info-label">Grant Types:</div>
+							<div class="info-value">{ props.Client.GrantTypes }</div>
+						</div>
+						if props.Client.RedirectURIs != "" {
+							<div class="info-row">
+								<div class="info-label">Redirect URIs:</div>
+								<div class="info-value">{ props.Client.RedirectURIs }</div>
+							</div>
+						}
+						<div class="info-row">
+							<div class="info-label">Status:</div>
+							<div class="info-value">
+								if props.Client.IsActive {
+									<span class="status-badge status-active">Active</span>
+								} else {
+									<span class="status-badge status-inactive">Inactive</span>
+								}
+							</div>
+						</div>
+					</div>
+					<div class="back-button-section">
+						<a href="/admin/clients" class="btn btn-primary">Back to Clients List</a>
+					</div>
+				</div>
+			</div>
+		</div>
+		<script>
+			function copySecret() {
+				const secretElement = document.getElementById('clientSecret');
+				const secret = secretElement.textContent;
+
+				navigator.clipboard.writeText(secret).then(() => {
+					alert('Client secret copied to clipboard!');
+				}).catch(err => {
+					console.error('Failed to copy:', err);
+					// Fallback for older browsers
+					const textarea = document.createElement('textarea');
+					textarea.value = secret;
+					document.body.appendChild(textarea);
+					textarea.select();
+					document.execCommand('copy');
+					document.body.removeChild(textarea);
+					alert('Client secret copied to clipboard!');
+				});
+			}
+		</script>
+	}
+}

@@ -1,0 +1,121 @@
+package templates
+
+templ AdminClientForm(props ClientFormPageProps) {
+	@Layout(props.Title, LayoutAdminNavbar, &props.NavbarProps) {
+		<div class="main-content">
+			<div class="container">
+				<div class="card">
+					<div class="header">
+						<h1 class="page-title-with-icon">
+							<span>{ props.Title }</span>
+						</h1>
+					</div>
+					@Alert(props.Error, AlertError)
+					<form method={ props.Method } action={ templ.URL(props.Action) } class="client-form">
+						<input type="hidden" name="csrf_token" value={ props.CSRFToken }/>
+						<div class="form-group">
+							<label for="client_name">Client Name *</label>
+							if props.Client != nil {
+								<input
+									type="text"
+									id="client_name"
+									name="client_name"
+									value={ props.Client.ClientName }
+									required
+								/>
+							} else {
+								<input
+									type="text"
+									id="client_name"
+									name="client_name"
+									required
+								/>
+							}
+							<small class="hint">A human-readable name for this OAuth client</small>
+						</div>
+						<div class="form-group">
+							<label for="description">Description</label>
+							if props.Client != nil {
+								<textarea id="description" name="description" rows="3">{ props.Client.Description }</textarea>
+							} else {
+								<textarea id="description" name="description" rows="3"></textarea>
+							}
+							<small class="hint">Optional description of this client's purpose</small>
+						</div>
+						<div class="form-group">
+							<label for="scopes">Scopes</label>
+							if props.Client != nil {
+								<input
+									type="text"
+									id="scopes"
+									name="scopes"
+									value={ props.Client.Scopes }
+								/>
+							} else {
+								<input
+									type="text"
+									id="scopes"
+									name="scopes"
+									value="read write"
+								/>
+							}
+							<small class="hint">Space-separated list of scopes (e.g., "read write")</small>
+						</div>
+						<div class="form-group">
+							<label for="grant_types">Grant Types</label>
+							<select id="grant_types" name="grant_types">
+								<option value="device_code" selected>
+									Device Code Flow (RFC 8628)
+								</option>
+							</select>
+							<small class="hint">Currently only Device Code Flow is supported</small>
+						</div>
+						<div class="form-group">
+							<label for="redirect_uris">Redirect URIs</label>
+							if props.Client != nil {
+								<textarea id="redirect_uris" name="redirect_uris" rows="3">{ props.Client.RedirectURIs }</textarea>
+							} else {
+								<textarea id="redirect_uris" name="redirect_uris" rows="3"></textarea>
+							}
+							<small class="hint">Comma-separated redirect URIs (optional for device flow)</small>
+						</div>
+						if props.IsEdit {
+							<div class="form-group">
+								<label for="is_active">Status</label>
+								<select id="is_active" name="is_active">
+									<option value="true" selected?={ props.Client != nil && props.Client.IsActive }>Active</option>
+									<option value="false" selected?={ props.Client != nil && !props.Client.IsActive }>Inactive</option>
+								</select>
+								<small class="hint">Inactive clients cannot be used for authorization</small>
+							</div>
+							<div class="form-group">
+								<label>Client Secret</label>
+								<div class="secret-info-box">
+									<p>
+										The client secret is encrypted and cannot be displayed.
+										<a
+											href={ templ.URL("/admin/clients/" + props.Client.ClientID + "/regenerate-secret") }
+											onclick="return confirm('Are you sure? This will invalidate the current secret.');"
+										>
+											Regenerate Secret
+										</a>
+									</p>
+								</div>
+							</div>
+						}
+						<div class="form-actions">
+							<button type="submit" class="btn btn-primary">
+								if props.IsEdit {
+									Update Client
+								} else {
+									Create Client
+								}
+							</button>
+							<a href="/admin/clients" class="btn btn-secondary">Cancel</a>
+						</div>
+					</form>
+				</div>
+			</div>
+		</div>
+	}
+}

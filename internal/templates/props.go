@@ -1,6 +1,8 @@
 package templates
 
 import (
+	"time"
+
 	"github.com/appleboy/authgate/internal/models"
 	"github.com/appleboy/authgate/internal/services"
 	"github.com/appleboy/authgate/internal/store"
@@ -87,20 +89,38 @@ type ClientsPageProps struct {
 	Success    string
 }
 
+// ClientDisplay wraps OAuthApplication with string fields for template rendering
+type ClientDisplay struct {
+	ID               int64
+	ClientID         string
+	ClientName       string
+	Description      string
+	Scopes           string
+	GrantTypes       string
+	RedirectURIs     string // Comma-separated string
+	EnableDeviceFlow bool
+	IsActive         bool
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
 // ClientFormPageProps contains properties for the client form page
 type ClientFormPageProps struct {
 	BaseProps
 	NavbarProps
-	Client *models.OAuthApplication
+	Client *ClientDisplay
 	Error  string
 	IsEdit bool
+	Title  string
+	Method string
+	Action string
 }
 
 // ClientCreatedPageProps contains properties for the client created page
 type ClientCreatedPageProps struct {
 	BaseProps
 	NavbarProps
-	Client       *models.OAuthApplication
+	Client       *ClientDisplay
 	ClientSecret string
 }
 

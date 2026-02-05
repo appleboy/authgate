@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/appleboy/authgate/internal/middleware"
+	"github.com/appleboy/authgate/internal/models"
 	"github.com/appleboy/authgate/internal/services"
 	"github.com/appleboy/authgate/internal/store"
 	"github.com/appleboy/authgate/internal/templates"
@@ -91,13 +92,20 @@ func (h *ClientHandler) ShowClientsPage(c *gin.Context) {
 // ShowCreateClientPage displays the form to create a new client
 func (h *ClientHandler) ShowCreateClientPage(c *gin.Context) {
 	user, _ := c.Get("user")
-	c.HTML(http.StatusOK, "admin/client_form.html", gin.H{
-		"user":       user,
-		"action":     "/admin/clients",
-		"method":     "POST",
-		"title":      "Create OAuth Client",
-		"csrf_token": middleware.GetCSRFToken(c),
-	})
+	userModel := user.(*models.User)
+
+	templates.RenderTempl(c, http.StatusOK, templates.AdminClientForm(templates.ClientFormPageProps{
+		BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
+		NavbarProps: templates.NavbarProps{
+			Username:   userModel.Username,
+			IsAdmin:    userModel.IsAdmin(),
+			ActiveLink: "clients",
+		},
+		Title:  "Create OAuth Client",
+		Method: "POST",
+		Action: "/admin/clients",
+		IsEdit: false,
+	}))
 }
 
 // CreateClient handles the creation of a new OAuth client
@@ -117,45 +125,69 @@ func (h *ClientHandler) CreateClient(c *gin.Context) {
 	resp, err := h.clientService.CreateClient(c.Request.Context(), req)
 	if err != nil {
 		user, _ := c.Get("user")
-		c.HTML(http.StatusBadRequest, "admin/client_form.html", gin.H{
-			"user":       user,
-			"error":      err.Error(),
-			"action":     "/admin/clients",
-			"method":     "POST",
-			"title":      "Create OAuth Client",
-			"csrf_token": middleware.GetCSRFToken(c),
-			"client": map[string]string{
-				"client_name":   req.ClientName,
-				"description":   req.Description,
-				"scopes":        req.Scopes,
-				"grant_types":   req.GrantTypes,
-				"redirect_uris": strings.Join(req.RedirectURIs, ", "),
-			},
-		})
+		userModel := user.(*models.User)
+
+		// Convert request data to ClientDisplay struct for template
+		clientData := &templates.ClientDisplay{
+			ClientName:   req.ClientName,
+			Description:  req.Description,
+			Scopes:       req.Scopes,
+			GrantTypes:   req.GrantTypes,
+			RedirectURIs: strings.Join(req.RedirectURIs, ", "),
+		}
+
+		templates.RenderTempl(
+			c,
+			http.StatusBadRequest,
+			templates.AdminClientForm(templates.ClientFormPageProps{
+				BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
+				NavbarProps: templates.NavbarProps{
+					Username:   userModel.Username,
+					IsAdmin:    userModel.IsAdmin(),
+					ActiveLink: "clients",
+				},
+				Client: clientData,
+				Error:  err.Error(),
+				Title:  "Create OAuth Client",
+				Method: "POST",
+				Action: "/admin/clients",
+				IsEdit: false,
+			}),
+		)
 		return
 	}
 
 	// Show the newly created client with the plain secret (only shown once)
-	// Prepare client data for template
-	clientData := gin.H{
-		"ID":               resp.ID,
-		"ClientID":         resp.ClientID,
-		"ClientName":       resp.ClientName,
-		"Description":      resp.Description,
-		"Scopes":           resp.Scopes,
-		"GrantTypes":       resp.GrantTypes,
-		"RedirectURIs":     resp.RedirectURIs.Join(", "),
-		"EnableDeviceFlow": resp.EnableDeviceFlow,
-		"IsActive":         resp.IsActive,
+	user, _ := c.Get("user")
+	userModel := user.(*models.User)
+
+	// Convert OAuthApplication to ClientDisplay for template
+	clientDisplay := &templates.ClientDisplay{
+		ID:               resp.ID,
+		ClientID:         resp.ClientID,
+		ClientName:       resp.ClientName,
+		Description:      resp.Description,
+		Scopes:           resp.Scopes,
+		GrantTypes:       resp.GrantTypes,
+		RedirectURIs:     resp.RedirectURIs.Join(", "),
+		EnableDeviceFlow: resp.EnableDeviceFlow,
+		IsActive:         resp.IsActive,
 	}
 
-	user, _ := c.Get("user")
-	c.HTML(http.StatusOK, "admin/client_created.html", gin.H{
-		"user":          user,
-		"client":        clientData,
-		"client_secret": resp.ClientSecretPlain,
-		"csrf_token":    middleware.GetCSRFToken(c),
-	})
+	templates.RenderTempl(
+		c,
+		http.StatusOK,
+		templates.AdminClientCreated(templates.ClientCreatedPageProps{
+			BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
+			NavbarProps: templates.NavbarProps{
+				Username:   userModel.Username,
+				IsAdmin:    userModel.IsAdmin(),
+				ActiveLink: "clients",
+			},
+			Client:       clientDisplay,
+			ClientSecret: resp.ClientSecretPlain,
+		}),
+	)
 }
 
 // ShowEditClientPage displays the form to edit an existing client
@@ -170,30 +202,37 @@ func (h *ClientHandler) ShowEditClientPage(c *gin.Context) {
 		return
 	}
 
-	// Prepare client data for template
-	clientData := gin.H{
-		"ID":               client.ID,
-		"ClientID":         client.ClientID,
-		"ClientName":       client.ClientName,
-		"Description":      client.Description,
-		"Scopes":           client.Scopes,
-		"GrantTypes":       client.GrantTypes,
-		"RedirectURIs":     client.RedirectURIs.Join(", "),
-		"EnableDeviceFlow": client.EnableDeviceFlow,
-		"IsActive":         client.IsActive,
-		"CreatedAt":        client.CreatedAt,
-		"UpdatedAt":        client.UpdatedAt,
+	user, _ := c.Get("user")
+	userModel := user.(*models.User)
+
+	// Convert OAuthApplication to ClientDisplay for template
+	clientDisplay := &templates.ClientDisplay{
+		ID:               client.ID,
+		ClientID:         client.ClientID,
+		ClientName:       client.ClientName,
+		Description:      client.Description,
+		Scopes:           client.Scopes,
+		GrantTypes:       client.GrantTypes,
+		RedirectURIs:     client.RedirectURIs.Join(", "),
+		EnableDeviceFlow: client.EnableDeviceFlow,
+		IsActive:         client.IsActive,
+		CreatedAt:        client.CreatedAt,
+		UpdatedAt:        client.UpdatedAt,
 	}
 
-	user, _ := c.Get("user")
-	c.HTML(http.StatusOK, "admin/client_form.html", gin.H{
-		"user":       user,
-		"client":     clientData,
-		"action":     "/admin/clients/" + clientID,
-		"method":     "POST",
-		"title":      "Edit OAuth Client",
-		"csrf_token": middleware.GetCSRFToken(c),
-	})
+	templates.RenderTempl(c, http.StatusOK, templates.AdminClientForm(templates.ClientFormPageProps{
+		BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
+		NavbarProps: templates.NavbarProps{
+			Username:   userModel.Username,
+			IsAdmin:    userModel.IsAdmin(),
+			ActiveLink: "clients",
+		},
+		Client: clientDisplay,
+		Title:  "Edit OAuth Client",
+		Method: "POST",
+		Action: "/admin/clients/" + clientID,
+		IsEdit: true,
+	}))
 }
 
 // UpdateClient handles updating an existing OAuth client
@@ -214,29 +253,42 @@ func (h *ClientHandler) UpdateClient(c *gin.Context) {
 	if err != nil {
 		client, _ := h.clientService.GetClient(clientID)
 
-		// Prepare client data for template
-		clientData := gin.H{
-			"ID":               client.ID,
-			"ClientID":         client.ClientID,
-			"ClientName":       req.ClientName,
-			"Description":      req.Description,
-			"Scopes":           req.Scopes,
-			"GrantTypes":       req.GrantTypes,
-			"RedirectURIs":     strings.Join(req.RedirectURIs, ", "),
-			"EnableDeviceFlow": client.EnableDeviceFlow,
-			"IsActive":         req.IsActive,
+		user, _ := c.Get("user")
+		userModel := user.(*models.User)
+
+		// Convert form data to ClientDisplay for template
+		clientDisplay := &templates.ClientDisplay{
+			ID:               client.ID,
+			ClientID:         client.ClientID,
+			ClientName:       req.ClientName,
+			Description:      req.Description,
+			Scopes:           req.Scopes,
+			GrantTypes:       req.GrantTypes,
+			RedirectURIs:     strings.Join(req.RedirectURIs, ", "),
+			EnableDeviceFlow: client.EnableDeviceFlow,
+			IsActive:         req.IsActive,
+			CreatedAt:        client.CreatedAt,
+			UpdatedAt:        client.UpdatedAt,
 		}
 
-		user, _ := c.Get("user")
-		c.HTML(http.StatusBadRequest, "admin/client_form.html", gin.H{
-			"user":       user,
-			"error":      err.Error(),
-			"client":     clientData,
-			"action":     "/admin/clients/" + clientID,
-			"method":     "POST",
-			"title":      "Edit OAuth Client",
-			"csrf_token": middleware.GetCSRFToken(c),
-		})
+		templates.RenderTempl(
+			c,
+			http.StatusBadRequest,
+			templates.AdminClientForm(templates.ClientFormPageProps{
+				BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
+				NavbarProps: templates.NavbarProps{
+					Username:   userModel.Username,
+					IsAdmin:    userModel.IsAdmin(),
+					ActiveLink: "clients",
+				},
+				Client: clientDisplay,
+				Error:  err.Error(),
+				Title:  "Edit OAuth Client",
+				Method: "POST",
+				Action: "/admin/clients/" + clientID,
+				IsEdit: true,
+			}),
+		)
 		return
 	}
 
@@ -314,13 +366,22 @@ func (h *ClientHandler) RegenerateSecret(c *gin.Context) {
 
 	client, _ := h.clientService.GetClient(clientID)
 	user, _ := c.Get("user")
+	userModel := user.(*models.User)
 
-	c.HTML(http.StatusOK, "admin/client_secret.html", gin.H{
-		"user":          user,
-		"client":        client,
-		"client_secret": newSecret,
-		"csrf_token":    middleware.GetCSRFToken(c),
-	})
+	templates.RenderTempl(
+		c,
+		http.StatusOK,
+		templates.AdminClientSecret(templates.ClientSecretPageProps{
+			BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
+			NavbarProps: templates.NavbarProps{
+				Username:   userModel.Username,
+				IsAdmin:    userModel.IsAdmin(),
+				ActiveLink: "clients",
+			},
+			Client:       client,
+			ClientSecret: newSecret,
+		}),
+	)
 }
 
 // ViewClient displays detailed information about a client
@@ -335,25 +396,20 @@ func (h *ClientHandler) ViewClient(c *gin.Context) {
 		return
 	}
 
-	// Prepare client data for template
-	clientData := gin.H{
-		"ID":               client.ID,
-		"ClientID":         client.ClientID,
-		"ClientName":       client.ClientName,
-		"Description":      client.Description,
-		"Scopes":           client.Scopes,
-		"GrantTypes":       client.GrantTypes,
-		"RedirectURIs":     client.RedirectURIs.Join(", "),
-		"EnableDeviceFlow": client.EnableDeviceFlow,
-		"IsActive":         client.IsActive,
-		"CreatedAt":        client.CreatedAt,
-		"UpdatedAt":        client.UpdatedAt,
-	}
-
 	user, _ := c.Get("user")
-	c.HTML(http.StatusOK, "admin/client_detail.html", gin.H{
-		"user":       user,
-		"client":     clientData,
-		"csrf_token": middleware.GetCSRFToken(c),
-	})
+	userModel := user.(*models.User)
+
+	templates.RenderTempl(
+		c,
+		http.StatusOK,
+		templates.AdminClientDetail(templates.ClientDetailPageProps{
+			BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
+			NavbarProps: templates.NavbarProps{
+				Username:   userModel.Username,
+				IsAdmin:    userModel.IsAdmin(),
+				ActiveLink: "clients",
+			},
+			Client: client,
+		}),
+	)
 }
