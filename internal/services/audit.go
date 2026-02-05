@@ -133,12 +133,9 @@ func (s *AuditService) flushBatchUnsafe() {
 	// Clear buffer
 	s.batchBuffer = s.batchBuffer[:0]
 
-	// Write to database (release lock during I/O)
-	s.batchMutex.Unlock()
 	if err := s.store.CreateAuditLogBatch(toWrite); err != nil {
 		log.Printf("Failed to write audit log batch: %v", err)
 	}
-	s.batchMutex.Lock()
 }
 
 // Log records an audit log entry asynchronously
