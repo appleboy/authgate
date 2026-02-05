@@ -35,374 +35,158 @@ docker build -f docker/Dockerfile -t authgate .
 
 ## Architecture
 
-### Device Authorization Flow (with Refresh Tokens)
+### Device Authorization Flow
 
-1. CLI calls `POST /oauth/device/code` with client_id → receives device_code + user_code + verification_uri
-2. User visits verification_uri (`/device`) in browser, must login first if not authenticated
+1. CLI calls `POST /oauth/device/code` → receives device_code + user_code + verification_uri
+2. User visits `/device` in browser, must login first if not authenticated
 3. User submits user_code via `POST /device/verify` → device code marked as authorized
-4. CLI polls `POST /oauth/token` with device_code every 5s → receives access_token + refresh_token when authorized
-5. CLI uses access_token for API calls (expires in 1 hour)
-6. When access_token expires, CLI calls `POST /oauth/token` with `grant_type=refresh_token` → receives new access_token (fixed mode) or new access_token + refresh_token (rotation mode)
+4. CLI polls `POST /oauth/token` with device_code every 5s → receives access_token + refresh_token
+5. When access_token expires, CLI uses `grant_type=refresh_token` to get new token
 
 ### Layers (dependency injection pattern)
 
-- `main.go` - Wires up store → auth providers → token providers → services → handlers, configures Gin router with session middleware
+- `main.go` - Wires up store → auth providers → token providers → services → handlers
 - `config/` - Loads .env via godotenv, provides Config struct with defaults
-- `store/` - GORM-based data access layer, supports SQLite and PostgreSQL via driver factory pattern
+- `store/` - GORM-based data access layer, supports SQLite and PostgreSQL
   - `driver.go` - Database driver factory using map-based pattern (no if-else)
   - `sqlite.go` - Store implementation and database operations (driver-agnostic)
-- `auth/` - Authentication providers (LocalAuthProvider, HTTPAPIAuthProvider) with pluggable design
-- `token/` - Token providers (LocalTokenProvider, HTTPTokenProvider) with pluggable design
+- `auth/` - Authentication providers (LocalAuthProvider, HTTPAPIAuthProvider)
+- `token/` - Token providers (LocalTokenProvider, HTTPTokenProvider)
   - `types.go` - Shared data structures (TokenResult, TokenValidationResult)
   - `errors.go` - Provider-level error definitions
   - `local.go` - Local JWT provider (HMAC-SHA256)
   - `http_api.go` - External HTTP API token provider
-- `services/` - Business logic (UserService, DeviceService, TokenService), depends on Store, Auth providers, and Token providers
-- `handlers/` - HTTP handlers (AuthHandler, DeviceHandler, TokenHandler), depends on Services
+- `services/` - Business logic (UserService, DeviceService, TokenService)
+- `handlers/` - HTTP handlers (AuthHandler, DeviceHandler, TokenHandler)
 - `models/` - GORM models (User, OAuthClient, DeviceCode, AccessToken)
 - `middleware/` - Gin middleware (auth.go: RequireAuth checks session for user_id)
 
-### Authentication Architecture
+### Key Features
 
-- **Pluggable Providers**: Supports local (database) and external HTTP API authentication
-- **Hybrid Mode**: Each user authenticates based on their `auth_source` field
-- **Auth Mode**: Configured via `AUTH_MODE` env var (`local` or `http_api`), defaults to `local`
-- **User Sync**: External auth automatically creates/updates users in local database
-- **No Interfaces**: Direct struct dependency injection (project convention)
-- **Authentication Flow**:
-  1. UserService looks up user by username
-  2. If user exists: route to provider based on user's `auth_source` field
-     - `auth_source=local`: LocalAuthProvider (bcrypt against database)
-     - `auth_source=http_api`: HTTPAPIAuthProvider (call external API)
-  3. If user doesn't exist and `AUTH_MODE=http_api`: try external auth and create user
-  4. Default admin user always uses local authentication (failsafe)
-- **User Fields**: ExternalID, AuthSource, Email, FullName added for external auth support
-- **Key Benefit**: Admin can always login locally even if external service is down
+**Pluggable Authentication**
 
-### Token Provider Architecture
+- Supports local (database) and external HTTP API authentication
+- Per-user authentication routing based on `auth_source` field (hybrid mode)
+- Configured via `AUTH_MODE` env var (`local` or `http_api`)
+- Default admin user always uses local auth as failsafe
 
-- **Pluggable Providers**: Supports local JWT generation/validation and external HTTP API token services
-- **Global Mode**: Configured via `TOKEN_PROVIDER_MODE` env var (`local` or `http_api`), defaults to `local`
-- **Local Storage**: Token records always stored in local database for management (revocation, listing, auditing)
-- **No Interfaces**: Direct struct dependency injection (project convention, following auth provider pattern)
-- **Token Generation Flow**:
-  1. TokenService receives token generation request (from ExchangeDeviceCode)
-  2. Selects provider based on `TOKEN_PROVIDER_MODE` configuration
-     - `local`: LocalTokenProvider generates JWT with HMAC-SHA256 using `JWT_SECRET`
-     - `http_api`: HTTPTokenProvider calls external API to generate JWT
-  3. Saves token record to local database (regardless of provider)
-  4. Returns AccessToken to client
-- **Token Validation Flow**:
-  1. TokenService receives validation request (from TokenInfo endpoint)
-  2. Selects provider based on `TOKEN_PROVIDER_MODE` configuration
-     - `local`: LocalTokenProvider validates JWT signature with `JWT_SECRET`
-     - `http_api`: HTTPTokenProvider calls external API to validate JWT
-  3. Returns TokenValidationResult with claims
-- **Provider Types**:
-  - `LocalTokenProvider`: Uses golang-jwt/jwt library for HMAC-SHA256 signing
-  - `HTTPTokenProvider`: Delegates to external HTTP API, supports custom signing algorithms (RS256, ES256, etc.)
-- **API Contract**: HTTPTokenProvider expects `/generate` and `/validate` endpoints with specific JSON format
-- **Key Benefit**: Centralized token services, advanced key management, compliance requirements while maintaining local token management
+**Pluggable Token Providers**
 
-### Refresh Token Architecture
+- Supports local JWT (HMAC-SHA256) and external HTTP API token services
+- Configured via `TOKEN_PROVIDER_MODE` env var (`local` or `http_api`)
+- Token records always stored in local database for management
+- LocalTokenProvider: Uses golang-jwt/jwt library
+- HTTPTokenProvider: Delegates to external API, supports custom signing algorithms (RS256, ES256)
 
-AuthGate supports refresh tokens following RFC 6749 with configurable rotation modes for different security requirements.
+**Refresh Tokens (RFC 6749)**
 
-- **Key Features**:
-  - **Dual Modes**: Fixed (reusable) vs Rotation (one-time use) refresh tokens
-  - **Unified Storage**: Both access and refresh tokens stored in `AccessToken` table with `token_category` field
-  - **Token Family Tracking**: `parent_token_id` links tokens for audit trails and revocation
-  - **Status Management**: Tokens can be `active`, `disabled`, or `revoked`
-  - **Configurable Expiration**: `REFRESH_TOKEN_EXPIRATION` env var (default: 720h = 30 days)
-  - **Provider Support**: Both LocalTokenProvider and HTTPTokenProvider support refresh operations
+- Two modes: Fixed (reusable) and Rotation (one-time use)
+- Unified storage: Both access and refresh tokens in `AccessToken` table with `token_category` field
+- Token family tracking via `parent_token_id` for audit trails
+- Status management: `active`, `disabled`, or `revoked`
+- Enable rotation mode via `ENABLE_TOKEN_ROTATION=true`
 
-- **Fixed Mode (Default - Multi-Device Friendly)**:
-  1. Device code exchange returns `access_token` + `refresh_token`
-  2. When access token expires, client POSTs to `/oauth/token` with `grant_type=refresh_token`
-  3. Server returns new `access_token` only (refresh token remains unchanged and reusable)
-  4. Process repeats until refresh token expires or is manually disabled/revoked
-  5. Each device/application gets its own refresh token that doesn't affect others
-  6. Users can manage all tokens (disable/enable/revoke) via backend UI
-  7. LastUsedAt field tracks activity for identifying inactive sessions
+**Rate Limiting**
 
-- **Rotation Mode (Optional - High Security)**:
-  1. Same as fixed mode, but step 3 returns both new `access_token` + new `refresh_token`
-  2. Old refresh token is automatically revoked (status set to 'revoked') after each use
-  3. Prevents token replay attacks
-  4. Requires clients to update stored refresh token after each use
-  5. Enable via `ENABLE_TOKEN_ROTATION=true`
+- IP-based rate limiting with configurable per-endpoint limits
+- Two storage backends: Memory (single instance) or Redis (multi-pod)
+- Built on github.com/ulule/limiter/v3 with sliding window algorithm
+- Protects: /login (5 req/min), /oauth/device/code (10 req/min), /oauth/token (20 req/min), /device/verify (10 req/min)
+- Enable/disable via `ENABLE_RATE_LIMIT` env var
 
-- **Token Management**:
-  - **Status Field**: `active` (usable) / `disabled` (temporarily blocked, can re-enable) / `revoked` (permanently blocked)
-  - **Independent Revocation**: Revoking refresh token doesn't affect existing access tokens
-  - **Family Tracking**: ParentTokenID enables audit trails and selective revocation
-  - **Scope Validation**: Refresh requests cannot escalate privileges beyond original grant
+**Audit Logging**
 
-- **Environment Variables**:
-  - `REFRESH_TOKEN_EXPIRATION=720h` - Refresh token lifetime (default: 30 days)
-  - `ENABLE_REFRESH_TOKENS=true` - Feature flag (default: enabled)
-  - `ENABLE_TOKEN_ROTATION=false` - Enable rotation mode (default: disabled, uses fixed mode)
+- Tracks authentication, device authorization, token operations, admin actions, security events
+- Asynchronous batch writes (every 1s or 100 records) for minimal performance impact
+- Automatic sensitive data masking (passwords, tokens, secrets)
+- Event types: AUTHENTICATION*\*, DEVICE_CODE*_, TOKEN\__, CLIENT\_\*, RATE_LIMIT_EXCEEDED
+- Severity levels: INFO, WARNING, ERROR, CRITICAL
+- Web interface at `/admin/audit` with filtering and CSV export
 
-- **Grant Type Support**:
-  - `urn:ietf:params:oauth:grant-type:device_code` - Device authorization flow (returns access + refresh)
-  - `refresh_token` - RFC 6749 refresh token grant (returns new tokens)
+**OAuth Provider Support**
 
-- **Security Considerations**:
-  - Refresh tokens validated by type claim (`"type": "refresh"` in JWT)
-  - Refresh tokens cannot be used as access tokens (separate validation logic)
-  - Client ID verification prevents cross-client token usage
-  - Token family tracking enables detection of suspicious patterns
-  - Optional rotation mode for high-security scenarios
+- Microsoft Entra ID (Azure AD), GitHub, Gitea
+- Auto-registration of users (configurable via `OAUTH_AUTO_REGISTER`)
+- Uses OAuth 2.0 authorization code flow
 
-### Rate Limiting Architecture
+**Service-to-Service Authentication**
 
-AuthGate includes built-in rate limiting to protect against brute force attacks and API abuse, with support for both single-instance and multi-pod deployments.
-
-- **Key Features**:
-  - **IP-based rate limiting**: Tracks requests per client IP address
-  - **Per-endpoint configuration**: Different limits for different endpoints
-  - **Pluggable storage backends**: Memory (single instance) or Redis (distributed)
-  - **Multi-pod support**: Redis backend enables shared rate limiting across multiple pods
-  - **Sliding window algorithm**: Uses github.com/ulule/limiter/v3 for accurate rate limiting
-  - **Automatic cleanup**: Old rate limiter entries are automatically removed
-  - **Configurable**: All limits can be adjusted via environment variables
-  - **Hot disable**: Can be disabled without code changes (ENABLE_RATE_LIMIT=false)
-
-- **Storage Backends**:
-  - **Memory Store** (default): Fast, in-memory storage for single-instance deployments
-  - **Redis Store**: Distributed storage for multi-pod/multi-instance deployments
-    - Requires Redis server (standalone or cluster)
-    - Shares rate limit state across all pods
-    - Ensures accurate global rate limiting (e.g., 10 req/min across 3 pods = 10 total, not 30)
-
-- **Default Rate Limits**:
-  - `/login` (POST): 5 requests/minute (prevents password brute force)
-  - `/oauth/device/code`: 10 requests/minute (prevents device code spam)
-  - `/oauth/token`: 20 requests/minute (allows polling, prevents abuse)
-  - `/device/verify`: 10 requests/minute (prevents user code brute force)
-
-- **Implementation Details**:
-  - Built on github.com/ulule/limiter/v3 for production-grade rate limiting
-  - Separate limiter instance per IP address
-  - Sliding window algorithm provides precise rate limiting
-  - Cleanup routine runs every 5 minutes to remove inactive limiters
-  - Returns HTTP 429 (Too Many Requests) when limit exceeded
-  - Redis connection pooling for optimal performance
-
-- **Environment Variables**:
-  - `ENABLE_RATE_LIMIT=true` - Master switch to enable/disable rate limiting
-  - `RATE_LIMIT_STORE=memory` - Storage backend: "memory" or "redis"
-  - `RATE_LIMIT_CLEANUP_INTERVAL=5m` - How often to cleanup old limiters
-  - `LOGIN_RATE_LIMIT=5` - Requests per minute for login endpoint
-  - `DEVICE_CODE_RATE_LIMIT=10` - Requests per minute for device code
-  - `TOKEN_RATE_LIMIT=20` - Requests per minute for token endpoint
-  - `DEVICE_VERIFY_RATE_LIMIT=10` - Requests per minute for device verify
-  - **Redis settings** (when RATE_LIMIT_STORE=redis):
-    - `REDIS_ADDR=localhost:6379` - Redis server address
-    - `REDIS_PASSWORD=` - Redis password (empty for no auth)
-    - `REDIS_DB=0` - Redis database number
-
-- **Deployment Scenarios**:
-  - **Single Instance**: Use `RATE_LIMIT_STORE=memory` (default, no Redis needed)
-  - **Multiple Pods (Kubernetes)**: Use `RATE_LIMIT_STORE=redis` for shared state
-  - **Load Balanced**: Use Redis to ensure global rate limits across all instances
-  - **Development**: Memory store is sufficient and requires no additional dependencies
-
-- **Security Benefits**:
-  - Prevents password brute force attacks
-  - Mitigates device code enumeration
-  - Prevents user code guessing attacks
-  - Protects against DoS attempts
-  - Per-IP tracking prevents single attacker from overwhelming service
-  - Multi-pod support prevents rate limit bypass via load balancer
-
-- **Example Configurations**:
-
-**Single Instance (Memory)**:
-
-```bash
-ENABLE_RATE_LIMIT=true
-RATE_LIMIT_STORE=memory
-```
-
-**Multi-Pod (Redis)**:
-
-```bash
-ENABLE_RATE_LIMIT=true
-RATE_LIMIT_STORE=redis
-REDIS_ADDR=redis-service:6379
-REDIS_PASSWORD=your-redis-password
-REDIS_DB=0
-```
-
-### Audit Logging Architecture
-
-AuthGate includes a comprehensive audit logging system that tracks all critical operations and security events. The system is designed for high performance with asynchronous batch writing and automatic sensitive data masking.
-
-- **Key Features**:
-  - **Comprehensive Event Coverage**: Tracks authentication, device authorization, token operations, admin actions, and security events
-  - **Asynchronous Processing**: Non-blocking batch writes (every 1 second or 100 records) for minimal performance impact
-  - **Automatic Data Masking**: Sensitive fields (passwords, tokens, secrets) are automatically redacted in audit logs
-  - **Flexible Filtering**: Search and filter by event type, severity, actor, resource, time range, success/failure status
-  - **Web Interface**: View, search, filter, and export audit logs through admin panel at `/admin/audit`
-  - **CSV Export**: Export filtered audit logs for external analysis or compliance reporting
-  - **Statistics Dashboard**: View event counts by type, severity, and success rate via `/admin/audit/api/stats`
-  - **Automatic Cleanup**: Configurable retention period with automatic deletion of old logs
-  - **Graceful Shutdown**: Ensures all buffered logs are written before server stops
-
-- **Event Types**:
-  - **Authentication**: `AUTHENTICATION_SUCCESS`, `AUTHENTICATION_FAILURE`, `LOGOUT`, `OAUTH_AUTHENTICATION`
-  - **Device Authorization**: `DEVICE_CODE_GENERATED`, `DEVICE_CODE_AUTHORIZED`
-  - **Token Operations**: `ACCESS_TOKEN_ISSUED`, `REFRESH_TOKEN_ISSUED`, `TOKEN_REFRESHED`, `TOKEN_REVOKED`, `TOKEN_DISABLED`, `TOKEN_ENABLED`
-  - **Admin Operations**: `CLIENT_CREATED`, `CLIENT_UPDATED`, `CLIENT_DELETED`, `CLIENT_SECRET_REGENERATED`
-  - **Security Events**: `RATE_LIMIT_EXCEEDED`, `SUSPICIOUS_ACTIVITY`
-
-- **Severity Levels**:
-  - `INFO` - Normal operations (login, token issuance)
-  - `WARNING` - Potentially concerning events (failed authentication, rate limit exceeded)
-  - `ERROR` - Operation failures (token refresh failure)
-  - `CRITICAL` - Security incidents (suspicious activity)
-
-- **Implementation Details**:
-  - Audit events sent to buffered channel (size: 1000 by default, configurable)
-  - Background worker goroutine processes events asynchronously
-  - Batch writes occur every 1 second OR when 100 records accumulate (whichever comes first)
-  - Buffer overflow drops events with warning log (extremely rare in normal operation)
-  - Automatic sensitive data masking:
-    - **Complete masking**: `password`, `client_secret`, `token`, `access_token`, `refresh_token`, `secret` → `***REDACTED***`
-    - **Partial masking**: `device_code`, `token_id` → Shows first 8 and last 4 characters
-  - Database indexes on: `event_time`, `event_type`, `actor_user_id`, `actor_ip`, `severity`, `success`
-  - Graceful shutdown: Flushes remaining buffered logs before exit
-  - Automatic cleanup job: Runs every 24 hours to delete logs older than retention period
-
-- **Database Schema** (`audit_logs` table):
-  - Event information: `event_type`, `event_time`, `severity`
-  - Actor information: `actor_user_id`, `actor_username`, `actor_ip`
-  - Resource information: `resource_type`, `resource_id`, `resource_name`
-  - Operation details: `action`, `details` (JSON), `success`, `error_message`
-  - Request metadata: `user_agent`, `request_path`, `request_method`
-  - Timestamps: `created_at` (immutable, no UpdatedAt)
-
-- **API Endpoints**:
-  - `GET /admin/audit` - View audit logs (HTML interface, requires admin role)
-  - `GET /admin/audit/export` - Export filtered logs as CSV
-  - `GET /admin/audit/api` - List audit logs with pagination (JSON API)
-  - `GET /admin/audit/api/stats` - Get statistics (event counts by type/severity)
-
-- **Configuration**:
-  - `ENABLE_AUDIT_LOGGING=true` - Enable/disable audit logging (default: enabled)
-  - `AUDIT_LOG_RETENTION=2160h` - Retention period (default: 90 days)
-  - `AUDIT_LOG_BUFFER_SIZE=1000` - Async buffer size (default: 1000)
-  - `AUDIT_LOG_CLEANUP_INTERVAL=24h` - Cleanup frequency (default: 24 hours)
-
-- **Performance**:
-  - Typical overhead: < 1% CPU, < 10 MB memory for 100k events
-  - Non-blocking: All logging operations are asynchronous
-  - Batch writes reduce database I/O by 100x compared to individual inserts
-  - Minimal impact on request latency (< 0.1ms to queue event)
-
-- **Usage in Code**:
-  ```go
-  // Async logging (preferred for most events)
-  auditService.Log(ctx, services.AuditLogEntry{
-      EventType:     models.EventAuthenticationSuccess,
-      Severity:      models.SeverityInfo,
-      ActorUserID:   userID,
-      ActorUsername: username,
-      Action:        "User logged in",
-      Details: models.AuditDetails{
-          "auth_method": "password",
-      },
-      Success: true,
-  })
-
-  // Sync logging (for critical events that must be written immediately)
-  err := auditService.LogSync(ctx, services.AuditLogEntry{
-      EventType: models.EventSuspiciousActivity,
-      Severity:  models.SeverityCritical,
-      // ...
-  })
-  ```
-
-- **Integration Points**:
-  - All services (UserService, TokenService, DeviceService, ClientService) accept AuditService dependency
-  - Handlers extract IP and username from context automatically
-  - Rate limiter logs `RATE_LIMIT_EXCEEDED` events
-  - Middleware captures request metadata (path, method, user agent)
+- Three modes: `none` (default), `simple` (shared secret), `hmac` (signature-based)
+- Protects communication with external auth/token APIs
+- HMAC mode provides replay attack protection with timestamp validation
 
 ### Key Implementation Details
 
-- Device codes expire after 30min (configurable via Config.DeviceCodeExpiration)
-- User codes are 8-char uppercase alphanumeric (generated by generateUserCode in services/device.go)
-- User codes normalized: uppercase + dashes removed before lookup
-- JWTs signed with HMAC-SHA256, expire after 1 hour (Config.JWTExpiration)
-- Sessions stored in encrypted cookies (gin-contrib/sessions), 7-day expiry
-- Polling interval is 5 seconds (Config.PollingInterval)
-- Templates and static files embedded via go:embed in main.go
+- Device codes expire after 30min (configurable via `DeviceCodeExpiration`)
+- User codes: 8-char uppercase alphanumeric, normalized (uppercase + dashes removed)
+- JWTs signed with HMAC-SHA256, expire after 1 hour
+- Sessions: encrypted cookies (gin-contrib/sessions), 7-day expiry
+- Polling interval: 5 seconds
+- Templates and static files embedded via `//go:embed`
+- Error handling: Services return typed errors, handlers convert to RFC 8628 OAuth responses
 
 ### Key Endpoints
 
 - `GET /health` - Health check with database connection test
-- `POST /oauth/device/code` - CLI requests device+user codes (accepts form or JSON)
-- `POST /oauth/token` - Token endpoint supporting multiple grant types:
-  - `grant_type=urn:ietf:params:oauth:grant-type:device_code` - Device authorization flow (returns access + refresh tokens)
-  - `grant_type=refresh_token` - Refresh token grant (RFC 6749) - returns new access token (fixed mode) or new access + refresh tokens (rotation mode)
+- `POST /oauth/device/code` - CLI requests device+user codes
+- `POST /oauth/token` - Token endpoint (grant_type: device_code or refresh_token)
 - `GET /oauth/tokeninfo` - Verify JWT validity
 - `POST /oauth/revoke` - Revoke tokens (RFC 7009)
-- `GET /device` - User authorization page (protected, requires login)
+- `GET /device` - User authorization page (protected)
 - `POST /device/verify` - User submits code to authorize device (protected)
 - `GET|POST /login` - User authentication
 - `GET /logout` - Clear session
-- `GET /admin/audit` - View audit logs (HTML interface, requires admin role)
-- `GET /admin/audit/export` - Export audit logs as CSV
-- `GET /admin/audit/api` - List audit logs (JSON API)
-- `GET /admin/audit/api/stats` - Get audit log statistics
-
-### Error Handling
-
-Services return typed errors (ErrInvalidClient, ErrDeviceCodeNotFound, etc.), handlers convert to RFC 8628 OAuth error responses.
+- `GET /admin/audit` - View audit logs (admin only)
 
 ## Environment Variables
 
-| Variable                       | Default                 | Description                                                                   |
-| ------------------------------ | ----------------------- | ----------------------------------------------------------------------------- |
-| SERVER_ADDR                    | :8080                   | Listen address                                                                |
-| BASE_URL                       | `http://localhost:8080` | Public URL for verification_uri                                               |
-| JWT_SECRET                     | (default)               | JWT signing key (used when TOKEN_PROVIDER_MODE=local)                         |
-| SESSION_SECRET                 | (default)               | Cookie encryption key                                                         |
-| DATABASE_DRIVER                | sqlite                  | Database driver ("sqlite" or "postgres")                                      |
-| DATABASE_DSN                   | oauth.db                | Connection string (path for SQLite, DSN for PostgreSQL)                       |
-| **AUTH_MODE**                  | local                   | Authentication mode: `local` or `http_api`                                    |
-| HTTP_API_URL                   | (none)                  | External auth API endpoint (required when AUTH_MODE=http_api)                 |
-| HTTP_API_TIMEOUT               | 10s                     | HTTP API request timeout                                                      |
-| HTTP_API_INSECURE_SKIP_VERIFY  | false                   | Skip TLS verification (dev/testing only)                                      |
-| HTTP_API_AUTH_MODE             | none                    | Service-to-service auth mode: `none`, `simple`, or `hmac`                     |
-| HTTP_API_AUTH_SECRET           | (none)                  | Shared secret for service-to-service authentication                           |
-| HTTP_API_AUTH_HEADER           | X-API-Secret            | Custom header name for simple auth mode                                       |
-| **TOKEN_PROVIDER_MODE**        | local                   | Token provider mode: `local` or `http_api`                                    |
-| TOKEN_API_URL                  | (none)                  | External token API endpoint (required when TOKEN_PROVIDER_MODE=http_api)      |
-| TOKEN_API_TIMEOUT              | 10s                     | Token API request timeout                                                     |
-| TOKEN_API_INSECURE_SKIP_VERIFY | false                   | Skip TLS verification for token API (dev/testing only)                        |
-| TOKEN_API_AUTH_MODE            | none                    | Service-to-service auth mode: `none`, `simple`, or `hmac`                     |
-| TOKEN_API_AUTH_SECRET          | (none)                  | Shared secret for service-to-service authentication                           |
-| TOKEN_API_AUTH_HEADER          | X-API-Secret            | Custom header name for simple auth mode                                       |
-| **REFRESH_TOKEN_EXPIRATION**   | 720h                    | Refresh token lifetime (default: 30 days)                                     |
-| **ENABLE_REFRESH_TOKENS**      | true                    | Feature flag to enable/disable refresh tokens                                 |
-| **ENABLE_TOKEN_ROTATION**      | false                   | Enable rotation mode (default: false, uses fixed mode)                        |
-| **ENABLE_RATE_LIMIT**          | true                    | Enable rate limiting (protects against brute force and API abuse)             |
-| **RATE_LIMIT_STORE**           | memory                  | Rate limit storage backend: `memory` (single instance) or `redis` (multi-pod) |
-| RATE_LIMIT_CLEANUP_INTERVAL    | 5m                      | How often to cleanup old rate limiter entries                                 |
-| LOGIN_RATE_LIMIT               | 5                       | Requests per minute allowed for /login endpoint                               |
-| DEVICE_CODE_RATE_LIMIT         | 10                      | Requests per minute for /oauth/device/code endpoint                           |
-| TOKEN_RATE_LIMIT               | 20                      | Requests per minute for /oauth/token endpoint (includes polling)              |
-| DEVICE_VERIFY_RATE_LIMIT       | 10                      | Requests per minute for /device/verify endpoint                               |
-| **REDIS_ADDR**                 | localhost:6379          | Redis server address (required when RATE_LIMIT_STORE=redis)                   |
-| REDIS_PASSWORD                 | (empty)                 | Redis password (empty for no auth)                                            |
-| REDIS_DB                       | 0                       | Redis database number                                                         |
-| **ENABLE_AUDIT_LOGGING**       | true                    | Enable comprehensive audit logging (default: true)                            |
-| AUDIT_LOG_RETENTION            | 2160h (90 days)         | How long to keep audit logs before automatic deletion                         |
-| AUDIT_LOG_BUFFER_SIZE          | 1000                    | Async buffer size for audit events                                            |
-| AUDIT_LOG_CLEANUP_INTERVAL     | 24h                     | How often to run cleanup job for old audit logs                               |
+| Variable                     | Default               | Description                                             |
+| ---------------------------- | --------------------- | ------------------------------------------------------- |
+| SERVER_ADDR                  | :8080                 | Listen address                                          |
+| BASE_URL                     | http://localhost:8080 | Public URL for verification_uri                         |
+| JWT_SECRET                   | (default)             | JWT signing key (local mode)                            |
+| SESSION_SECRET               | (default)             | Cookie encryption key                                   |
+| DATABASE_DRIVER              | sqlite                | Database driver ("sqlite" or "postgres")                |
+| DATABASE_DSN                 | oauth.db              | Connection string                                       |
+| **AUTH_MODE**                | local                 | Authentication mode: `local` or `http_api`              |
+| HTTP_API_URL                 | (none)                | External auth API endpoint                              |
+| HTTP_API_TIMEOUT             | 10s                   | HTTP API request timeout                                |
+| HTTP_API_AUTH_MODE           | none                  | Service auth: `none`, `simple`, or `hmac`               |
+| HTTP_API_AUTH_SECRET         | (none)                | Shared secret for service authentication                |
+| **TOKEN_PROVIDER_MODE**      | local                 | Token provider: `local` or `http_api`                   |
+| TOKEN_API_URL                | (none)                | External token API endpoint                             |
+| TOKEN_API_TIMEOUT            | 10s                   | Token API request timeout                               |
+| TOKEN_API_AUTH_MODE          | none                  | Service auth: `none`, `simple`, or `hmac`               |
+| TOKEN_API_AUTH_SECRET        | (none)                | Shared secret for service authentication                |
+| **REFRESH_TOKEN_EXPIRATION** | 720h                  | Refresh token lifetime (30 days)                        |
+| **ENABLE_REFRESH_TOKENS**    | true                  | Enable refresh tokens                                   |
+| **ENABLE_TOKEN_ROTATION**    | false                 | Enable rotation mode (default: fixed mode)              |
+| **ENABLE_RATE_LIMIT**        | true                  | Enable rate limiting                                    |
+| **RATE_LIMIT_STORE**         | memory                | Storage backend: `memory` or `redis`                    |
+| LOGIN_RATE_LIMIT             | 5                     | Requests per minute for /login                          |
+| DEVICE_CODE_RATE_LIMIT       | 10                    | Requests per minute for /oauth/device/code              |
+| TOKEN_RATE_LIMIT             | 20                    | Requests per minute for /oauth/token                    |
+| DEVICE_VERIFY_RATE_LIMIT     | 10                    | Requests per minute for /device/verify                  |
+| REDIS_ADDR                   | localhost:6379        | Redis server address (when RATE_LIMIT_STORE=redis)      |
+| REDIS_PASSWORD               | (empty)               | Redis password                                          |
+| REDIS_DB                     | 0                     | Redis database number                                   |
+| **ENABLE_AUDIT_LOGGING**     | true                  | Enable audit logging                                    |
+| AUDIT_LOG_RETENTION          | 2160h                 | Retention period (90 days)                              |
+| AUDIT_LOG_BUFFER_SIZE        | 1000                  | Async buffer size                                       |
+| AUDIT_LOG_CLEANUP_INTERVAL   | 24h                   | Cleanup frequency                                       |
+| **MICROSOFT_OAUTH_ENABLED**  | false                 | Enable Microsoft Entra ID OAuth                         |
+| MICROSOFT_TENANT_ID          | common                | Tenant: `common`, `organizations`, `consumers`, or UUID |
+| MICROSOFT_CLIENT_ID          | (none)                | Microsoft OAuth client ID                               |
+| MICROSOFT_CLIENT_SECRET      | (none)                | Microsoft OAuth client secret                           |
+| **GITHUB_OAUTH_ENABLED**     | false                 | Enable GitHub OAuth                                     |
+| GITHUB_CLIENT_ID             | (none)                | GitHub OAuth client ID                                  |
+| GITHUB_CLIENT_SECRET         | (none)                | GitHub OAuth client secret                              |
+| **GITEA_OAUTH_ENABLED**      | false                 | Enable Gitea OAuth                                      |
+| GITEA_URL                    | (none)                | Gitea instance URL                                      |
+| GITEA_CLIENT_ID              | (none)                | Gitea OAuth client ID                                   |
+| GITEA_CLIENT_SECRET          | (none)                | Gitea OAuth client secret                               |
+| OAUTH_AUTO_REGISTER          | true                  | Allow OAuth auto-registration                           |
+| OAUTH_TIMEOUT                | 15s                   | OAuth HTTP client timeout                               |
 
 ## Default Test Data
 
@@ -421,484 +205,32 @@ cp .env.example .env      # Add CLIENT_ID from server logs
 go run main.go
 ```
 
-## External Authentication Configuration
+## External API Integration
 
 ### HTTP API Authentication
 
-To use external HTTP API for authentication, configure these environment variables:
+When `AUTH_MODE=http_api`, AuthGate delegates authentication to external API:
 
-```bash
-AUTH_MODE=http_api
-HTTP_API_URL=https://your-auth-api.com/verify
-HTTP_API_TIMEOUT=10s
-HTTP_API_INSECURE_SKIP_VERIFY=false
-```
-
-#### Authentication API Contract
-
-Request (POST to HTTP_API_URL):
-
-```json
-{
-  "username": "john",
-  "password": "secret123"
-}
-```
-
-Response:
-
-```json
-{
-  "success": true,
-  "user_id": "external-user-id",
-  "email": "john@example.com",
-  "full_name": "John Doe"
-}
-```
-
-#### Authentication Response Requirements
-
-- `success` (required): Boolean indicating authentication result
-- `user_id` (required when success=true): Non-empty string uniquely identifying the user in external system
-- `email` (optional): User's email address
-- `full_name` (optional): User's display name
-- `message` (optional): Error message when success=false or HTTP status is non-2xx
-
-#### Authentication Behavior
-
-- First login auto-creates user in local database with `auth_source="http_api"`
-- Subsequent logins update user info (email, full_name)
-- Users get default "user" role (admins must be promoted manually)
-- External users stored with `auth_source="http_api"` and `external_id` set
-- Each user authenticates based on their own `auth_source` field (hybrid mode)
-- Default admin user (`auth_source="local"`) can always login even if external API is down
-- Missing or empty `user_id` when `success=true` will cause authentication to fail
-- **Username conflicts**: If external username matches existing user, login fails with error
-  - User sees: "Username conflict with existing user. Please contact administrator."
-  - Administrator must either: (1) rename existing user, (2) update external API username, or (3) manually merge accounts
-
-### Local Authentication (Default)
-
-No additional configuration needed. Users authenticate against local SQLite database:
-
-```bash
-AUTH_MODE=local  # or omit AUTH_MODE entirely
-```
-
-### Hybrid Mode Advantages
-
-The system supports **per-user authentication routing** based on the `auth_source` field:
-
-- **Failsafe Admin Access**: Default admin user always uses local auth, providing emergency access
-- **Mixed User Base**: Can have both local and external users in the same system
-- **Zero Downtime Migration**: Gradually migrate users from local to external auth
-- **Service Independence**: External service outage doesn't lock out local users
-
-#### Example Scenario
-
-1. Server starts with `AUTH_MODE=http_api`
-2. Default admin user created with `auth_source=local` (can always login)
-3. External users authenticate via HTTP API, created with `auth_source=http_api`
-4. Each user authenticates via their designated provider
-5. If external API fails, admin can still login to manage the system
-
-## External Token Provider Configuration
+- Request: POST to `HTTP_API_URL` with `{"username": "...", "password": "..."}`
+- Response: `{"success": true, "user_id": "...", "email": "...", "full_name": "..."}`
+- First login auto-creates user with `auth_source="http_api"`
+- Default admin user always uses local auth (failsafe)
 
 ### HTTP API Token Provider
 
-To use external HTTP API for token generation and validation, configure these environment variables:
+When `TOKEN_PROVIDER_MODE=http_api`, AuthGate delegates token generation/validation to external API:
 
-```bash
-TOKEN_PROVIDER_MODE=http_api
-TOKEN_API_URL=https://token-service.example.com/api
-TOKEN_API_TIMEOUT=10s
-TOKEN_API_INSECURE_SKIP_VERIFY=false
-```
+- Generation: POST to `{TOKEN_API_URL}/generate` with user_id, client_id, scopes, expires_in
+- Validation: POST to `{TOKEN_API_URL}/validate` with token
+- Token records still saved to local database for revocation/management
 
-#### Token API Contract
+### Service-to-Service Authentication
 
-**Token Generation Endpoint:** `POST {TOKEN_API_URL}/generate`
+Secure communication with external APIs using `HTTP_API_AUTH_MODE` / `TOKEN_API_AUTH_MODE`:
 
-Request:
-
-```json
-{
-  "user_id": "user-uuid",
-  "client_id": "client-uuid",
-  "scopes": "read write",
-  "expires_in": 3600
-}
-```
-
-Response (Success):
-
-```json
-{
-  "success": true,
-  "access_token": "eyJhbGc...",
-  "token_type": "Bearer",
-  "expires_in": 3600,
-  "claims": {
-    "custom_claim": "value"
-  }
-}
-```
-
-Response (Error):
-
-```json
-{
-  "success": false,
-  "message": "Invalid user_id or client_id"
-}
-```
-
-**Token Validation Endpoint:** `POST {TOKEN_API_URL}/validate`
-
-Request:
-
-```json
-{
-  "token": "eyJhbGc..."
-}
-```
-
-Response (Valid):
-
-```json
-{
-  "valid": true,
-  "user_id": "user-uuid",
-  "client_id": "client-uuid",
-  "scopes": "read write",
-  "expires_at": 1736899200,
-  "claims": {
-    "custom_claim": "value"
-  }
-}
-```
-
-Response (Invalid):
-
-```json
-{
-  "valid": false,
-  "message": "Token expired or signature invalid"
-}
-```
-
-#### Token Response Requirements
-
-Generation Response:
-
-- `success` (required): Boolean indicating generation result
-- `access_token` (required when success=true): Non-empty JWT string
-- `token_type` (optional): Token type, defaults to "Bearer"
-- `expires_in` (optional): Expiration duration in seconds
-- `claims` (optional): Additional JWT claims
-- `message` (optional): Error message when success=false
-
-Validation Response:
-
-- `valid` (required): Boolean indicating validation result
-- `user_id` (required when valid=true): User identifier from token
-- `client_id` (required when valid=true): Client identifier from token
-- `scopes` (required when valid=true): Granted scopes
-- `expires_at` (required when valid=true): Unix timestamp of expiration
-- `claims` (optional): Additional JWT claims
-- `message` (optional): Error message when valid=false
-
-#### Token Provider Behavior
-
-- Token generation/validation delegated to external service
-- Token records still saved to local database for management
-- Supports custom signing algorithms (RS256, ES256, etc.)
-- Local database tracks: token ID, token string, user_id, client_id, scopes, expiration
-- Revocation handled locally (external service doesn't need revocation endpoint)
-- Token listing handled locally (external service doesn't need listing endpoint)
-
-### Local Token Provider (Default)
-
-No additional configuration needed. Tokens generated/validated using local JWT secret:
-
-```bash
-TOKEN_PROVIDER_MODE=local  # or omit TOKEN_PROVIDER_MODE entirely
-JWT_SECRET=your-256-bit-secret-change-in-production
-```
-
-### Token Provider Benefits
-
-#### Local Mode
-
-- Simple setup, no external dependencies
-- Fast token operations
-- Self-contained deployment
-
-#### HTTP API Mode
-
-- Centralized token services across multiple applications
-- Advanced key management and rotation
-- Custom signing algorithms (RS256, ES256)
-- Compliance requirements for token generation
-- Integration with existing IAM/PKI systems
-
-#### Why Local Storage is Retained
-
-- Revocation: Users can revoke tokens via `/account/sessions` or `/oauth/revoke`
-- Management: Users can list active sessions
-- Auditing: Track when and for which clients tokens were issued
-- Client Association: Link tokens to OAuth clients for display in UI
-
-## OAuth Provider Configuration
-
-AuthGate supports third-party OAuth providers for user authentication, allowing users to sign in with their existing accounts.
-
-### Microsoft Entra ID OAuth
-
-To use Microsoft Entra ID (formerly Azure AD) for OAuth authentication, configure these environment variables:
-
-```bash
-MICROSOFT_OAUTH_ENABLED=true
-MICROSOFT_TENANT_ID=common                    # See tenant options below
-MICROSOFT_CLIENT_ID=12345678-1234-1234-1234-123456789abc
-MICROSOFT_CLIENT_SECRET=your-client-secret-value
-MICROSOFT_REDIRECT_URL=http://localhost:8080/auth/callback/microsoft
-MICROSOFT_SCOPES=openid,profile,email,User.Read
-```
-
-#### Tenant ID Options
-
-- `common` - Multi-tenant: any Microsoft account (personal or work/school)
-- `organizations` - Work or school accounts only
-- `consumers` - Personal Microsoft accounts only
-- `{tenant-uuid}` - Specific organization tenant ID (e.g., `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`)
-
-#### Azure Portal Setup
-
-1. Navigate to [Azure Portal](https://portal.azure.com) → Azure Active Directory → App registrations
-2. Click "New registration"
-   - Name: `AuthGate` (or your app name)
-   - Supported account types: Choose based on your tenant ID setting
-   - Redirect URI: `Web` → `http://localhost:8080/auth/callback/microsoft`
-3. Click "Register"
-4. Copy the "Application (client) ID" → set as `MICROSOFT_CLIENT_ID`
-5. Go to "Certificates & secrets" → "New client secret"
-   - Description: `AuthGate OAuth`
-   - Expires: Choose expiration period
-   - Copy the secret **value** (not ID) → set as `MICROSOFT_CLIENT_SECRET`
-6. Go to "API permissions"
-   - "Microsoft Graph" should already have `User.Read` permission
-   - If not: Click "Add a permission" → "Microsoft Graph" → "Delegated permissions" → Select `User.Read`
-   - Click "Grant admin consent" (if required by your organization)
-
-#### Microsoft Graph API
-
-AuthGate calls Microsoft Graph API v1.0 endpoint `/me` to retrieve user information:
-
-- User ID (object ID)
-- Email (from `mail` or `userPrincipalName`)
-- Display name
-- Given name and surname
-
-The `User.Read` scope is required for this API call.
-
-### GitHub OAuth
-
-Configure GitHub OAuth with:
-
-```bash
-GITHUB_OAUTH_ENABLED=true
-GITHUB_CLIENT_ID=your_github_client_id
-GITHUB_CLIENT_SECRET=your_github_client_secret
-GITHUB_REDIRECT_URL=http://localhost:8080/oauth/callback/github
-GITHUB_SCOPES=user:email
-```
-
-### Gitea OAuth
-
-Configure Gitea OAuth with:
-
-```bash
-GITEA_OAUTH_ENABLED=true
-GITEA_URL=https://gitea.example.com
-GITEA_CLIENT_ID=your_gitea_client_id
-GITEA_CLIENT_SECRET=your_gitea_client_secret
-GITEA_REDIRECT_URL=http://localhost:8080/oauth/callback/gitea
-GITEA_SCOPES=read:user
-```
-
-### OAuth Settings
-
-```bash
-OAUTH_AUTO_REGISTER=true         # Allow OAuth to auto-create accounts (default: true)
-OAUTH_TIMEOUT=15s                # HTTP client timeout for OAuth requests (default: 15s)
-OAUTH_INSECURE_SKIP_VERIFY=false # Skip TLS verification for OAuth (dev/testing only)
-```
-
-## Service-to-Service Authentication
-
-When using external HTTP APIs for authentication (`AUTH_MODE=http_api`) or token operations (`TOKEN_PROVIDER_MODE=http_api`), you can secure the communication between AuthGate and these services using service-to-service authentication.
-
-### Authentication Modes
-
-#### 1. None Mode (Default)
-
-No authentication headers are added. Use only in trusted internal networks.
-
-```bash
-HTTP_API_AUTH_MODE=none
-# or omit HTTP_API_AUTH_MODE entirely
-```
-
-#### 2. Simple Mode (Shared Secret)
-
-Adds a simple API secret header to each request. Quick to set up, suitable for internal services.
-
-```bash
-# For HTTP API Authentication
-HTTP_API_AUTH_MODE=simple
-HTTP_API_AUTH_SECRET=your-shared-secret-key
-HTTP_API_AUTH_HEADER=X-API-Secret  # Optional, defaults to X-API-Secret
-
-# For Token API
-TOKEN_API_AUTH_MODE=simple
-TOKEN_API_AUTH_SECRET=your-shared-secret-key
-TOKEN_API_AUTH_HEADER=X-API-Secret  # Optional
-```
-
-##### Simple Mode: Request Headers
-
-```txt
-X-API-Secret: your-shared-secret-key
-```
-
-##### Simple Mode: Server-side Validation
-
-```go
-secret := r.Header.Get("X-API-Secret")
-if secret != expectedSecret {
-    return http.StatusUnauthorized
-}
-```
-
-#### 3. HMAC Mode (Signature-based)
-
-Calculates HMAC-SHA256 signature for each request. Provides protection against tampering and replay attacks. Recommended for production.
-
-```bash
-# For HTTP API Authentication
-HTTP_API_AUTH_MODE=hmac
-HTTP_API_AUTH_SECRET=your-shared-secret-key
-
-# For Token API
-TOKEN_API_AUTH_MODE=hmac
-TOKEN_API_AUTH_SECRET=your-shared-secret-key
-```
-
-##### HMAC Mode: Request Headers
-
-```txt
-X-Signature: <hmac-sha256-hex>
-X-Timestamp: <unix-timestamp>
-X-Nonce: <random-uuid>
-Content-Type: application/json
-```
-
-##### Signature Calculation
-
-```txt
-message = timestamp + method + path + body
-signature = HMAC-SHA256(secret, message)
-```
-
-##### Example in Go
-
-```go
-import (
-    "crypto/hmac"
-    "crypto/sha256"
-    "encoding/hex"
-)
-
-message := fmt.Sprintf("%d%s%s%s", timestamp, "POST", "/api/auth", requestBody)
-h := hmac.New(sha256.New, []byte(secret))
-h.Write([]byte(message))
-signature := hex.EncodeToString(h.Sum(nil))
-```
-
-##### HMAC Mode: Server-side Validation
-
-```go
-import httpclient "github.com/appleboy/go-httpclient"
-
-authConfig := &httpclient.AuthConfig{
-    Mode:   httpclient.AuthModeHMAC,
-    Secret: "your-shared-secret-key",
-}
-
-// Verify signature (checks timestamp age and signature validity)
-err := authConfig.VerifyHMACSignature(req, 5*time.Minute)
-if err != nil {
-    return http.StatusUnauthorized
-}
-```
-
-##### Security Features
-
-- **Timestamp validation**: Requests older than 5 minutes are rejected (prevents replay attacks)
-- **Signature verification**: Ensures request hasn't been tampered with
-- **Nonce**: Adds uniqueness to each request (can be logged for additional replay protection)
-
-### Configuration Examples
-
-#### Example 1: Simple mode for internal network
-
-```bash
-# .env
-AUTH_MODE=http_api
-HTTP_API_URL=http://internal-auth-service:8080/verify
-HTTP_API_AUTH_MODE=simple
-HTTP_API_AUTH_SECRET=internal-shared-secret-abc123
-```
-
-#### Example 2: HMAC mode for production
-
-```bash
-# .env
-AUTH_MODE=http_api
-HTTP_API_URL=https://auth-api.example.com/verify
-HTTP_API_AUTH_MODE=hmac
-HTTP_API_AUTH_SECRET=production-secret-change-this
-
-TOKEN_PROVIDER_MODE=http_api
-TOKEN_API_URL=https://token-api.example.com
-TOKEN_API_AUTH_MODE=hmac
-TOKEN_API_AUTH_SECRET=token-service-secret-change-this
-```
-
-#### Example 3: Custom header name
-
-```bash
-# .env
-HTTP_API_AUTH_MODE=simple
-HTTP_API_AUTH_SECRET=my-secret
-HTTP_API_AUTH_HEADER=X-Internal-Token  # Custom header name
-```
-
-### Implementation Notes
-
-- **Per-Service Configuration**: Auth API and Token API have independent authentication settings
-- **Backward Compatible**: Defaults to `none` mode, existing deployments continue working
-- **Error Handling**: Authentication failures are logged but don't expose secret details
-- **Testing**: Set `HTTP_API_INSECURE_SKIP_VERIFY=true` for self-signed certificates (dev only)
-
-### Security Recommendations
-
-1. **Production**: Use HMAC mode with strong secrets (32+ characters)
-2. **Development**: Simple mode acceptable for local/internal testing
-3. **Secret Rotation**: Coordinate secret changes between AuthGate and external services
-4. **HTTPS Required**: Always use HTTPS for external API calls in production
-5. **Logging**: External services should log authentication attempts for audit trails
+- `none` - No authentication (default, trusted networks only)
+- `simple` - Shared secret header (e.g., `X-API-Secret: your-secret`)
+- `hmac` - HMAC-SHA256 signature with timestamp validation (production recommended)
 
 ## Coding Conventions
 
@@ -907,13 +239,12 @@ HTTP_API_AUTH_HEADER=X-Internal-Token  # Custom header name
 - GORM models use `gorm.Model` for CreatedAt/UpdatedAt/DeletedAt
 - Handlers accept both form-encoded and JSON request bodies where applicable
 - All static assets and templates are embedded via `//go:embed` for single-binary deployment
-- Database connection health check available via `store.Health()` method
+- **No Interfaces**: Direct struct dependency injection (project convention)
 - **Audit Logging**: Services that modify data should log audit events
   - Use `auditService.Log()` for normal events (async, non-blocking)
-  - Use `auditService.LogSync()` for critical security events (synchronous, must be written immediately)
-  - Always set appropriate severity level (INFO, WARNING, ERROR, CRITICAL)
+  - Use `auditService.LogSync()` for critical security events (synchronous)
   - Sensitive data is automatically masked by AuditService (passwords, tokens, secrets)
 - **IMPORTANT**: Before committing changes:
   1. **Write tests**: All new features and bug fixes MUST include corresponding unit tests
-  2. **Format code**: Run `make fmt` to automatically fix code formatting issues and ensure consistency
-  3. **Pass linting**: Run `make lint` to verify all code passes linting without errors
+  2. **Format code**: Run `make fmt` to automatically fix formatting issues
+  3. **Pass linting**: Run `make lint` to verify code passes linting without errors
