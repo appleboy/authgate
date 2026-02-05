@@ -59,19 +59,19 @@ lint:
 	golangci-lint run
 
 ## build_linux_amd64: build the authgate binary for linux amd64
-build_linux_amd64:
+build_linux_amd64: generate
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -a -tags '$(TAGS)' -ldflags '$(EXTLDFLAGS)-s -w $(LDFLAGS)' -o release/linux/amd64/$(EXECUTABLE) .
 
 ## build_linux_arm64: build the authgate binary for linux arm64
-build_linux_arm64:
+build_linux_arm64: generate
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build -a -tags '$(TAGS)' -ldflags '$(EXTLDFLAGS)-s -w $(LDFLAGS)' -o release/linux/arm64/$(EXECUTABLE) .
 
 ## build_cli_linux_amd64: build the authgate-cli binary for linux amd64
-build_cli_linux_amd64:
+build_cli_linux_amd64: generate
 	cd _example/authgate-cli && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -a -o ../../release/linux/amd64/$(EXECUTABLE_CLI) .
 
 ## build_cli_linux_arm64: build the authgate-cli binary for linux arm64
-build_cli_linux_arm64:
+build_cli_linux_arm64: generate
 	cd _example/authgate-cli && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build -a -o ../../release/linux/arm64/$(EXECUTABLE_CLI) .
 
 ## build_all_linux_amd64: build both binaries for linux amd64
