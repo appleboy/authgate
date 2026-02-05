@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"strings"
 
@@ -18,11 +19,15 @@ var (
 )
 
 type ClientService struct {
-	store *store.Store
+	store        *store.Store
+	auditService *AuditService
 }
 
-func NewClientService(s *store.Store) *ClientService {
-	return &ClientService{store: s}
+func NewClientService(s *store.Store, auditService *AuditService) *ClientService {
+	return &ClientService{
+		store:        s,
+		auditService: auditService,
+	}
 }
 
 type CreateClientRequest struct {
@@ -55,7 +60,10 @@ type ClientWithCreator struct {
 	CreatorUsername string // Empty string if user not found or deleted
 }
 
-func (s *ClientService) CreateClient(req CreateClientRequest) (*ClientResponse, error) {
+func (s *ClientService) CreateClient(
+	ctx context.Context,
+	req CreateClientRequest,
+) (*ClientResponse, error) {
 	if strings.TrimSpace(req.ClientName) == "" {
 		return nil, ErrClientNameRequired
 	}
@@ -100,13 +108,36 @@ func (s *ClientService) CreateClient(req CreateClientRequest) (*ClientResponse, 
 		return nil, err
 	}
 
+	// Log client creation
+	if s.auditService != nil {
+		s.auditService.Log(ctx, AuditLogEntry{
+			EventType:    models.EventClientCreated,
+			Severity:     models.SeverityInfo,
+			ActorUserID:  req.CreatedBy,
+			ResourceType: models.ResourceClient,
+			ResourceID:   clientID,
+			ResourceName: client.ClientName,
+			Action:       "OAuth client created",
+			Details: models.AuditDetails{
+				"client_name": client.ClientName,
+				"grant_types": client.GrantTypes,
+				"scopes":      client.Scopes,
+			},
+			Success: true,
+		})
+	}
+
 	return &ClientResponse{
 		OAuthApplication:  client,
 		ClientSecretPlain: clientSecret,
 	}, nil
 }
 
-func (s *ClientService) UpdateClient(clientID string, req UpdateClientRequest) error {
+func (s *ClientService) UpdateClient(
+	ctx context.Context,
+	clientID, actorUserID string,
+	req UpdateClientRequest,
+) error {
 	if strings.TrimSpace(req.ClientName) == "" {
 		return ErrClientNameRequired
 	}
@@ -123,17 +154,64 @@ func (s *ClientService) UpdateClient(clientID string, req UpdateClientRequest) e
 	client.RedirectURIs = models.StringArray(req.RedirectURIs)
 	client.IsActive = req.IsActive
 
-	return s.store.UpdateClient(client)
+	err = s.store.UpdateClient(client)
+	if err != nil {
+		return err
+	}
+
+	// Log client update
+	if s.auditService != nil {
+		s.auditService.Log(ctx, AuditLogEntry{
+			EventType:    models.EventClientUpdated,
+			Severity:     models.SeverityInfo,
+			ActorUserID:  actorUserID,
+			ResourceType: models.ResourceClient,
+			ResourceID:   clientID,
+			ResourceName: client.ClientName,
+			Action:       "OAuth client updated",
+			Details: models.AuditDetails{
+				"client_name": client.ClientName,
+				"is_active":   client.IsActive,
+				"grant_types": client.GrantTypes,
+				"scopes":      client.Scopes,
+			},
+			Success: true,
+		})
+	}
+
+	return nil
 }
 
-func (s *ClientService) DeleteClient(clientID string) error {
+func (s *ClientService) DeleteClient(ctx context.Context, clientID, actorUserID string) error {
 	// Check if client exists
-	_, err := s.store.GetClient(clientID)
+	client, err := s.store.GetClient(clientID)
 	if err != nil {
 		return ErrClientNotFound
 	}
 
-	return s.store.DeleteClient(clientID)
+	err = s.store.DeleteClient(clientID)
+	if err != nil {
+		return err
+	}
+
+	// Log client deletion
+	if s.auditService != nil {
+		s.auditService.Log(ctx, AuditLogEntry{
+			EventType:    models.EventClientDeleted,
+			Severity:     models.SeverityWarning,
+			ActorUserID:  actorUserID,
+			ResourceType: models.ResourceClient,
+			ResourceID:   clientID,
+			ResourceName: client.ClientName,
+			Action:       "OAuth client deleted",
+			Details: models.AuditDetails{
+				"client_name": client.ClientName,
+			},
+			Success: true,
+		})
+	}
+
+	return nil
 }
 
 func (s *ClientService) ListClients() ([]models.OAuthApplication, error) {
@@ -209,7 +287,10 @@ func (s *ClientService) GetClient(clientID string) (*models.OAuthApplication, er
 	return client, nil
 }
 
-func (s *ClientService) RegenerateSecret(clientID string) (string, error) {
+func (s *ClientService) RegenerateSecret(
+	ctx context.Context,
+	clientID, actorUserID string,
+) (string, error) {
 	client, err := s.store.GetClient(clientID)
 	if err != nil {
 		return "", ErrClientNotFound
@@ -225,6 +306,23 @@ func (s *ClientService) RegenerateSecret(clientID string) (string, error) {
 	client.ClientSecret = string(secretHash)
 	if err := s.store.UpdateClient(client); err != nil {
 		return "", err
+	}
+
+	// Log secret regeneration
+	if s.auditService != nil {
+		s.auditService.Log(ctx, AuditLogEntry{
+			EventType:    models.EventClientSecretRegenerated,
+			Severity:     models.SeverityWarning,
+			ActorUserID:  actorUserID,
+			ResourceType: models.ResourceClient,
+			ResourceID:   clientID,
+			ResourceName: client.ClientName,
+			Action:       "OAuth client secret regenerated",
+			Details: models.AuditDetails{
+				"client_name": client.ClientName,
+			},
+			Success: true,
+		})
 	}
 
 	return newSecret, nil

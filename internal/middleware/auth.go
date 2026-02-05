@@ -14,7 +14,7 @@ const (
 )
 
 // RequireAuth is a middleware that requires the user to be logged in
-func RequireAuth() gin.HandlerFunc {
+func RequireAuth(userService *services.UserService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		session := sessions.Default(c)
 		userID := session.Get(SessionUserID)
@@ -28,6 +28,13 @@ func RequireAuth() gin.HandlerFunc {
 		}
 
 		c.Set("user_id", userID)
+
+		// Load user object for audit logging and other purposes
+		user, err := userService.GetUserByID(userID.(string))
+		if err == nil {
+			c.Set("user", user)
+		}
+
 		c.Next()
 	}
 }

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
@@ -25,16 +26,28 @@ var (
 )
 
 type DeviceService struct {
-	store  *store.Store
-	config *config.Config
+	store        *store.Store
+	config       *config.Config
+	auditService *AuditService
 }
 
-func NewDeviceService(s *store.Store, cfg *config.Config) *DeviceService {
-	return &DeviceService{store: s, config: cfg}
+func NewDeviceService(
+	s *store.Store,
+	cfg *config.Config,
+	auditService *AuditService,
+) *DeviceService {
+	return &DeviceService{
+		store:        s,
+		config:       cfg,
+		auditService: auditService,
+	}
 }
 
 // GenerateDeviceCode creates a new device code request
-func (s *DeviceService) GenerateDeviceCode(clientID, scope string) (*models.DeviceCode, error) {
+func (s *DeviceService) GenerateDeviceCode(
+	ctx context.Context,
+	clientID, scope string,
+) (*models.DeviceCode, error) {
 	// Validate client
 	client, err := s.store.GetClient(clientID)
 	if err != nil {
@@ -78,6 +91,23 @@ func (s *DeviceService) GenerateDeviceCode(clientID, scope string) (*models.Devi
 
 	if err := s.store.CreateDeviceCode(deviceCode); err != nil {
 		return nil, err
+	}
+
+	// Log device code generation
+	if s.auditService != nil {
+		s.auditService.Log(ctx, AuditLogEntry{
+			EventType:    models.EventDeviceCodeGenerated,
+			Severity:     models.SeverityInfo,
+			ResourceType: models.ResourceDeviceCode,
+			ResourceID:   deviceCode.DeviceCodeID,
+			Action:       "Device code generated",
+			Details: models.AuditDetails{
+				"client_id": clientID,
+				"scopes":    scope,
+				"user_code": deviceCode.UserCode,
+			},
+			Success: true,
+		})
 	}
 
 	return deviceCode, nil
@@ -146,7 +176,10 @@ func (s *DeviceService) GetDeviceCodeByUserCode(userCode string) (*models.Device
 }
 
 // AuthorizeDeviceCode marks a device code as authorized by a user
-func (s *DeviceService) AuthorizeDeviceCode(userCode, userID string) error {
+func (s *DeviceService) AuthorizeDeviceCode(
+	ctx context.Context,
+	userCode, userID, username string,
+) error {
 	dc, err := s.GetDeviceCodeByUserCode(userCode)
 	if err != nil {
 		return err
@@ -156,7 +189,31 @@ func (s *DeviceService) AuthorizeDeviceCode(userCode, userID string) error {
 	dc.Authorized = true
 	dc.AuthorizedAt = time.Now()
 
-	return s.store.UpdateDeviceCode(dc)
+	err = s.store.UpdateDeviceCode(dc)
+	if err != nil {
+		return err
+	}
+
+	// Log device code authorization
+	if s.auditService != nil {
+		s.auditService.Log(ctx, AuditLogEntry{
+			EventType:     models.EventDeviceCodeAuthorized,
+			Severity:      models.SeverityInfo,
+			ActorUserID:   userID,
+			ActorUsername: username,
+			ResourceType:  models.ResourceDeviceCode,
+			ResourceID:    dc.DeviceCodeID,
+			Action:        "Device code authorized by user",
+			Details: models.AuditDetails{
+				"client_id": dc.ClientID,
+				"scopes":    dc.Scopes,
+				"user_code": dc.UserCode,
+			},
+			Success: true,
+		})
+	}
+
+	return nil
 }
 
 // GetClientNameByUserCode retrieves the client name associated with a user code

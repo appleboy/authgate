@@ -37,6 +37,7 @@ type TokenService struct {
 	localTokenProvider *token.LocalTokenProvider
 	httpTokenProvider  *token.HTTPTokenProvider
 	tokenProviderMode  string
+	auditService       *AuditService
 }
 
 type JWTClaims struct {
@@ -53,6 +54,7 @@ func NewTokenService(
 	localProvider *token.LocalTokenProvider,
 	httpProvider *token.HTTPTokenProvider,
 	providerMode string,
+	auditService *AuditService,
 ) *TokenService {
 	return &TokenService{
 		store:              s,
@@ -61,6 +63,7 @@ func NewTokenService(
 		localTokenProvider: localProvider,
 		httpTokenProvider:  httpProvider,
 		tokenProviderMode:  providerMode,
+		auditService:       auditService,
 	}
 }
 
@@ -226,6 +229,41 @@ func (s *TokenService) ExchangeDeviceCode(
 	// Delete the used device code
 	_ = s.store.DeleteDeviceCodeByID(dc.ID)
 
+	// Log token issuance
+	if s.auditService != nil {
+		s.auditService.Log(ctx, AuditLogEntry{
+			EventType:    models.EventAccessTokenIssued,
+			Severity:     models.SeverityInfo,
+			ActorUserID:  accessToken.UserID,
+			ResourceType: models.ResourceToken,
+			ResourceID:   accessToken.ID,
+			Action:       "Access token issued via device code exchange",
+			Details: models.AuditDetails{
+				"client_id":        accessToken.ClientID,
+				"scopes":           accessToken.Scopes,
+				"token_provider":   s.tokenProviderMode,
+				"refresh_token_id": refreshToken.ID,
+			},
+			Success: true,
+		})
+
+		s.auditService.Log(ctx, AuditLogEntry{
+			EventType:    models.EventRefreshTokenIssued,
+			Severity:     models.SeverityInfo,
+			ActorUserID:  refreshToken.UserID,
+			ResourceType: models.ResourceToken,
+			ResourceID:   refreshToken.ID,
+			Action:       "Refresh token issued via device code exchange",
+			Details: models.AuditDetails{
+				"client_id":       refreshToken.ClientID,
+				"scopes":          refreshToken.Scopes,
+				"token_provider":  s.tokenProviderMode,
+				"access_token_id": accessToken.ID,
+			},
+			Success: true,
+		})
+	}
+
 	return accessToken, refreshToken, nil
 }
 
@@ -280,8 +318,51 @@ func (s *TokenService) RevokeToken(tokenString string) error {
 }
 
 // RevokeTokenByID revokes a token by its ID
-func (s *TokenService) RevokeTokenByID(tokenID string) error {
-	return s.store.RevokeToken(tokenID)
+func (s *TokenService) RevokeTokenByID(ctx context.Context, tokenID, actorUserID string) error {
+	// Get token info before revocation
+	token, err := s.store.GetAccessTokenByID(tokenID)
+	if err != nil {
+		return err
+	}
+
+	err = s.store.RevokeToken(tokenID)
+	if err != nil {
+		// Log revocation failure
+		if s.auditService != nil {
+			s.auditService.Log(ctx, AuditLogEntry{
+				EventType:    models.EventTokenRevoked,
+				Severity:     models.SeverityError,
+				ActorUserID:  actorUserID,
+				ResourceType: models.ResourceToken,
+				ResourceID:   tokenID,
+				Action:       "Token revocation failed",
+				Details:      models.AuditDetails{"token_category": token.TokenCategory},
+				Success:      false,
+				ErrorMessage: err.Error(),
+			})
+		}
+		return err
+	}
+
+	// Log token revocation
+	if s.auditService != nil {
+		s.auditService.Log(ctx, AuditLogEntry{
+			EventType:    models.EventTokenRevoked,
+			Severity:     models.SeverityInfo,
+			ActorUserID:  actorUserID,
+			ResourceType: models.ResourceToken,
+			ResourceID:   tokenID,
+			Action:       "Token revoked",
+			Details: models.AuditDetails{
+				"token_category": token.TokenCategory,
+				"client_id":      token.ClientID,
+				"token_user_id":  token.UserID,
+			},
+			Success: true,
+		})
+	}
+
+	return nil
 }
 
 // GetUserTokens returns all active tokens for a user
@@ -528,6 +609,33 @@ func (s *TokenService) RefreshAccessToken(
 		return nil, nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
+	// Log token refresh
+	if s.auditService != nil {
+		details := models.AuditDetails{
+			"client_id":           newAccessToken.ClientID,
+			"scopes":              newAccessToken.Scopes,
+			"token_provider":      s.tokenProviderMode,
+			"rotation_enabled":    enableRotation,
+			"new_access_token_id": newAccessToken.ID,
+		}
+
+		if enableRotation && newRefreshToken.ID != refreshToken.ID {
+			details["new_refresh_token_id"] = newRefreshToken.ID
+			details["old_refresh_token_id"] = refreshToken.ID
+		}
+
+		s.auditService.Log(ctx, AuditLogEntry{
+			EventType:    models.EventTokenRefreshed,
+			Severity:     models.SeverityInfo,
+			ActorUserID:  newAccessToken.UserID,
+			ResourceType: models.ResourceToken,
+			ResourceID:   newAccessToken.ID,
+			Action:       "Access token refreshed",
+			Details:      details,
+			Success:      true,
+		})
+	}
+
 	return newAccessToken, newRefreshToken, nil
 }
 
@@ -560,14 +668,83 @@ func splitScopes(scopes string) []string {
 	return strings.Fields(scopes)
 }
 
+// updateTokenStatusWithAudit is a helper function to update token status and log audit events
+func (s *TokenService) updateTokenStatusWithAudit(
+	ctx context.Context,
+	tokenID, actorUserID, newStatus string,
+	eventType models.EventType,
+	actionSuccess, actionFailed string,
+) error {
+	// Get token info before updating
+	token, err := s.store.GetAccessTokenByID(tokenID)
+	if err != nil {
+		return err
+	}
+
+	err = s.store.UpdateTokenStatus(tokenID, newStatus)
+	if err != nil {
+		// Log failure
+		if s.auditService != nil {
+			s.auditService.Log(ctx, AuditLogEntry{
+				EventType:    eventType,
+				Severity:     models.SeverityError,
+				ActorUserID:  actorUserID,
+				ResourceType: models.ResourceToken,
+				ResourceID:   tokenID,
+				Action:       actionFailed,
+				Details:      models.AuditDetails{"token_category": token.TokenCategory},
+				Success:      false,
+				ErrorMessage: err.Error(),
+			})
+		}
+		return err
+	}
+
+	// Log success
+	if s.auditService != nil {
+		s.auditService.Log(ctx, AuditLogEntry{
+			EventType:    eventType,
+			Severity:     models.SeverityInfo,
+			ActorUserID:  actorUserID,
+			ResourceType: models.ResourceToken,
+			ResourceID:   tokenID,
+			Action:       actionSuccess,
+			Details: models.AuditDetails{
+				"token_category": token.TokenCategory,
+				"client_id":      token.ClientID,
+				"token_user_id":  token.UserID,
+			},
+			Success: true,
+		})
+	}
+
+	return nil
+}
+
 // DisableToken disables a token (can be re-enabled)
-func (s *TokenService) DisableToken(tokenID string) error {
-	return s.store.UpdateTokenStatus(tokenID, "disabled")
+func (s *TokenService) DisableToken(ctx context.Context, tokenID, actorUserID string) error {
+	return s.updateTokenStatusWithAudit(
+		ctx,
+		tokenID,
+		actorUserID,
+		"disabled",
+		models.EventTokenDisabled,
+		"Token disabled",
+		"Token disable failed",
+	)
 }
 
 // EnableToken re-enables a disabled token
-func (s *TokenService) EnableToken(tokenID string) error {
-	return s.store.UpdateTokenStatus(tokenID, "active")
+func (s *TokenService) EnableToken(ctx context.Context, tokenID, actorUserID string) error {
+	return s.updateTokenStatusWithAudit(
+		ctx,
+		tokenID,
+		actorUserID,
+		"active",
+		models.EventTokenEnabled,
+		"Token enabled",
+		"Token enable failed",
+	)
 }
 
 // RevokeTokenByStatus permanently revokes a token (uses status update, not deletion)

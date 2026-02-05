@@ -22,6 +22,7 @@ import (
 	"github.com/appleboy/authgate/internal/services"
 	"github.com/appleboy/authgate/internal/store"
 	"github.com/appleboy/authgate/internal/token"
+	"github.com/appleboy/authgate/internal/util"
 	"github.com/appleboy/authgate/internal/version"
 
 	"github.com/appleboy/go-httpclient"
@@ -104,6 +105,9 @@ func runServer() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
+	// Initialize audit service
+	auditService := services.NewAuditService(db, cfg.EnableAuditLogging, cfg.AuditLogBufferSize)
+
 	// Initialize authentication providers
 	localProvider := auth.NewLocalAuthProvider(db)
 	httpAPIProvider := initializeHTTPAPIAuthProvider(cfg)
@@ -119,8 +123,9 @@ func runServer() {
 		httpAPIProvider,
 		cfg.AuthMode,
 		cfg.OAuthAutoRegister,
+		auditService,
 	)
-	deviceService := services.NewDeviceService(db, cfg)
+	deviceService := services.NewDeviceService(db, cfg, auditService)
 	tokenService := services.NewTokenService(
 		db,
 		cfg,
@@ -128,8 +133,9 @@ func runServer() {
 		localTokenProvider,
 		httpTokenProvider,
 		cfg.TokenProviderMode,
+		auditService,
 	)
-	clientService := services.NewClientService(db)
+	clientService := services.NewClientService(db, auditService)
 
 	// Initialize OAuth providers
 	oauthProviders := initializeOAuthProviders(cfg)
@@ -145,10 +151,14 @@ func runServer() {
 	clientHandler := handlers.NewClientHandler(clientService)
 	sessionHandler := handlers.NewSessionHandler(tokenService, userService)
 	oauthHandler := handlers.NewOAuthHandler(oauthProviders, userService, oauthHTTPClient)
+	auditHandler := handlers.NewAuditHandler(auditService)
 
 	// Setup Gin
 	setupGinMode(cfg)
 	r := gin.Default()
+
+	// Setup IP middleware (for audit logging)
+	r.Use(util.IPMiddleware())
 
 	// Setup session middleware
 	sessionStore := cookie.NewStore([]byte(cfg.SessionSecret))
@@ -205,7 +215,7 @@ func runServer() {
 	r.GET("/health", createHealthCheckHandler(db))
 
 	// Setup rate limiting
-	rateLimiters, redisClient := setupRateLimiting(cfg)
+	rateLimiters, redisClient := setupRateLimiting(cfg, auditService)
 
 	// Public routes
 	r.GET("/", func(c *gin.Context) {
@@ -231,7 +241,7 @@ func runServer() {
 
 	// Protected routes (require login)
 	protected := r.Group("")
-	protected.Use(middleware.RequireAuth(), middleware.CSRFMiddleware())
+	protected.Use(middleware.RequireAuth(userService), middleware.CSRFMiddleware())
 	{
 		protected.GET("/device", deviceHandler.DevicePage)
 		protected.POST("/device/verify", rateLimiters.deviceVerify, deviceHandler.DeviceVerify)
@@ -239,7 +249,7 @@ func runServer() {
 
 	// Account routes (require login)
 	account := r.Group("/account")
-	account.Use(middleware.RequireAuth(), middleware.CSRFMiddleware())
+	account.Use(middleware.RequireAuth(userService), middleware.CSRFMiddleware())
 	{
 		account.GET("/sessions", sessionHandler.ListSessions)
 		account.POST("/sessions/:id/revoke", sessionHandler.RevokeSession)
@@ -251,7 +261,7 @@ func runServer() {
 	// Admin routes (require admin role)
 	admin := r.Group("/admin")
 	admin.Use(
-		middleware.RequireAuth(),
+		middleware.RequireAuth(userService),
 		middleware.RequireAdmin(userService),
 		middleware.CSRFMiddleware(),
 	)
@@ -264,6 +274,14 @@ func runServer() {
 		admin.POST("/clients/:id", clientHandler.UpdateClient)
 		admin.POST("/clients/:id/delete", clientHandler.DeleteClient)
 		admin.GET("/clients/:id/regenerate-secret", clientHandler.RegenerateSecret)
+
+		// Audit log routes (HTML pages)
+		admin.GET("/audit", auditHandler.ShowAuditLogsPage)
+		admin.GET("/audit/export", auditHandler.ExportAuditLogs)
+
+		// Audit log API routes (JSON)
+		admin.GET("/audit/api", auditHandler.ListAuditLogs)
+		admin.GET("/audit/api/stats", auditHandler.GetAuditLogStats)
 	}
 
 	// Start server
@@ -323,6 +341,47 @@ func runServer() {
 			}
 			log.Println("Redis connection closed")
 			return nil
+		})
+	}
+
+	// Add shutdown job for audit service
+	m.AddShutdownJob(func() error {
+		log.Println("Shutting down audit service...")
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if err := auditService.Shutdown(ctx); err != nil {
+			log.Printf("Error shutting down audit service: %v", err)
+			return err
+		}
+		return nil
+	})
+
+	// Add cleanup job for old audit logs (runs daily)
+	if cfg.EnableAuditLogging && cfg.AuditLogRetention > 0 {
+		m.AddRunningJob(func(ctx context.Context) error {
+			ticker := time.NewTicker(24 * time.Hour)
+			defer ticker.Stop()
+
+			// Run cleanup immediately on startup
+			if deleted, err := auditService.CleanupOldLogs(cfg.AuditLogRetention); err != nil {
+				log.Printf("Failed to cleanup old audit logs: %v", err)
+			} else if deleted > 0 {
+				log.Printf("Cleaned up %d old audit logs", deleted)
+			}
+
+			for {
+				select {
+				case <-ticker.C:
+					if deleted, err := auditService.CleanupOldLogs(cfg.AuditLogRetention); err != nil {
+						log.Printf("Failed to cleanup old audit logs: %v", err)
+					} else if deleted > 0 {
+						log.Printf("Cleaned up %d old audit logs", deleted)
+					}
+				case <-ctx.Done():
+					return nil
+				}
+			}
 		})
 	}
 
@@ -487,7 +546,10 @@ type rateLimitMiddlewares struct {
 
 // setupRateLimiting configures rate limiting middlewares based on configuration
 // Returns rate limit middlewares and optional Redis client (needs cleanup on shutdown)
-func setupRateLimiting(cfg *config.Config) (rateLimitMiddlewares, *redis.Client) {
+func setupRateLimiting(
+	cfg *config.Config,
+	auditService *services.AuditService,
+) (rateLimitMiddlewares, *redis.Client) {
 	// Return no-op middlewares when rate limiting is disabled
 	noOpMiddleware := func(c *gin.Context) { c.Next() }
 	disabledLimiters := rateLimitMiddlewares{
@@ -501,13 +563,16 @@ func setupRateLimiting(cfg *config.Config) (rateLimitMiddlewares, *redis.Client)
 	case !cfg.EnableRateLimit:
 		return disabledLimiters, nil
 	default:
-		return createRateLimiters(cfg)
+		return createRateLimiters(cfg, auditService)
 	}
 }
 
 // createRateLimiters creates rate limiting middlewares for all endpoints
 // Returns rate limit middlewares and optional shared Redis client
-func createRateLimiters(cfg *config.Config) (rateLimitMiddlewares, *redis.Client) {
+func createRateLimiters(
+	cfg *config.Config,
+	auditService *services.AuditService,
+) (rateLimitMiddlewares, *redis.Client) {
 	log.Printf("Rate limiting enabled (store: %s)", cfg.RateLimitStore)
 
 	storeType := middleware.RateLimitStoreType(cfg.RateLimitStore)
@@ -538,6 +603,7 @@ func createRateLimiters(cfg *config.Config) (rateLimitMiddlewares, *redis.Client
 			RedisPassword:     cfg.RedisPassword,
 			RedisDB:           cfg.RedisDB,
 			CleanupInterval:   cfg.RateLimitCleanupInterval,
+			AuditService:      auditService, // Add audit service for logging
 		})
 		if err != nil {
 			log.Fatalf("Failed to create rate limiter for %s: %v", endpoint, err)

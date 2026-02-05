@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/hex"
 	"testing"
@@ -22,7 +23,7 @@ func setupTestService(t *testing.T) (*DeviceService, *models.OAuthApplication) {
 		DeviceCodeExpiration: 30 * time.Minute,
 		PollingInterval:      5,
 	}
-	service := NewDeviceService(st, cfg)
+	service := NewDeviceService(st, cfg, nil)
 
 	// Create test client
 	client := &models.OAuthApplication{
@@ -42,7 +43,7 @@ func TestDeviceCodeHashing(t *testing.T) {
 	service, client := setupTestService(t)
 
 	t.Run("DeviceCode field not stored in database", func(t *testing.T) {
-		dc, err := service.GenerateDeviceCode(client.ClientID, "read")
+		dc, err := service.GenerateDeviceCode(context.Background(), client.ClientID, "read")
 		require.NoError(t, err)
 		assert.NotEmpty(t, dc.DeviceCode, "DeviceCode field should be populated")
 		assert.Len(t, dc.DeviceCode, 40, "DeviceCode should be 40 hex chars")
@@ -57,7 +58,7 @@ func TestDeviceCodeHashing(t *testing.T) {
 	})
 
 	t.Run("Valid device code passes verification", func(t *testing.T) {
-		dc, err := service.GenerateDeviceCode(client.ClientID, "read")
+		dc, err := service.GenerateDeviceCode(context.Background(), client.ClientID, "read")
 		require.NoError(t, err)
 		plaintext := dc.DeviceCode
 
@@ -69,7 +70,7 @@ func TestDeviceCodeHashing(t *testing.T) {
 	})
 
 	t.Run("Invalid device code fails verification", func(t *testing.T) {
-		dc, err := service.GenerateDeviceCode(client.ClientID, "read")
+		dc, err := service.GenerateDeviceCode(context.Background(), client.ClientID, "read")
 		require.NoError(t, err)
 
 		// Try with wrong code (same suffix, different prefix)
@@ -80,10 +81,10 @@ func TestDeviceCodeHashing(t *testing.T) {
 
 	t.Run("Hash collision does not grant access", func(t *testing.T) {
 		// Generate two codes
-		dc1, err := service.GenerateDeviceCode(client.ClientID, "read")
+		dc1, err := service.GenerateDeviceCode(context.Background(), client.ClientID, "read")
 		require.NoError(t, err)
 
-		dc2, err := service.GenerateDeviceCode(client.ClientID, "read")
+		dc2, err := service.GenerateDeviceCode(context.Background(), client.ClientID, "read")
 		require.NoError(t, err)
 
 		// Try to use dc1's prefix with dc2's suffix
@@ -97,7 +98,7 @@ func TestDeviceCodeInputValidation(t *testing.T) {
 	service, client := setupTestService(t)
 
 	t.Run("Valid 40-char hex code passes", func(t *testing.T) {
-		dc, err := service.GenerateDeviceCode(client.ClientID, "read")
+		dc, err := service.GenerateDeviceCode(context.Background(), client.ClientID, "read")
 		require.NoError(t, err)
 
 		retrieved, err := service.GetDeviceCode(dc.DeviceCode)
@@ -205,7 +206,7 @@ func TestDeviceCodeGeneration(t *testing.T) {
 		codes := make(map[string]bool)
 
 		for i := 0; i < 100; i++ {
-			dc, err := service.GenerateDeviceCode(client.ClientID, "read")
+			dc, err := service.GenerateDeviceCode(context.Background(), client.ClientID, "read")
 			require.NoError(t, err)
 
 			assert.False(t, codes[dc.DeviceCode], "Duplicate device code generated")
@@ -214,7 +215,7 @@ func TestDeviceCodeGeneration(t *testing.T) {
 	})
 
 	t.Run("Generated codes have correct format", func(t *testing.T) {
-		dc, err := service.GenerateDeviceCode(client.ClientID, "read")
+		dc, err := service.GenerateDeviceCode(context.Background(), client.ClientID, "read")
 		require.NoError(t, err)
 
 		// Check length
@@ -229,7 +230,7 @@ func TestDeviceCodeGeneration(t *testing.T) {
 	})
 
 	t.Run("Hash and salt are properly generated", func(t *testing.T) {
-		dc, err := service.GenerateDeviceCode(client.ClientID, "read")
+		dc, err := service.GenerateDeviceCode(context.Background(), client.ClientID, "read")
 		require.NoError(t, err)
 
 		// Check hash length (50 bytes = 100 hex chars)

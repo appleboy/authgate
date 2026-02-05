@@ -109,7 +109,7 @@ func (h *ClientHandler) CreateClient(c *gin.Context) {
 		CreatedBy:    userID.(string),
 	}
 
-	resp, err := h.clientService.CreateClient(req)
+	resp, err := h.clientService.CreateClient(c.Request.Context(), req)
 	if err != nil {
 		user, _ := c.Get("user")
 		c.HTML(http.StatusBadRequest, "admin/client_form.html", gin.H{
@@ -204,7 +204,8 @@ func (h *ClientHandler) UpdateClient(c *gin.Context) {
 		IsActive:     c.PostForm("is_active") == "true",
 	}
 
-	err := h.clientService.UpdateClient(clientID, req)
+	userID, _ := c.Get("user_id")
+	err := h.clientService.UpdateClient(c.Request.Context(), clientID, userID.(string), req)
 	if err != nil {
 		client, _ := h.clientService.GetClient(clientID)
 
@@ -251,7 +252,8 @@ func (h *ClientHandler) UpdateClient(c *gin.Context) {
 func (h *ClientHandler) DeleteClient(c *gin.Context) {
 	clientID := c.Param("id")
 
-	err := h.clientService.DeleteClient(clientID)
+	userID, _ := c.Get("user_id")
+	err := h.clientService.DeleteClient(c.Request.Context(), clientID, userID.(string))
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": "Failed to delete client: " + err.Error(),
@@ -276,7 +278,12 @@ func (h *ClientHandler) DeleteClient(c *gin.Context) {
 func (h *ClientHandler) RegenerateSecret(c *gin.Context) {
 	clientID := c.Param("id")
 
-	newSecret, err := h.clientService.RegenerateSecret(clientID)
+	userID, _ := c.Get("user_id")
+	newSecret, err := h.clientService.RegenerateSecret(
+		c.Request.Context(),
+		clientID,
+		userID.(string),
+	)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": "Failed to regenerate secret: " + err.Error(),

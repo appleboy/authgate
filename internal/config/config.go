@@ -127,6 +127,12 @@ type Config struct {
 	RedisAddr     string // Redis address for rate limiting (e.g., "localhost:6379")
 	RedisPassword string // Redis password (empty for no auth)
 	RedisDB       int    // Redis database number (default: 0)
+
+	// Audit Logging settings
+	EnableAuditLogging      bool          // Enable audit logging (default: true)
+	AuditLogRetention       time.Duration // Retention period for audit logs (default: 90 days)
+	AuditLogBufferSize      int           // Async buffer size (default: 1000)
+	AuditLogCleanupInterval time.Duration // Cleanup interval (default: 24 hours)
 }
 
 func Load() *Config {
@@ -143,9 +149,10 @@ func Load() *Config {
 	}
 
 	return &Config{
-		ServerAddr:           getEnv("SERVER_ADDR", ":8080"),
-		BaseURL:              getEnv("BASE_URL", "http://localhost:8080"),
-		IsProduction:         getEnvBool("ENVIRONMENT", false) || getEnv("ENVIRONMENT", "") == "production",
+		ServerAddr: getEnv("SERVER_ADDR", ":8080"),
+		BaseURL:    getEnv("BASE_URL", "http://localhost:8080"),
+		IsProduction: getEnvBool("ENVIRONMENT", false) ||
+			getEnv("ENVIRONMENT", "") == "production",
 		JWTSecret:            getEnv("JWT_SECRET", "your-256-bit-secret-change-in-production"),
 		JWTExpiration:        time.Hour,
 		SessionSecret:        getEnv("SESSION_SECRET", "session-secret-change-in-production"),
@@ -237,6 +244,12 @@ func Load() *Config {
 		RedisAddr:     getEnv("REDIS_ADDR", "localhost:6379"),
 		RedisPassword: getEnv("REDIS_PASSWORD", ""),
 		RedisDB:       getEnvInt("REDIS_DB", 0),
+
+		// Audit Logging settings
+		EnableAuditLogging:      getEnvBool("ENABLE_AUDIT_LOGGING", true),
+		AuditLogRetention:       getEnvDuration("AUDIT_LOG_RETENTION", 90*24*time.Hour), // 90 days
+		AuditLogBufferSize:      getEnvInt("AUDIT_LOG_BUFFER_SIZE", 1000),
+		AuditLogCleanupInterval: getEnvDuration("AUDIT_LOG_CLEANUP_INTERVAL", 24*time.Hour),
 	}
 }
 
