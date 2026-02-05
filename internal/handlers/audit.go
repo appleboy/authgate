@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/appleboy/authgate/internal/middleware"
 	"github.com/appleboy/authgate/internal/models"
 	"github.com/appleboy/authgate/internal/services"
 	"github.com/appleboy/authgate/internal/store"
@@ -94,24 +95,37 @@ func (h *AuditHandler) ShowAuditLogsPage(c *gin.Context) {
 
 	// Get current user for navbar
 	user, _ := c.Get("user")
+	userModel := user.(*models.User)
 
-	// Render HTML template
-	c.HTML(http.StatusOK, "admin/audit_logs.html", gin.H{
-		"user":        user,
-		"logs":        logs,
-		"Page":        pagination.CurrentPage,
-		"PageSize":    pagination.PageSize,
-		"TotalItems":  pagination.Total,
-		"TotalPages":  pagination.TotalPages,
-		"PrevPage":    pagination.PrevPage,
-		"NextPage":    pagination.NextPage,
-		"Search":      c.Query("search"),
-		"EventType":   c.Query("event_type"),
-		"Severity":    c.Query("severity"),
-		"Success":     c.Query("success"),
-		"ActorIP":     c.Query("actor_ip"),
-		"QueryString": c.Request.URL.RawQuery,
-	})
+	// Convert logs slice to pointer slice
+	logPtrs := make([]*models.AuditLog, len(logs))
+	for i := range logs {
+		logPtrs[i] = &logs[i]
+	}
+
+	// Render templ template
+	templates.RenderTempl(c, http.StatusOK, templates.AdminAuditLogs(templates.AuditLogsPageProps{
+		BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
+		NavbarProps: templates.NavbarProps{
+			Username:   userModel.Username,
+			IsAdmin:    userModel.IsAdmin(),
+			ActiveLink: "audit",
+		},
+		User:        userModel,
+		Logs:        logPtrs,
+		Page:        pagination.CurrentPage,
+		PageSize:    pagination.PageSize,
+		TotalItems:  int(pagination.Total),
+		TotalPages:  pagination.TotalPages,
+		PrevPage:    pagination.PrevPage,
+		NextPage:    pagination.NextPage,
+		Search:      c.Query("search"),
+		EventType:   c.Query("event_type"),
+		Severity:    c.Query("severity"),
+		Success:     c.Query("success"),
+		ActorIP:     c.Query("actor_ip"),
+		QueryString: c.Request.URL.RawQuery,
+	}))
 }
 
 // ListAuditLogs retrieves audit logs with pagination and filtering (JSON API)

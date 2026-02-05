@@ -144,17 +144,18 @@ type ClientDetailPageProps struct {
 type AuditLogsPageProps struct {
 	BaseProps
 	NavbarProps
-	User       *models.User
-	Logs       []*models.AuditLog
-	TotalItems int
-	Page       int
-	TotalPages int
-	NextPage   int
-	PrevPage   int
-	PageSize   int
-	Search     string
-	EventType  string
-	Severity   string
-	Success    string
-	ActorIP    string
+	User        *models.User
+	Logs        []*models.AuditLog
+	TotalItems  int
+	Page        int
+	TotalPages  int
+	NextPage    int
+	PrevPage    int
+	PageSize    int
+	Search      string
+	EventType   string
+	Severity    string
+	Success     string
+	ActorIP     string
+	QueryString string
 }

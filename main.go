@@ -6,12 +6,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"html/template"
 	"io/fs"
 	"log"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/appleboy/authgate/internal/auth"
@@ -167,39 +165,6 @@ func runServer() {
 		SameSite: http.SameSiteStrictMode,
 	})
 	r.Use(sessions.Sessions("oauth_session", sessionStore))
-
-	// Load embedded templates (including subdirectories)
-	// Create a sub filesystem to strip the "internal/templates" prefix
-	templateSubFS, err := fs.Sub(templatesFS, "internal/templates")
-	if err != nil {
-		log.Fatalf("Failed to create template sub filesystem: %v", err)
-	}
-
-	// Parse templates manually to preserve directory structure in names
-	tmpl := template.New("")
-	err = fs.WalkDir(templateSubFS, ".", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() || !strings.HasSuffix(path, ".html") {
-			return nil
-		}
-
-		// Read the template file
-		content, err := fs.ReadFile(templateSubFS, path)
-		if err != nil {
-			return err
-		}
-
-		// Parse with the full path as the name
-		_, err = tmpl.New(path).Parse(string(content))
-		return err
-	})
-	if err != nil {
-		log.Fatalf("Failed to parse templates: %v", err)
-	}
-
-	r.SetHTMLTemplate(tmpl)
 
 	// Serve embedded static files
 	staticSubFS, err := fs.Sub(templatesFS, "internal/templates/static")
