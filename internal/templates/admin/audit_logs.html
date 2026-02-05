@@ -438,71 +438,7 @@
             color: #c62828;
         }
 
-        /* === Pagination === */
-        .audit-pagination {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: var(--space-5);
-            background: var(--color-gray-50);
-            border: 1px solid var(--audit-border);
-            border-radius: 12px;
-        }
-
-        .pagination-info {
-            font-family: var(--audit-font-mono);
-            font-size: var(--text-sm);
-            color: var(--color-gray-600);
-        }
-
-        .pagination-info-value {
-            font-weight: 700;
-            color: var(--color-gray-900);
-        }
-
-        .pagination-controls {
-            display: flex;
-            gap: var(--space-3);
-            align-items: center;
-        }
-
-        .pagination-button,
-        .pagination-button-disabled {
-            padding: var(--space-2) var(--space-4);
-            border-radius: 8px;
-            font-family: var(--audit-font-display);
-            font-size: var(--text-sm);
-            font-weight: 600;
-            border: 1px solid var(--audit-border);
-            background: white;
-            color: var(--color-gray-700);
-            cursor: pointer;
-            text-decoration: none;
-            transition: all 0.2s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: var(--space-2);
-        }
-
-        .pagination-button:hover {
-            background: var(--color-primary-50);
-            border-color: var(--color-primary-500);
-            color: var(--color-primary-700);
-            transform: translateY(-1px);
-        }
-
-        .pagination-button-disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
-        }
-
-        .pagination-current {
-            font-family: var(--audit-font-mono);
-            font-size: var(--text-sm);
-            font-weight: 600;
-            color: var(--color-gray-900);
-            padding: 0 var(--space-3);
-        }
+        /* Pagination styles now handled by shared styles in style.css */
 
         /* === Empty State === */
         .audit-empty {
@@ -806,43 +742,7 @@
 
                 <!-- Pagination -->
                 {{if .TotalPages}}
-                <div class="audit-pagination">
-                    <div class="pagination-info">
-                        Showing <span class="pagination-info-value">{{.TotalItems}}</span> total logs
-                    </div>
-
-                    <div class="pagination-controls">
-                        {{if gt .Page 1}}
-                        <a href="?page={{.PrevPage}}&page_size={{.PageSize}}{{if .Search}}&search={{.Search}}{{end}}{{if .EventType}}&event_type={{.EventType}}{{end}}{{if .Severity}}&severity={{.Severity}}{{end}}{{if .Success}}&success={{.Success}}{{end}}{{if .ActorIP}}&actor_ip={{.ActorIP}}{{end}}"
-                           class="pagination-button">
-                            <span>←</span>
-                            <span>Previous</span>
-                        </a>
-                        {{else}}
-                        <button class="pagination-button-disabled" disabled>
-                            <span>←</span>
-                            <span>Previous</span>
-                        </button>
-                        {{end}}
-
-                        <span class="pagination-current">
-                            Page {{.Page}} of {{.TotalPages}}
-                        </span>
-
-                        {{if lt .Page .TotalPages}}
-                        <a href="?page={{.NextPage}}&page_size={{.PageSize}}{{if .Search}}&search={{.Search}}{{end}}{{if .EventType}}&event_type={{.EventType}}{{end}}{{if .Severity}}&severity={{.Severity}}{{end}}{{if .Success}}&success={{.Success}}{{end}}{{if .ActorIP}}&actor_ip={{.ActorIP}}{{end}}"
-                           class="pagination-button">
-                            <span>Next</span>
-                            <span>→</span>
-                        </a>
-                        {{else}}
-                        <button class="pagination-button-disabled" disabled>
-                            <span>Next</span>
-                            <span>→</span>
-                        </button>
-                        {{end}}
-                    </div>
-                </div>
+                {{template "pagination-audit" .}}
                 {{end}}
                 {{else}}
                 <!-- Empty State -->

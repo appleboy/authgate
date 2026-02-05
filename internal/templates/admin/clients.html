@@ -199,45 +199,7 @@
 
             <!-- Pagination Controls -->
             {{if .Pagination}}
-            <div class="pagination-container">
-                <div class="pagination-info">
-                    <span>Showing</span>
-                    <span class="pagination-info-total">{{.Pagination.Total}}</span>
-                    <span>total clients</span>
-                </div>
-
-                <div class="pagination-controls">
-                    {{if .Pagination.HasPrev}}
-                    <a href="/admin/clients?page={{.Pagination.PrevPage}}&page_size={{.PageSize}}{{if .Search}}&search={{.Search}}{{end}}"
-                       class="pagination-button">
-                        <span class="pagination-button-icon">←</span>
-                        <span>Previous</span>
-                    </a>
-                    {{else}}
-                    <button class="pagination-button" disabled>
-                        <span class="pagination-button-icon">←</span>
-                        <span>Previous</span>
-                    </button>
-                    {{end}}
-
-                    <span class="pagination-current">
-                        Page {{.Pagination.CurrentPage}} of {{.Pagination.TotalPages}}
-                    </span>
-
-                    {{if .Pagination.HasNext}}
-                    <a href="/admin/clients?page={{.Pagination.NextPage}}&page_size={{.PageSize}}{{if .Search}}&search={{.Search}}{{end}}"
-                       class="pagination-button">
-                        <span>Next</span>
-                        <span class="pagination-button-icon">→</span>
-                    </a>
-                    {{else}}
-                    <button class="pagination-button" disabled>
-                        <span>Next</span>
-                        <span class="pagination-button-icon">→</span>
-                    </button>
-                    {{end}}
-                </div>
-            </div>
+            {{template "pagination-clients" .}}
             {{end}}
             {{else}}
             <div class="empty-state-with-search">
