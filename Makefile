@@ -25,18 +25,6 @@ LDFLAGS ?= -X 'github.com/appleboy/authgate/internal/version.Version=$(VERSION)'
 	-X 'github.com/appleboy/authgate/internal/version.BuildOS=$(shell $(GO) env GOOS)' \
 	-X 'github.com/appleboy/authgate/internal/version.BuildArch=$(shell $(GO) env GOARCH)'
 
-## install-templ: install templ CLI if not installed
-install-templ:
-	@command -v templ >/dev/null 2>&1 || $(GO) install github.com/a-h/templ/cmd/templ@$(TEMPL_VERSION)
-
-## generate: run templ generate to compile .templ files
-generate: install-templ
-	templ generate
-
-## watch: watch mode for automatic regeneration
-watch: install-templ
-	templ generate --watch
-
 ## build: build the authgate binary
 build: generate $(EXECUTABLE)
 
@@ -100,6 +88,18 @@ clean:
 .PHONY: help build build-cli build-all install test fmt lint clean
 .PHONY: build_linux_amd64 build_linux_arm64 build_cli_linux_amd64 build_cli_linux_arm64
 .PHONY: build_all_linux_amd64 build_all_linux_arm64 install-templ generate watch
+
+## install-templ: install templ CLI if not installed
+install-templ:
+	@command -v templ >/dev/null 2>&1 || $(GO) install github.com/a-h/templ/cmd/templ@$(TEMPL_VERSION)
+
+## generate: run templ generate to compile .templ files
+generate: install-templ
+	templ generate
+
+## watch: watch mode for automatic regeneration
+watch: install-templ
+	templ generate --watch
 
 ## help: print this help message
 help:

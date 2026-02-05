@@ -1,5 +1,7 @@
 package templates
 
+import "time"
+
 type LayoutType string
 
 const (
@@ -15,16 +17,45 @@ templ Layout(title string, layoutType LayoutType, navbar *NavbarProps) {
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 			<title>{ title } - AuthGate</title>
-			<link rel="stylesheet" href="/static/style.css"/>
+			<!-- Preconnect to font CDN -->
+			<link rel="preconnect" href="https://fonts.googleapis.com"/>
+			<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+			<!-- IBM Plex Sans for UI, JetBrains Mono for code -->
+			<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+			<!-- Base styles -->
+			<link rel="stylesheet" href="/static/css/base.css"/>
+			<!-- Component styles -->
+			<link rel="stylesheet" href="/static/css/components/navbar.css"/>
+			<link rel="stylesheet" href="/static/css/components/forms.css"/>
+			<link rel="stylesheet" href="/static/css/components/alerts.css"/>
+			<link rel="stylesheet" href="/static/css/components/tables.css"/>
+			<link rel="stylesheet" href="/static/css/components/pagination.css"/>
+			<link rel="stylesheet" href="/static/css/components/sessions.css"/>
+			<!-- Page-specific styles -->
 			if layoutType == LayoutAdminNavbar {
-				<link rel="stylesheet" href="/static/admin.css"/>
+				<link rel="stylesheet" href="/static/css/pages/admin.css"/>
+				<link rel="stylesheet" href="/static/css/pages/admin-tables.css"/>
 			}
 		</head>
 		<body class={ string(layoutType) }>
 			if navbar != nil {
 				@Navbar(navbar)
 			}
-			{ children... }
+			<main class="main-content" role="main">
+				{ children... }
+			</main>
+			<!-- Footer -->
+			<footer class="site-footer">
+				<div class="footer-content">
+					<p class="footer-text">© { time.Now().Format("2006") } AuthGate | OAuth 2.0 Device Authorization</p>
+				</div>
+			</footer>
+			<!-- JavaScript -->
+			<script src="/static/js/utils.js"></script>
+			<script src="/static/js/navbar.js"></script>
+			if layoutType == LayoutAdminNavbar {
+				<script src="/static/js/admin.js"></script>
+			}
 		</body>
 	</html>
 }

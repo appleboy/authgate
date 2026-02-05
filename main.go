@@ -186,7 +186,9 @@ func runServer() {
 	r.GET("/login", func(c *gin.Context) {
 		authHandler.LoginPageWithOAuth(c, oauthProviders)
 	})
-	r.POST("/login", rateLimiters.login, authHandler.Login)
+	r.POST("/login", rateLimiters.login, func(c *gin.Context) {
+		authHandler.Login(c, oauthProviders)
+	})
 	r.GET("/logout", authHandler.Logout)
 
 	// OAuth routes (public)

@@ -63,7 +63,9 @@ func (h *AuthHandler) LoginPageWithOAuth(
 }
 
 // Login handles the login form submission
-func (h *AuthHandler) Login(c *gin.Context) {
+func (h *AuthHandler) Login(c *gin.Context,
+	oauthProviders map[string]*auth.OAuthProvider,
+) {
 	username := c.PostForm("username")
 	password := c.PostForm("password")
 	redirectTo := c.PostForm("redirect")
@@ -79,13 +81,23 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			errorMsg = "Invalid username or password"
 		}
 
+		// Prepare OAuth provider data for template
+		providers := []templates.OAuthProvider{}
+		for _, provider := range oauthProviders {
+			providers = append(providers, templates.OAuthProvider{
+				Name:        provider.GetProvider(),
+				DisplayName: provider.GetDisplayName(),
+			})
+		}
+
 		templates.RenderTempl(
 			c,
 			http.StatusUnauthorized,
 			templates.LoginPage(templates.LoginPageProps{
-				BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
-				Error:     errorMsg,
-				Redirect:  redirectTo,
+				BaseProps:      templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
+				Error:          errorMsg,
+				Redirect:       redirectTo,
+				OAuthProviders: providers,
 			}),
 		)
 		return

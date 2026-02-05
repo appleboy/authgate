@@ -6,14 +6,14 @@ templ Navbar(props *NavbarProps) {
 			<div class="navbar-brand">
 				<a href="/device">AuthGate</a>
 			</div>
-			<button class="navbar-toggle" onclick="toggleMenu()">☰</button>
+			<button class="navbar-toggle" onclick="toggleMenu()" aria-label="Toggle navigation menu">☰</button>
 			<div class="navbar-menu" id="navbarMenu">
 				<div class="navbar-links">
-					@NavLink("/device", "Device Authorization", props.ActiveLink == "device")
-					@NavLink("/account/sessions", "Active Sessions", props.ActiveLink == "sessions")
+					@NavLink("/device", "Device Authorization", props.ActiveLink == "device", false)
+					@NavLink("/account/sessions", "Active Sessions", props.ActiveLink == "sessions", false)
 					if props.IsAdmin {
-						@NavLink("/admin/clients", "OAuth Clients", props.ActiveLink == "clients")
-						@NavLink("/admin/audit", "Audit Logs", props.ActiveLink == "audit")
+						@NavLink("/admin/clients", "OAuth Clients", props.ActiveLink == "clients", true)
+						@NavLink("/admin/audit", "Audit Logs", props.ActiveLink == "audit", true)
 					}
 				</div>
 				<div class="navbar-user">
@@ -23,18 +23,12 @@ templ Navbar(props *NavbarProps) {
 			</div>
 		</div>
 	</nav>
-	<script>
-		function toggleMenu() {
-			const menu = document.getElementById('navbarMenu');
-			menu.classList.toggle('active');
-		}
-	</script>
 }
 
-templ NavLink(href, label string, isActive bool) {
+templ NavLink(href, label string, isActive bool, isAdmin bool) {
 	<a
 		href={ templ.URL(href) }
-		class={ templ.Classes("navbar-link", templ.KV("active", isActive)) }
+		class={ templ.Classes("navbar-link", templ.KV("active", isActive), templ.KV("admin", isAdmin)) }
 	>
 		{ label }
 	</a>
