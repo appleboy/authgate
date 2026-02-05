@@ -209,8 +209,9 @@ func (h *OAuthHandler) OAuthCallback(c *gin.Context) {
 	session.Delete("oauth_state")
 	session.Delete("oauth_provider")
 
-	// Save user ID in session
+	// Save user ID and username in session
 	session.Set("user_id", user.ID)
+	session.Set("username", user.Username)
 
 	// Get redirect URL
 	redirectURL := "/device"

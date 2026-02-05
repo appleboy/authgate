@@ -100,21 +100,17 @@ func (h *DeviceHandler) DeviceCodeRequest(c *gin.Context) {
 // DevicePage renders the device code input page
 func (h *DeviceHandler) DevicePage(c *gin.Context) {
 	session := sessions.Default(c)
-	username := session.Get(SessionUsername)
 	userID := session.Get(SessionUserID)
 	userCode := c.Query("user_code")
 
 	usernameStr := ""
-	if username != nil {
-		usernameStr = username.(string)
-	}
-
 	isAdmin := false
-	// Check if user is admin
+	// Get user info from database
 	if userID != nil {
 		user, err := h.userService.GetUserByID(userID.(string))
-		if err == nil && user.IsAdmin() {
-			isAdmin = true
+		if err == nil {
+			usernameStr = user.Username
+			isAdmin = user.IsAdmin()
 		}
 	}
 

@@ -157,7 +157,7 @@ templ SessionTableRow(session services.TokenWithClient, csrfToken string) {
 		</td>
 		<!-- Last Used -->
 		<td class="session-table-date">
-			if session.TokenCategory == "refresh" && !session.LastUsedAt.IsZero() {
+			if session.TokenCategory == "refresh" && session.LastUsedAt != nil && !session.LastUsedAt.IsZero() {
 				<span class="session-table-date-label">Last Used</span>
 				<span class="session-table-date-value">{ session.LastUsedAt.Format("2006-01-02 15:04") }</span>
 			} else {
