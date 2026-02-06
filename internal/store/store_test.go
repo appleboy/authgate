@@ -3,9 +3,11 @@ package store
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/appleboy/authgate/internal/config"
 	"github.com/appleboy/authgate/internal/models"
 
 	"github.com/google/uuid"
@@ -14,8 +16,16 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
+
+// getTestConfig returns a minimal config for testing
+func getTestConfig() *config.Config {
+	return &config.Config{
+		DefaultAdminPassword: "", // Use random password in tests
+	}
+}
 
 // TestStoreWithSQLite tests store operations with SQLite
 func TestStoreWithSQLite(t *testing.T) {
@@ -109,7 +119,7 @@ func createFreshStore(t *testing.T, driver string, pgContainer *postgres.Postgre
 		t.Fatalf("unsupported driver: %s", driver)
 	}
 
-	store, err := New(driver, dsn)
+	store, err := New(driver, dsn, getTestConfig())
 	require.NoError(t, err)
 	require.NotNil(t, store)
 
@@ -324,7 +334,7 @@ func TestRegisterDriver(t *testing.T) {
 
 // BenchmarkStoreOperations benchmarks basic store operations
 func BenchmarkStoreOperations(b *testing.B) {
-	store, err := New("sqlite", ":memory:")
+	store, err := New("sqlite", ":memory:", getTestConfig())
 	require.NoError(b, err)
 
 	b.Run("CreateUser", func(b *testing.B) {
@@ -358,7 +368,7 @@ func BenchmarkStoreOperations(b *testing.B) {
 
 // TestUpsertExternalUser_UsernameConflict_OnCreate tests username conflict detection when creating new users
 func TestUpsertExternalUser_UsernameConflict_OnCreate(t *testing.T) {
-	store, err := New("sqlite", ":memory:")
+	store, err := New("sqlite", ":memory:", getTestConfig())
 	require.NoError(t, err)
 
 	// Create a local user first
@@ -388,7 +398,7 @@ func TestUpsertExternalUser_UsernameConflict_OnCreate(t *testing.T) {
 
 // TestUpsertExternalUser_UsernameConflict_OnUpdate tests username conflict when updating existing user
 func TestUpsertExternalUser_UsernameConflict_OnUpdate(t *testing.T) {
-	store, err := New("sqlite", ":memory:")
+	store, err := New("sqlite", ":memory:", getTestConfig())
 	require.NoError(t, err)
 
 	// Create first external user
@@ -434,7 +444,7 @@ func TestUpsertExternalUser_UsernameConflict_OnUpdate(t *testing.T) {
 
 // TestUpsertExternalUser_SameUserKeepsUsername tests that same user can keep their username
 func TestUpsertExternalUser_SameUserKeepsUsername(t *testing.T) {
-	store, err := New("sqlite", ":memory:")
+	store, err := New("sqlite", ":memory:", getTestConfig())
 	require.NoError(t, err)
 
 	// Create external user
@@ -464,7 +474,7 @@ func TestUpsertExternalUser_SameUserKeepsUsername(t *testing.T) {
 
 // TestUpsertExternalUser_Success_NewUser tests successful creation of new external user
 func TestUpsertExternalUser_Success_NewUser(t *testing.T) {
-	store, err := New("sqlite", ":memory:")
+	store, err := New("sqlite", ":memory:", getTestConfig())
 	require.NoError(t, err)
 
 	user, err := store.UpsertExternalUser(
@@ -488,7 +498,7 @@ func TestUpsertExternalUser_Success_NewUser(t *testing.T) {
 
 // TestUpsertExternalUser_Success_UpdateExisting tests successful update of existing external user
 func TestUpsertExternalUser_Success_UpdateExisting(t *testing.T) {
-	store, err := New("sqlite", ":memory:")
+	store, err := New("sqlite", ":memory:", getTestConfig())
 	require.NoError(t, err)
 
 	// Create user
@@ -516,4 +526,84 @@ func TestUpsertExternalUser_Success_UpdateExisting(t *testing.T) {
 	assert.Equal(t, "bob", updatedUser.Username)
 	assert.Equal(t, "bob.builder@example.com", updatedUser.Email)
 	assert.Equal(t, "Robert Builder", updatedUser.FullName)
+}
+
+// TestDefaultAdminPassword_WhitespaceHandling tests that whitespace-only passwords are treated as empty
+func TestDefaultAdminPassword_WhitespaceHandling(t *testing.T) {
+	tests := []struct {
+		name                 string
+		defaultAdminPassword string
+		shouldUseConfigured  bool
+	}{
+		{
+			name:                 "valid password",
+			defaultAdminPassword: "MyPassword123",
+			shouldUseConfigured:  true,
+		},
+		{
+			name:                 "password with leading/trailing spaces",
+			defaultAdminPassword: "  MyPassword123  ",
+			shouldUseConfigured:  true,
+		},
+		{
+			name:                 "empty string",
+			defaultAdminPassword: "",
+			shouldUseConfigured:  false,
+		},
+		{
+			name:                 "only spaces",
+			defaultAdminPassword: "   ",
+			shouldUseConfigured:  false,
+		},
+		{
+			name:                 "only tabs",
+			defaultAdminPassword: "\t\t\t",
+			shouldUseConfigured:  false,
+		},
+		{
+			name:                 "mixed whitespace",
+			defaultAdminPassword: " \t\n\r ",
+			shouldUseConfigured:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.Config{
+				DefaultAdminPassword: tt.defaultAdminPassword,
+			}
+
+			store, err := New("sqlite", ":memory:", cfg)
+			require.NoError(t, err)
+			require.NotNil(t, store)
+
+			// Get the created admin user
+			admin, err := store.GetUserByUsername("admin")
+			require.NoError(t, err)
+			require.NotNil(t, admin)
+
+			// Verify the password works
+			if tt.shouldUseConfigured {
+				// Should use the trimmed configured password
+				err = bcrypt.CompareHashAndPassword(
+					[]byte(admin.PasswordHash),
+					[]byte(strings.TrimSpace(tt.defaultAdminPassword)),
+				)
+				assert.NoError(t, err, "configured password should work after trimming")
+			} else {
+				// Should have generated a random password (we can't verify the exact password,
+				// but we can verify it's not an empty password)
+				assert.NotEmpty(t, admin.PasswordHash)
+
+				// Verify that whitespace-only password does NOT work
+				if tt.defaultAdminPassword != "" {
+					err = bcrypt.CompareHashAndPassword(
+						[]byte(admin.PasswordHash),
+						[]byte(tt.defaultAdminPassword),
+					)
+					assert.Error(t, err, "whitespace-only password should not work")
+				}
+			}
+		})
+	}
 }

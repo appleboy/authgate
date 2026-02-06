@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
+	"github.com/appleboy/authgate/internal/config"
 	"github.com/appleboy/authgate/internal/models"
 
 	"github.com/google/uuid"
@@ -20,7 +22,7 @@ type Store struct {
 	db *gorm.DB
 }
 
-func New(driver, dsn string) (*Store, error) {
+func New(driver, dsn string, cfg *config.Config) (*Store, error) {
 	dialector, err := GetDialector(driver, dsn)
 	if err != nil {
 		return nil, err
@@ -48,7 +50,7 @@ func New(driver, dsn string) (*Store, error) {
 	store := &Store{db: db}
 
 	// Seed default data
-	if err := store.seedData(); err != nil {
+	if err := store.seedData(cfg); err != nil {
 		log.Printf("Warning: failed to seed data: %v", err)
 	}
 
@@ -65,17 +67,26 @@ func generateRandomPassword(length int) (string, error) {
 	return base64.URLEncoding.EncodeToString(bytes)[:length], nil
 }
 
-func (s *Store) seedData() error {
+func (s *Store) seedData(cfg *config.Config) error {
 	// Create default user if not exists
 	var userCount int64
 	s.db.Model(&models.User{}).Count(&userCount)
 	userID := uuid.New().String()
 	if userCount == 0 {
-		// Generate random password
-		password, err := generateRandomPassword(16)
-		if err != nil {
-			return err
+		var password string
+		var err error
+
+		// Use configured password if set (after trimming whitespace), otherwise generate random password
+		configuredPassword := strings.TrimSpace(cfg.DefaultAdminPassword)
+		if configuredPassword != "" {
+			password = configuredPassword
+		} else {
+			password, err = generateRandomPassword(16)
+			if err != nil {
+				return err
+			}
 		}
+
 		hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 		if err != nil {
 			return err
@@ -90,7 +101,13 @@ func (s *Store) seedData() error {
 		if err := s.db.Create(user).Error; err != nil {
 			return err
 		}
-		log.Printf("Created default user: admin / %s (role: admin)", password)
+
+		// Log password creation differently based on source
+		if configuredPassword != "" {
+			log.Printf("Created default user: admin / [configured password] (role: admin)")
+		} else {
+			log.Printf("Created default user: admin / %s (role: admin)", password)
+		}
 	}
 
 	// Create default OAuth client if not exists
