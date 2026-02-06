@@ -31,6 +31,16 @@ build: generate $(EXECUTABLE)
 $(EXECUTABLE): $(GOFILES)
 	$(GO) build -v -tags '$(TAGS)' -ldflags '$(EXTLDFLAGS)-s -w $(LDFLAGS)' -o bin/$@ .
 
+## air: Install air for hot reload.
+air:
+	@hash air > /dev/null 2>&1; if [ $$? -ne 0 ]; then \
+		$(GO) install github.com/air-verse/air@latest; \
+	fi
+
+## dev: Run the application with hot reload.
+dev: air
+	air
+
 ## build-cli: build the authgate-cli binary
 build-cli: $(EXECUTABLE_CLI)
 
@@ -87,7 +97,7 @@ clean:
 
 .PHONY: help build build-cli build-all install test fmt lint clean
 .PHONY: build_linux_amd64 build_linux_arm64 build_cli_linux_amd64 build_cli_linux_arm64
-.PHONY: build_all_linux_amd64 build_all_linux_arm64 install-templ generate watch
+.PHONY: build_all_linux_amd64 build_all_linux_arm64 install-templ generate watch air dev
 
 ## install-templ: install templ CLI if not installed
 install-templ:
