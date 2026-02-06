@@ -140,12 +140,23 @@ func runServer() {
 	oauthHTTPClient := createOAuthHTTPClient(cfg)
 
 	// Initialize handlers
-	authHandler := handlers.NewAuthHandler(userService, cfg.BaseURL)
+	authHandler := handlers.NewAuthHandler(
+		userService,
+		cfg.BaseURL,
+		cfg.SessionFingerprint,
+		cfg.SessionFingerprintIP,
+	)
 	deviceHandler := handlers.NewDeviceHandler(deviceService, userService, cfg)
 	tokenHandler := handlers.NewTokenHandler(tokenService, cfg)
 	clientHandler := handlers.NewClientHandler(clientService)
 	sessionHandler := handlers.NewSessionHandler(tokenService, userService)
-	oauthHandler := handlers.NewOAuthHandler(oauthProviders, userService, oauthHTTPClient)
+	oauthHandler := handlers.NewOAuthHandler(
+		oauthProviders,
+		userService,
+		oauthHTTPClient,
+		cfg.SessionFingerprint,
+		cfg.SessionFingerprintIP,
+	)
 	auditHandler := handlers.NewAuditHandler(auditService)
 
 	// Setup Gin
@@ -166,8 +177,9 @@ func runServer() {
 	})
 	r.Use(sessions.Sessions("oauth_session", sessionStore))
 
-	// Setup session idle timeout middleware
+	// Setup session security middleware
 	r.Use(middleware.SessionIdleTimeout(cfg.SessionIdleTimeout))
+	r.Use(middleware.SessionFingerprintMiddleware(cfg.SessionFingerprint, cfg.SessionFingerprintIP))
 
 	// Serve embedded static files
 	staticSubFS, err := fs.Sub(templatesFS, "internal/templates/static")

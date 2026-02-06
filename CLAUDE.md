@@ -120,7 +120,7 @@ docker build -f docker/Dockerfile -t authgate .
 - Device codes expire after 30min (configurable via `DeviceCodeExpiration`)
 - User codes: 8-char uppercase alphanumeric, normalized (uppercase + dashes removed)
 - JWTs signed with HMAC-SHA256, expire after 1 hour
-- Sessions: encrypted cookies (gin-contrib/sessions), configurable expiry (default: 1 hour), with idle timeout (default: 30 minutes)
+- Sessions: encrypted cookies (gin-contrib/sessions), configurable expiry (default: 1 hour), with idle timeout (default: 30 minutes) and fingerprinting (User-Agent validation)
 - Polling interval: 5 seconds
 - Templates and static files embedded via `//go:embed`
 - Error handling: Services return typed errors, handlers convert to RFC 8628 OAuth responses
@@ -148,6 +148,8 @@ docker build -f docker/Dockerfile -t authgate .
 | SESSION_SECRET               | (default)             | Cookie encryption key                                   |
 | SESSION_MAX_AGE              | 3600                  | Session lifetime in seconds (1 hour default)            |
 | SESSION_IDLE_TIMEOUT         | 1800                  | Session idle timeout in seconds (30 min, 0=disabled)    |
+| SESSION_FINGERPRINT          | true                  | Enable session fingerprinting (User-Agent validation)   |
+| SESSION_FINGERPRINT_IP       | false                 | Include IP in fingerprint (disabled due to dynamic IPs) |
 | DATABASE_DRIVER              | sqlite                | Database driver ("sqlite" or "postgres")                |
 | DATABASE_DSN                 | oauth.db              | Connection string                                       |
 | **AUTH_MODE**                | local                 | Authentication mode: `local` or `http_api`              |

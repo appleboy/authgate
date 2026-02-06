@@ -40,9 +40,11 @@ type Config struct {
 	JWTExpiration time.Duration
 
 	// Session settings
-	SessionSecret      string
-	SessionMaxAge      int // Session max age in seconds (default: 3600 = 1 hour)
-	SessionIdleTimeout int // Session idle timeout in seconds (0 = disabled, default: 1800 = 30 minutes)
+	SessionSecret        string
+	SessionMaxAge        int  // Session max age in seconds (default: 3600 = 1 hour)
+	SessionIdleTimeout   int  // Session idle timeout in seconds (0 = disabled, default: 1800 = 30 minutes)
+	SessionFingerprint   bool // Enable session fingerprinting (IP + User-Agent validation, default: true)
+	SessionFingerprintIP bool // Include IP address in fingerprint (default: false, due to dynamic IPs)
 
 	// Device code settings
 	DeviceCodeExpiration time.Duration
@@ -158,11 +160,16 @@ func Load() *Config {
 		BaseURL:    getEnv("BASE_URL", "http://localhost:8080"),
 		IsProduction: getEnvBool("ENVIRONMENT", false) ||
 			getEnv("ENVIRONMENT", "") == "production",
-		JWTSecret:            getEnv("JWT_SECRET", "your-256-bit-secret-change-in-production"),
-		JWTExpiration:        time.Hour,
-		SessionSecret:        getEnv("SESSION_SECRET", "session-secret-change-in-production"),
-		SessionMaxAge:        getEnvInt("SESSION_MAX_AGE", 3600),      // 1 hour default
-		SessionIdleTimeout:   getEnvInt("SESSION_IDLE_TIMEOUT", 1800), // 30 minutes default
+		JWTSecret:          getEnv("JWT_SECRET", "your-256-bit-secret-change-in-production"),
+		JWTExpiration:      time.Hour,
+		SessionSecret:      getEnv("SESSION_SECRET", "session-secret-change-in-production"),
+		SessionMaxAge:      getEnvInt("SESSION_MAX_AGE", 3600),      // 1 hour default
+		SessionIdleTimeout: getEnvInt("SESSION_IDLE_TIMEOUT", 1800), // 30 minutes default
+		SessionFingerprint: getEnvBool("SESSION_FINGERPRINT", true), // Enabled by default
+		SessionFingerprintIP: getEnvBool(
+			"SESSION_FINGERPRINT_IP",
+			false,
+		), // Disabled by default (dynamic IPs)
 		DeviceCodeExpiration: 30 * time.Minute,
 		PollingInterval:      5,
 		DatabaseDriver:       driver,

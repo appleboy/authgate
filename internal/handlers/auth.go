@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"net/url"
@@ -16,10 +18,22 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// generateFingerprint creates a SHA256 hash from IP (optional) and User-Agent
+func generateFingerprint(ip string, userAgent string, includeIP bool) string {
+	data := userAgent
+	if includeIP {
+		data = ip + "|" + userAgent
+	}
+
+	hash := sha256.Sum256([]byte(data))
+	return hex.EncodeToString(hash[:])
+}
+
 const (
 	SessionUserID       = "user_id"
 	SessionUsername     = "username"
 	SessionLastActivity = "last_activity"
+	SessionFingerprint  = "session_fingerprint"
 )
 
 // isRedirectSafe validates that a redirect URL is safe to use.
@@ -79,14 +93,23 @@ func isRedirectSafe(redirectURL, baseURL string) bool {
 }
 
 type AuthHandler struct {
-	userService *services.UserService
-	baseURL     string
+	userService                 *services.UserService
+	baseURL                     string
+	sessionFingerprintEnabled   bool
+	sessionFingerprintIncludeIP bool
 }
 
-func NewAuthHandler(us *services.UserService, baseURL string) *AuthHandler {
+func NewAuthHandler(
+	us *services.UserService,
+	baseURL string,
+	fingerprintEnabled bool,
+	fingerprintIncludeIP bool,
+) *AuthHandler {
 	return &AuthHandler{
-		userService: us,
-		baseURL:     baseURL,
+		userService:                 us,
+		baseURL:                     baseURL,
+		sessionFingerprintEnabled:   fingerprintEnabled,
+		sessionFingerprintIncludeIP: fingerprintIncludeIP,
 	}
 }
 
@@ -119,6 +142,8 @@ func (h *AuthHandler) LoginPageWithOAuth(
 		switch errorParam {
 		case "session_timeout":
 			errorMsg = "Your session has expired due to inactivity. Please sign in again."
+		case "session_invalid":
+			errorMsg = "Your session is invalid or may have been accessed from a different device. Please sign in again."
 		default:
 			errorMsg = errorParam
 		}
@@ -192,6 +217,15 @@ func (h *AuthHandler) Login(c *gin.Context,
 	session.Set(SessionUserID, user.ID)
 	session.Set(SessionUsername, user.Username)
 	session.Set(SessionLastActivity, time.Now().Unix()) // Set initial last activity time
+
+	// Set session fingerprint if enabled
+	if h.sessionFingerprintEnabled {
+		clientIP := c.GetString("client_ip") // Set by IPMiddleware
+		userAgent := c.Request.UserAgent()
+		fingerprint := generateFingerprint(clientIP, userAgent, h.sessionFingerprintIncludeIP)
+		session.Set(SessionFingerprint, fingerprint)
+	}
+
 	if err := session.Save(); err != nil {
 		templates.RenderTempl(
 			c,

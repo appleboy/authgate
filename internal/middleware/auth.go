@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"time"
 
@@ -13,7 +15,19 @@ import (
 const (
 	SessionUserID       = "user_id"
 	SessionLastActivity = "last_activity"
+	SessionFingerprint  = "session_fingerprint"
 )
+
+// generateFingerprint creates a SHA256 hash from IP (optional) and User-Agent
+func generateFingerprint(ip string, userAgent string, includeIP bool) string {
+	data := userAgent
+	if includeIP {
+		data = ip + "|" + userAgent
+	}
+
+	hash := sha256.Sum256([]byte(data))
+	return hex.EncodeToString(hash[:])
+}
 
 // RequireAuth is a middleware that requires the user to be logged in
 func RequireAuth(userService *services.UserService) gin.HandlerFunc {
@@ -35,6 +49,51 @@ func RequireAuth(userService *services.UserService) gin.HandlerFunc {
 		user, err := userService.GetUserByID(userID.(string))
 		if err == nil {
 			c.Set("user", user)
+		}
+
+		c.Next()
+	}
+}
+
+// SessionFingerprintMiddleware validates session fingerprint to prevent session hijacking
+// Checks User-Agent (and optionally IP) against stored fingerprint
+func SessionFingerprintMiddleware(enabled bool, includeIP bool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Skip if fingerprinting is disabled
+		if !enabled {
+			c.Next()
+			return
+		}
+
+		session := sessions.Default(c)
+		userID := session.Get(SessionUserID)
+
+		// Only check fingerprint for authenticated sessions
+		if userID != nil {
+			storedFingerprint := session.Get(SessionFingerprint)
+
+			if storedFingerprint != nil {
+				// Get current fingerprint
+				clientIP := c.GetString("client_ip") // Set by IPMiddleware
+				userAgent := c.Request.UserAgent()
+				currentFingerprint := generateFingerprint(clientIP, userAgent, includeIP)
+
+				// Compare fingerprints
+				if storedFingerprint.(string) != currentFingerprint {
+					// Fingerprint mismatch - possible session hijacking
+					session.Clear()
+					_ = session.Save()
+
+					// Redirect to login with security warning
+					redirectURL := c.Request.URL.String()
+					c.Redirect(
+						http.StatusFound,
+						"/login?redirect="+redirectURL+"&error=session_invalid",
+					)
+					c.Abort()
+					return
+				}
+			}
 		}
 
 		c.Next()

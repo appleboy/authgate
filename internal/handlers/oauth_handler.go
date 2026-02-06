@@ -3,7 +3,9 @@ package handlers
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"log"
 	"net/http"
@@ -18,11 +20,24 @@ import (
 	"golang.org/x/oauth2"
 )
 
+// generateFingerprintOAuth creates a SHA256 hash from IP (optional) and User-Agent
+func generateFingerprintOAuth(ip string, userAgent string, includeIP bool) string {
+	data := userAgent
+	if includeIP {
+		data = ip + "|" + userAgent
+	}
+
+	hash := sha256.Sum256([]byte(data))
+	return hex.EncodeToString(hash[:])
+}
+
 // OAuthHandler handles OAuth authentication
 type OAuthHandler struct {
-	providers   map[string]*auth.OAuthProvider
-	userService *services.UserService
-	httpClient  *http.Client // Custom HTTP client for OAuth requests
+	providers                   map[string]*auth.OAuthProvider
+	userService                 *services.UserService
+	httpClient                  *http.Client // Custom HTTP client for OAuth requests
+	sessionFingerprintEnabled   bool
+	sessionFingerprintIncludeIP bool
 }
 
 // NewOAuthHandler creates a new OAuth handler
@@ -30,11 +45,15 @@ func NewOAuthHandler(
 	providers map[string]*auth.OAuthProvider,
 	userService *services.UserService,
 	httpClient *http.Client,
+	fingerprintEnabled bool,
+	fingerprintIncludeIP bool,
 ) *OAuthHandler {
 	return &OAuthHandler{
-		providers:   providers,
-		userService: userService,
-		httpClient:  httpClient,
+		providers:                   providers,
+		userService:                 userService,
+		httpClient:                  httpClient,
+		sessionFingerprintEnabled:   fingerprintEnabled,
+		sessionFingerprintIncludeIP: fingerprintIncludeIP,
 	}
 }
 
@@ -214,6 +233,14 @@ func (h *OAuthHandler) OAuthCallback(c *gin.Context) {
 	session.Set("user_id", user.ID)
 	session.Set("username", user.Username)
 	session.Set("last_activity", time.Now().Unix()) // Set initial last activity time
+
+	// Set session fingerprint if enabled
+	if h.sessionFingerprintEnabled {
+		clientIP := c.GetString("client_ip") // Set by IPMiddleware
+		userAgent := c.Request.UserAgent()
+		fingerprint := generateFingerprintOAuth(clientIP, userAgent, h.sessionFingerprintIncludeIP)
+		session.Set("session_fingerprint", fingerprint)
+	}
 
 	// Get redirect URL
 	redirectURL := "/device"
