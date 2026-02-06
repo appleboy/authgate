@@ -166,6 +166,9 @@ func runServer() {
 	})
 	r.Use(sessions.Sessions("oauth_session", sessionStore))
 
+	// Setup session idle timeout middleware
+	r.Use(middleware.SessionIdleTimeout(cfg.SessionIdleTimeout))
+
 	// Serve embedded static files
 	staticSubFS, err := fs.Sub(templatesFS, "internal/templates/static")
 	if err != nil {

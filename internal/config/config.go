@@ -40,8 +40,9 @@ type Config struct {
 	JWTExpiration time.Duration
 
 	// Session settings
-	SessionSecret string
-	SessionMaxAge int // Session max age in seconds (default: 3600 = 1 hour)
+	SessionSecret      string
+	SessionMaxAge      int // Session max age in seconds (default: 3600 = 1 hour)
+	SessionIdleTimeout int // Session idle timeout in seconds (0 = disabled, default: 1800 = 30 minutes)
 
 	// Device code settings
 	DeviceCodeExpiration time.Duration
@@ -160,7 +161,8 @@ func Load() *Config {
 		JWTSecret:            getEnv("JWT_SECRET", "your-256-bit-secret-change-in-production"),
 		JWTExpiration:        time.Hour,
 		SessionSecret:        getEnv("SESSION_SECRET", "session-secret-change-in-production"),
-		SessionMaxAge:        getEnvInt("SESSION_MAX_AGE", 3600), // 1 hour default
+		SessionMaxAge:        getEnvInt("SESSION_MAX_AGE", 3600),      // 1 hour default
+		SessionIdleTimeout:   getEnvInt("SESSION_IDLE_TIMEOUT", 1800), // 30 minutes default
 		DeviceCodeExpiration: 30 * time.Minute,
 		PollingInterval:      5,
 		DatabaseDriver:       driver,

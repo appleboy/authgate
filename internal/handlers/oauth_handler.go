@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/appleboy/authgate/internal/auth"
 	"github.com/appleboy/authgate/internal/services"
@@ -212,6 +213,7 @@ func (h *OAuthHandler) OAuthCallback(c *gin.Context) {
 	// Save user ID and username in session
 	session.Set("user_id", user.ID)
 	session.Set("username", user.Username)
+	session.Set("last_activity", time.Now().Unix()) // Set initial last activity time
 
 	// Get redirect URL
 	redirectURL := "/device"

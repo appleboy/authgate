@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/appleboy/authgate/internal/auth"
 	"github.com/appleboy/authgate/internal/middleware"
@@ -16,8 +17,9 @@ import (
 )
 
 const (
-	SessionUserID   = "user_id"
-	SessionUsername = "username"
+	SessionUserID       = "user_id"
+	SessionUsername     = "username"
+	SessionLastActivity = "last_activity"
 )
 
 // isRedirectSafe validates that a redirect URL is safe to use.
@@ -111,6 +113,17 @@ func (h *AuthHandler) LoginPageWithOAuth(
 		redirectTo = ""
 	}
 
+	// Prepare error message
+	errorMsg := ""
+	if errorParam := c.Query("error"); errorParam != "" {
+		switch errorParam {
+		case "session_timeout":
+			errorMsg = "Your session has expired due to inactivity. Please sign in again."
+		default:
+			errorMsg = errorParam
+		}
+	}
+
 	// Prepare OAuth provider data for template
 	providers := []templates.OAuthProvider{}
 	for _, provider := range oauthProviders {
@@ -123,7 +136,7 @@ func (h *AuthHandler) LoginPageWithOAuth(
 	templates.RenderTempl(c, http.StatusOK, templates.LoginPage(templates.LoginPageProps{
 		BaseProps:      templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
 		Redirect:       redirectTo,
-		Error:          c.Query("error"),
+		Error:          errorMsg,
 		OAuthProviders: providers,
 	}))
 }
@@ -178,6 +191,7 @@ func (h *AuthHandler) Login(c *gin.Context,
 	session := sessions.Default(c)
 	session.Set(SessionUserID, user.ID)
 	session.Set(SessionUsername, user.Username)
+	session.Set(SessionLastActivity, time.Now().Unix()) // Set initial last activity time
 	if err := session.Save(); err != nil {
 		templates.RenderTempl(
 			c,
