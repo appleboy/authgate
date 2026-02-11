@@ -1,3 +1,28 @@
+//	@title			AuthGate API
+//	@version		1.0
+//	@description	OAuth 2.0 Device Authorization Grant (RFC 8628) server
+//	@termsOfService	http://swagger.io/terms/
+
+//	@contact.name	API Support
+//	@contact.url	https://github.com/appleboy/authgate
+//	@contact.email	appleboy.tw@gmail.com
+
+//	@license.name	MIT
+//	@license.url	https://github.com/appleboy/authgate/blob/main/LICENSE
+
+//	@host		localhost:8080
+//	@BasePath	/
+
+//	@securityDefinitions.apikey	BearerAuth
+//	@in							header
+//	@name						Authorization
+//	@description				Type "Bearer" followed by a space and JWT token.
+
+//	@securityDefinitions.apikey	SessionAuth
+//	@in							cookie
+//	@name						oauth_session
+//	@description				Session cookie for authenticated users
+
 package main
 
 import (
@@ -29,6 +54,10 @@ import (
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+
+	_ "github.com/appleboy/authgate/api" // swagger docs
 )
 
 //go:embed internal/templates/*
@@ -198,6 +227,13 @@ func runServer() {
 	r.GET("/", func(c *gin.Context) {
 		c.Redirect(http.StatusFound, "/device")
 	})
+
+	// Swagger documentation (development only)
+	if !cfg.IsProduction {
+		r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+		log.Println("Swagger UI enabled at: http://localhost:8080/swagger/index.html")
+	}
+
 	r.GET("/login", func(c *gin.Context) {
 		authHandler.LoginPageWithOAuth(c, oauthProviders)
 	})
@@ -501,6 +537,15 @@ func logOAuthProvidersStatus(providers map[string]*auth.OAuthProvider) {
 }
 
 // createHealthCheckHandler creates health check endpoint handler
+// healthCheck godoc
+//
+//	@Summary		Health check
+//	@Description	Check server and database health status
+//	@Tags			System
+//	@Produce		json
+//	@Success		200	{object}	object{status=string,database=string}	"Service is healthy"
+//	@Failure		503	{object}	object{status=string,database=string}	"Service is unhealthy"
+//	@Router			/health [get]
 func createHealthCheckHandler(db *store.Store) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		switch err := db.Health(); err {

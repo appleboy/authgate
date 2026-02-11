@@ -38,3 +38,5 @@ coverage.txt
 
 # templ generated files
 *_templ.go
+api/*
+!api/.gitkeep

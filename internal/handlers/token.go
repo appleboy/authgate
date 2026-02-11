@@ -28,8 +28,23 @@ func NewTokenHandler(ts *services.TokenService, cfg *config.Config) *TokenHandle
 	return &TokenHandler{tokenService: ts, config: cfg}
 }
 
-// Token handles POST /oauth/token
-// Routes to appropriate grant type handler based on grant_type parameter
+// Token godoc
+//
+//	@Summary		Request access token
+//	@Description	Exchange device code or refresh token for access token (RFC 8628 and RFC 6749)
+//	@Tags			OAuth
+//	@Accept			json
+//	@Accept			x-www-form-urlencoded
+//	@Produce		json
+//	@Param			grant_type		formData	string																							true	"Grant type: 'urn:ietf:params:oauth:grant-type:device_code' or 'refresh_token'"
+//	@Param			device_code		formData	string																							false	"Device code (required when grant_type=device_code)"
+//	@Param			client_id		formData	string																							true	"OAuth client ID"
+//	@Param			refresh_token	formData	string																							false	"Refresh token (required when grant_type=refresh_token)"
+//	@Success		200				{object}	object{access_token=string,refresh_token=string,token_type=string,expires_in=int,scope=string}	"Access token issued successfully"
+//	@Failure		400				{object}	object{error=string,error_description=string}													"Invalid request (unsupported_grant_type, invalid_request, authorization_pending, slow_down, expired_token, access_denied, invalid_grant)"
+//	@Failure		429				{object}	object{error=string,error_description=string}													"Rate limit exceeded"
+//	@Failure		500				{object}	object{error=string,error_description=string}													"Internal server error"
+//	@Router			/oauth/token [post]
 func (h *TokenHandler) Token(c *gin.Context) {
 	grantType := c.PostForm("grant_type")
 
@@ -161,7 +176,18 @@ func (h *TokenHandler) handleRefreshTokenGrant(c *gin.Context) {
 	})
 }
 
-// TokenInfo handles GET /oauth/tokeninfo (optional endpoint to validate tokens)
+// TokenInfo godoc
+//
+//	@Summary		Validate access token
+//	@Description	Verify JWT token validity and retrieve token information (RFC 7662 style introspection)
+//	@Tags			OAuth
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			Authorization	header		string																				true	"Bearer token (format: 'Bearer <token>')"
+//	@Success		200				{object}	object{active=bool,user_id=string,client_id=string,scope=string,exp=int,iss=string}	"Token is valid"
+//	@Failure		401				{object}	object{error=string,error_description=string}										"Token is invalid or expired (missing_token, invalid_token)"
+//	@Router			/oauth/tokeninfo [get]
 func (h *TokenHandler) TokenInfo(c *gin.Context) {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {
@@ -191,8 +217,19 @@ func (h *TokenHandler) TokenInfo(c *gin.Context) {
 	})
 }
 
-// Revoke handles POST /oauth/revoke (RFC 7009)
-// This endpoint allows clients to revoke access tokens
+// Revoke godoc
+//
+//	@Summary		Revoke token
+//	@Description	Revoke an access token or refresh token (RFC 7009). Returns 200 for both successful revocation and invalid tokens to prevent token scanning attacks.
+//	@Tags			OAuth
+//	@Accept			json
+//	@Accept			x-www-form-urlencoded
+//	@Produce		json
+//	@Param			token			formData	string											true	"Token to revoke (access token or refresh token)"
+//	@Param			token_type_hint	formData	string											false	"Token type hint: 'access_token' or 'refresh_token'"
+//	@Success		200				{string}	string											"Token revoked successfully (or invalid token)"
+//	@Failure		400				{object}	object{error=string,error_description=string}	"Invalid request (token parameter missing)"
+//	@Router			/oauth/revoke [post]
 func (h *TokenHandler) Revoke(c *gin.Context) {
 	// Get token from request
 	// RFC 7009 specifies that the token parameter is REQUIRED

@@ -27,8 +27,21 @@ func NewDeviceHandler(
 	return &DeviceHandler{deviceService: ds, userService: us, config: cfg}
 }
 
-// DeviceCodeRequest handles POST /oauth/device/code
-// This is called by the CLI to start the device flow
+// DeviceCodeRequest godoc
+//
+//	@Summary		Request device code
+//	@Description	Request a device code for OAuth 2.0 device authorization flow (RFC 8628). This endpoint is called by CLI applications to initiate the device flow.
+//	@Tags			OAuth
+//	@Accept			json
+//	@Accept			x-www-form-urlencoded
+//	@Produce		json
+//	@Param			client_id	formData	string																																true	"OAuth client ID"
+//	@Param			scope		formData	string																																false	"Requested scopes (space-separated, default: 'read write')"
+//	@Success		200			{object}	object{device_code=string,user_code=string,verification_uri=string,verification_uri_complete=string,expires_in=int,interval=int}	"Device code generated successfully"
+//	@Failure		400			{object}	object{error=string,error_description=string}																						"Invalid request (invalid_client)"
+//	@Failure		429			{object}	object{error=string,error_description=string}																						"Rate limit exceeded"
+//	@Failure		500			{object}	object{error=string,error_description=string}																						"Internal server error"
+//	@Router			/oauth/device/code [post]
 func (h *DeviceHandler) DeviceCodeRequest(c *gin.Context) {
 	clientID := c.PostForm("client_id")
 	if clientID == "" {

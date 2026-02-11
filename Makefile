@@ -4,6 +4,7 @@ EXECUTABLE_CLI := authgate-cli
 GOFILES := $(shell find . -type f -name "*.go")
 TAGS ?=
 TEMPL_VERSION ?= latest
+SWAG_VERSION ?= latest
 
 ifneq ($(shell uname), Darwin)
 	EXTLDFLAGS = -extldflags "-static" $(null)
@@ -108,14 +109,14 @@ rebuild: clean build
 .PHONY: build_linux_amd64 build_linux_arm64 build_cli_linux_amd64 build_cli_linux_arm64
 .PHONY: build_all_linux_amd64 build_all_linux_arm64 install-templ generate watch air dev
 .PHONY: install-golangci-lint mod-download mod-tidy mod-verify check-tools version
-.PHONY: docker-build docker-run
+.PHONY: docker-build docker-run install-swag swagger swagger-init swagger-fmt swagger-validate
 
 ## install-templ: install templ CLI if not installed
 install-templ:
 	@command -v templ >/dev/null 2>&1 || $(GO) install github.com/a-h/templ/cmd/templ@$(TEMPL_VERSION)
 
 ## generate: run templ generate to compile .templ files
-generate: install-templ
+generate: install-templ swagger
 	templ generate
 
 ## watch: watch mode for automatic regeneration
@@ -158,3 +159,24 @@ docker-build:
 ## docker-run: run docker container
 docker-run:
 	docker run -p 8080:8080 --env-file .env authgate:$(VERSION)
+
+## install-swag: install swag CLI if not installed
+install-swag:
+	@command -v swag >/dev/null 2>&1 || $(GO) install github.com/swaggo/swag/cmd/swag@$(SWAG_VERSION)
+
+## swagger-init: generate swagger documentation
+swagger-init: install-swag
+	swag init -g main.go --output api --parseDependency --parseInternal
+
+## swagger: alias for swagger-init
+swagger: swagger-init
+
+## swagger-fmt: format swagger comments
+swagger-fmt: install-swag
+	swag fmt
+
+## swagger-validate: validate swagger documentation
+swagger-validate: install-swag swagger-init
+	@echo "Swagger documentation generated successfully in api/"
+	@test -f api/swagger.json && echo "swagger.json: OK" || (echo "swagger.json: MISSING" && exit 1)
+	@test -f api/swagger.yaml && echo "swagger.yaml: OK" || (echo "swagger.yaml: MISSING" && exit 1)
