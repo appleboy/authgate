@@ -12,19 +12,22 @@ The metrics system consists of:
 
 ## Current Status
 
-✅ **Implemented (Core Infrastructure)**
+✅ **Fully Implemented**
+
+**Core Infrastructure:**
 
 - HTTP request metrics (automatic via middleware)
 - Metrics initialization with singleton pattern
 - `/metrics` endpoint for Prometheus scraping
 - Helper methods for recording OAuth, Auth, and Token metrics
 
-⚠️ **Pending (Service Integration)**
+**Service Integration:**
 
-- Device service integration
-- Token service integration
-- Auth handler integration
-- Session management integration
+- ✅ Device service integration (device code generation, authorization)
+- ✅ Token service integration (issuance, refresh, revocation, validation)
+- ✅ Auth handler integration (login, logout with session tracking)
+- ✅ OAuth handler integration (callback success/failure tracking)
+- ✅ Periodic gauge updates (active tokens, device codes)
 
 ## Quick Start
 
@@ -332,13 +335,13 @@ func (h *OAuthHandler) OAuthCallback(c *gin.Context) {
 
 ## Updating main.go
 
-After integrating metrics into services, update `main.go` to pass the metrics instance:
+✅ **Already Implemented** - Metrics are fully wired into all services and handlers:
 
 ```go
-// Current (already done):
+// Metrics initialization:
 prometheusMetrics := metrics.Init()
 
-// Update service initialization (to be done):
+// Service initialization:
 deviceService := services.NewDeviceService(db, cfg, auditService, prometheusMetrics)
 tokenService := services.NewTokenService(
     db,
@@ -348,51 +351,78 @@ tokenService := services.NewTokenService(
     httpTokenProvider,
     cfg.TokenProviderMode,
     auditService,
-    prometheusMetrics,  // Add this
+    prometheusMetrics,
 )
 
-// Update handler initialization:
+// Handler initialization:
 authHandler := handlers.NewAuthHandler(
     userService,
     cfg.BaseURL,
     cfg.SessionFingerprint,
     cfg.SessionFingerprintIP,
-    prometheusMetrics,  // Add this
+    prometheusMetrics,
+)
+
+oauthHandler := handlers.NewOAuthHandler(
+    oauthProviders,
+    userService,
+    oauthHTTPClient,
+    cfg.SessionFingerprint,
+    cfg.SessionFingerprintIP,
+    prometheusMetrics,
 )
 ```
 
 ## Periodic Gauge Updates
 
-For gauge metrics that track current state (active tokens, sessions, device codes), add a background job in `main.go`:
+✅ **Already Implemented** - Gauge metrics are automatically updated every 30 seconds via a background job in `main.go`:
 
 ```go
-// Add metrics update job (runs every 30 seconds)
-m.AddRunningJob(func(ctx context.Context) error {
-    ticker := time.NewTicker(30 * time.Second)
-    defer ticker.Stop()
+// Metrics gauge update job (runs every 30 seconds)
+if cfg.MetricsEnabled {
+    m.AddRunningJob(func(ctx context.Context) error {
+        ticker := time.NewTicker(30 * time.Second)
+        defer ticker.Stop()
 
-    for {
-        select {
-        case <-ticker.C:
-            // Update active tokens count
-            activeAccessTokens, _ := db.CountActiveTokens("access")
-            activeRefreshTokens, _ := db.CountActiveTokens("refresh")
-            prometheusMetrics.SetActiveTokensCount("access", activeAccessTokens)
-            prometheusMetrics.SetActiveTokensCount("refresh", activeRefreshTokens)
+        // Update immediately on startup
+        updateGaugeMetrics(db, prometheusMetrics)
 
-            // Update active device codes count
-            totalDeviceCodes, pendingDeviceCodes, _ := db.CountDeviceCodes()
-            prometheusMetrics.SetActiveDeviceCodesCount(totalDeviceCodes, pendingDeviceCodes)
-
-            // Update active sessions count (if tracking sessions in DB)
-            // activeSessions, _ := db.CountActiveSessions()
-            // prometheusMetrics.SetActiveSessionsCount(activeSessions)
-
-        case <-ctx.Done():
-            return nil
+        for {
+            select {
+            case <-ticker.C:
+                updateGaugeMetrics(db, prometheusMetrics)
+            case <-ctx.Done():
+                return nil
+            }
         }
+    })
+}
+
+// Helper function
+func updateGaugeMetrics(db *store.Store, m *metrics.Metrics) {
+    // Update active tokens count
+    activeAccessTokens, err := db.CountActiveTokensByCategory("access")
+    if err != nil {
+        log.Printf("Failed to count access tokens: %v", err)
+    } else {
+        m.SetActiveTokensCount("access", int(activeAccessTokens))
     }
-})
+
+    activeRefreshTokens, err := db.CountActiveTokensByCategory("refresh")
+    if err != nil {
+        log.Printf("Failed to count refresh tokens: %v", err)
+    } else {
+        m.SetActiveTokensCount("refresh", int(activeRefreshTokens))
+    }
+
+    // Update active device codes count
+    totalDeviceCodes, pendingDeviceCodes, err := db.CountDeviceCodes()
+    if err != nil {
+        log.Printf("Failed to count device codes: %v", err)
+    } else {
+        m.SetActiveDeviceCodesCount(int(totalDeviceCodes), int(pendingDeviceCodes))
+    }
+}
 ```
 
 ## Grafana Dashboard Example
@@ -484,32 +514,49 @@ curl http://localhost:8080/metrics | grep -E "(oauth|auth|http_request)"
    s.metrics.RecordTokenRefresh(true)
    ```
 
-## Next Steps
+## Implementation Complete ✅
 
-To complete the metrics integration:
+The metrics integration is now fully implemented:
 
-1. Update DeviceService to include metrics parameter and calls
-2. Update TokenService to include metrics parameter and calls
-3. Update AuthHandler to include metrics parameter and calls
-4. Update OAuthHandler to include metrics parameter and calls
-5. Add periodic gauge update job in main.go
-6. Add store methods for counting active resources (optional)
-7. Create Grafana dashboard (see docs/MONITORING.md)
-8. Update configuration docs with metrics endpoint info
+- ✅ DeviceService includes metrics parameter and records device code operations
+- ✅ TokenService includes metrics parameter and records token lifecycle events
+- ✅ AuthHandler includes metrics parameter and records authentication events
+- ✅ OAuthHandler includes metrics parameter and records OAuth callbacks
+- ✅ Periodic gauge update job added to main.go (runs every 30 seconds)
+- ✅ Store methods added for counting active resources:
+  - `CountActiveTokensByCategory(category string)` - Counts active tokens by type
+  - `CountDeviceCodes()` - Returns total and pending device codes
+
+**Optional Next Steps:**
+
+1. Create Grafana dashboard (see docs/MONITORING.md)
+2. Configure Prometheus scraping
+3. Set up alerting rules
 
 ## Configuration
 
-Add to `.env` or environment variables:
+Metrics are controlled via environment variables:
 
 ```bash
-# Metrics are always enabled
-# Access at: http://localhost:8080/metrics
+# Enable/disable metrics (default: false)
+METRICS_ENABLED=true
 
-# For production, consider:
-# - Restricting /metrics endpoint to internal network
-# - Using Prometheus scrape configs with authentication
-# - Setting up Grafana dashboards
+# Optional: Require Bearer token for /metrics endpoint
+METRICS_TOKEN=your-secret-token
+
+# Access metrics at:
+# http://localhost:8080/metrics
+# Or with authentication:
+# curl -H "Authorization: Bearer your-secret-token" http://localhost:8080/metrics
 ```
+
+**Production Recommendations:**
+
+- Enable `METRICS_TOKEN` for authentication
+- Restrict `/metrics` endpoint to internal network
+- Configure Prometheus with appropriate scrape intervals
+- Set up Grafana dashboards for visualization
+- Configure alerting rules for critical metrics
 
 ## See Also
 
