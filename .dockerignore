@@ -1,0 +1,42 @@
+# Git files
+.git
+.gitignore
+.github
+
+# Build outputs
+bin/
+release/
+*.db
+*.db-shm
+*.db-wal
+
+# Test files
+coverage.txt
+*.test
+
+# Documentation
+*.md
+docs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Example files
+_example/
+
+# CI/CD
+.goreleaser.yaml
+
+# Docker
+docker/
+Dockerfile.old
+docker-compose*.yml
+
+# Environment
+.env
+.env.local
+.env.*.local
