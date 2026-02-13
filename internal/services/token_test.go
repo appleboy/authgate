@@ -16,9 +16,9 @@ import (
 )
 
 func createTestTokenService(s *store.Store, cfg *config.Config) *TokenService {
-	deviceService := NewDeviceService(s, cfg, nil)
+	deviceService := NewDeviceService(s, cfg, nil, nil)
 	localProvider := token.NewLocalTokenProvider(cfg)
-	return NewTokenService(s, cfg, deviceService, localProvider, nil, "local", nil)
+	return NewTokenService(s, cfg, deviceService, localProvider, nil, "local", nil, nil)
 }
 
 func createAuthorizedDeviceCode(t *testing.T, s *store.Store, clientID string) *models.DeviceCode {
@@ -26,7 +26,7 @@ func createAuthorizedDeviceCode(t *testing.T, s *store.Store, clientID string) *
 		DeviceCodeExpiration: 30 * time.Minute,
 		PollingInterval:      5,
 	}
-	deviceService := NewDeviceService(s, cfg, nil)
+	deviceService := NewDeviceService(s, cfg, nil, nil)
 
 	// Generate device code
 	dc, err := deviceService.GenerateDeviceCode(context.Background(), clientID, "read write")
@@ -144,7 +144,7 @@ func TestExchangeDeviceCode_NotAuthorized(t *testing.T) {
 		BaseURL:              "http://localhost:8080",
 	}
 	tokenService := createTestTokenService(s, cfg)
-	deviceService := NewDeviceService(s, cfg, nil)
+	deviceService := NewDeviceService(s, cfg, nil, nil)
 
 	// Create an active client and device code but don't authorize it
 	client := createTestClient(t, s, true)
@@ -174,7 +174,7 @@ func TestExchangeDeviceCode_ExpiredCode(t *testing.T) {
 		BaseURL:              "http://localhost:8080",
 	}
 	tokenService := createTestTokenService(s, cfg)
-	deviceService := NewDeviceService(s, cfg, nil)
+	deviceService := NewDeviceService(s, cfg, nil, nil)
 
 	// Create an active client and device code (it will be expired)
 	client := createTestClient(t, s, true)
@@ -389,7 +389,7 @@ func TestGetUserTokens_Success(t *testing.T) {
 		BaseURL:              "http://localhost:8080",
 	}
 	tokenService := createTestTokenService(s, cfg)
-	deviceService := NewDeviceService(s, cfg, nil)
+	deviceService := NewDeviceService(s, cfg, nil, nil)
 
 	// Create an active client
 	client := createTestClient(t, s, true)
@@ -445,7 +445,7 @@ func TestRevokeAllUserTokens_Success(t *testing.T) {
 		BaseURL:              "http://localhost:8080",
 	}
 	tokenService := createTestTokenService(s, cfg)
-	deviceService := NewDeviceService(s, cfg, nil)
+	deviceService := NewDeviceService(s, cfg, nil, nil)
 
 	// Create an active client
 	client := createTestClient(t, s, true)
@@ -496,7 +496,7 @@ func TestGetUserTokensWithClient_Success(t *testing.T) {
 		BaseURL:              "http://localhost:8080",
 	}
 	tokenService := createTestTokenService(s, cfg)
-	deviceService := NewDeviceService(s, cfg, nil)
+	deviceService := NewDeviceService(s, cfg, nil, nil)
 
 	// Create an active client
 	client := createTestClient(t, s, true)
@@ -541,7 +541,7 @@ func TestGetUserTokensWithClient_MultipleClients(t *testing.T) {
 		BaseURL:              "http://localhost:8080",
 	}
 	tokenService := createTestTokenService(s, cfg)
-	deviceService := NewDeviceService(s, cfg, nil)
+	deviceService := NewDeviceService(s, cfg, nil, nil)
 
 	// Create two different clients
 	client1 := createTestClient(t, s, true)
