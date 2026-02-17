@@ -59,7 +59,7 @@ func TestMetricsCacheWrapper_GetActiveTokensCount_CacheHit(t *testing.T) {
 	wrapper := newTestCacheWrapper(store, memCache)
 
 	// Pre-populate cache
-	_ = memCache.Set(ctx, "metrics:tokens:access", 42, time.Minute)
+	_ = memCache.Set(ctx, "tokens:access", 42, time.Minute)
 
 	count, err := wrapper.GetActiveTokensCount(ctx, "access", time.Minute)
 	if err != nil {
@@ -189,7 +189,7 @@ func TestMetricsCacheWrapper_GetTotalDeviceCodesCount_CacheHit(t *testing.T) {
 	wrapper := newTestCacheWrapper(store, memCache)
 
 	// Pre-populate cache
-	_ = memCache.Set(ctx, "metrics:devices:total", 100, time.Minute)
+	_ = memCache.Set(ctx, "devices:total", 100, time.Minute)
 
 	count, err := wrapper.GetTotalDeviceCodesCount(ctx, time.Minute)
 	if err != nil {
@@ -215,7 +215,7 @@ func TestMetricsCacheWrapper_GetPendingDeviceCodesCount_CacheHit(t *testing.T) {
 	wrapper := newTestCacheWrapper(store, memCache)
 
 	// Pre-populate cache
-	_ = memCache.Set(ctx, "metrics:devices:pending", 25, time.Minute)
+	_ = memCache.Set(ctx, "devices:pending", 25, time.Minute)
 
 	count, err := wrapper.GetPendingDeviceCodesCount(ctx, time.Minute)
 	if err != nil {
@@ -255,7 +255,7 @@ func TestMetricsCacheWrapper_GetTotalDeviceCodesCount_CacheMiss(t *testing.T) {
 	}
 
 	// Verify cache was updated
-	cached, err := memCache.Get(ctx, "metrics:devices:total")
+	cached, err := memCache.Get(ctx, "devices:total")
 	if err != nil {
 		t.Fatalf("Expected cache to be updated, got error: %v", err)
 	}
@@ -293,7 +293,7 @@ func TestMetricsCacheWrapper_GetPendingDeviceCodesCount_CacheMiss(t *testing.T) 
 	}
 
 	// Verify cache was updated
-	cached, err := memCache.Get(ctx, "metrics:devices:pending")
+	cached, err := memCache.Get(ctx, "devices:pending")
 	if err != nil {
 		t.Fatalf("Expected cache to be updated, got error: %v", err)
 	}
@@ -438,7 +438,7 @@ func TestMetricsCacheWrapper_FallbackToManualCacheAside(t *testing.T) {
 	}
 
 	// Verify cache was updated
-	cached, _ := memCache.Get(ctx, "metrics:tokens:access")
+	cached, _ := memCache.Get(ctx, "tokens:access")
 	if cached != 100 {
 		t.Errorf("Expected cached value 100, got %d", cached)
 	}
