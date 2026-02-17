@@ -785,22 +785,22 @@ func (s *Store) CountActiveTokensByCategory(category string) (int64, error) {
 	return count, err
 }
 
-// CountDeviceCodes returns (total active, pending authorization)
-func (s *Store) CountDeviceCodes() (total int64, pending int64, err error) {
-	// Count all non-expired device codes
-	err = s.db.Model(&models.DeviceCode{}).
+// CountTotalDeviceCodes counts all non-expired device codes
+func (s *Store) CountTotalDeviceCodes() (int64, error) {
+	var count int64
+	err := s.db.Model(&models.DeviceCode{}).
 		Where("expires_at > ?", time.Now()).
-		Count(&total).
+		Count(&count).
 		Error
-	if err != nil {
-		return 0, 0, err
-	}
+	return count, err
+}
 
-	// Count pending (not yet authorized)
-	err = s.db.Model(&models.DeviceCode{}).
+// CountPendingDeviceCodes counts pending (not yet authorized) device codes
+func (s *Store) CountPendingDeviceCodes() (int64, error) {
+	var count int64
+	err := s.db.Model(&models.DeviceCode{}).
 		Where("expires_at > ? AND authorized = ?", time.Now(), false).
-		Count(&pending).
+		Count(&count).
 		Error
-
-	return total, pending, err
+	return count, err
 }

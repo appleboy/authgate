@@ -38,6 +38,7 @@ import (
 	"time"
 
 	"github.com/appleboy/authgate/internal/auth"
+	"github.com/appleboy/authgate/internal/cache"
 	"github.com/appleboy/authgate/internal/client"
 	"github.com/appleboy/authgate/internal/config"
 	"github.com/appleboy/authgate/internal/handlers"
@@ -107,41 +108,149 @@ func printUsage() {
 }
 
 func runServer() {
-	// Load configuration
+	// Load and validate configuration
 	cfg := config.Load()
+	validateConfiguration(cfg)
 
-	// Validate configuration
+	// Initialize database
+	db := initializeDatabase(cfg)
+
+	// Initialize metrics and cache
+	prometheusMetrics := initializeMetrics(cfg)
+	metricsCache, metricsCacheCloser := initializeMetricsCache(cfg)
+
+	// Initialize services
+	auditService := services.NewAuditService(db, cfg.EnableAuditLogging, cfg.AuditLogBufferSize)
+	userService, deviceService, tokenService, clientService := initializeServices(
+		cfg,
+		db,
+		auditService,
+		prometheusMetrics,
+	)
+
+	// Initialize OAuth
+	oauthProviders := initializeOAuthProviders(cfg)
+	logOAuthProvidersStatus(oauthProviders)
+	oauthHTTPClient := createOAuthHTTPClient(cfg)
+
+	// Initialize handlers
+	handlerSet := initializeHandlers(
+		cfg,
+		userService,
+		deviceService,
+		tokenService,
+		clientService,
+		auditService,
+		oauthProviders,
+		oauthHTTPClient,
+		prometheusMetrics,
+	)
+
+	// Setup Gin router
+	r, redisClient := setupRouter(cfg, db, handlerSet, prometheusMetrics, auditService)
+
+	// Create and start HTTP server with graceful shutdown
+	srv := createHTTPServer(cfg, r)
+	startServerWithGracefulShutdown(
+		srv,
+		cfg,
+		db,
+		auditService,
+		prometheusMetrics,
+		metricsCache,
+		metricsCacheCloser,
+		redisClient,
+	)
+}
+
+// validateConfiguration validates all configuration settings
+func validateConfiguration(cfg *config.Config) {
 	if err := cfg.Validate(); err != nil {
 		log.Fatalf("Invalid configuration: %v", err)
 	}
-
-	// Validate authentication configuration
 	if err := validateAuthConfig(cfg); err != nil {
 		log.Fatalf("Invalid authentication configuration: %v", err)
 	}
-
-	// Validate token provider configuration
 	if err := validateTokenProviderConfig(cfg); err != nil {
 		log.Fatalf("Invalid token provider configuration: %v", err)
 	}
+}
 
-	// Initialize store
+// initializeDatabase creates and initializes the database connection
+func initializeDatabase(cfg *config.Config) *store.Store {
 	db, err := store.New(cfg.DatabaseDriver, cfg.DatabaseDSN, cfg)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
+	return db
+}
 
-	// Initialize metrics
+// initializeMetrics initializes Prometheus metrics
+func initializeMetrics(cfg *config.Config) metrics.MetricsRecorder {
 	prometheusMetrics := metrics.Init(cfg.MetricsEnabled)
 	if cfg.MetricsEnabled {
 		log.Println("Prometheus metrics initialized")
 	} else {
 		log.Println("Metrics disabled (using noop implementation)")
 	}
+	return prometheusMetrics
+}
 
-	// Initialize audit service
-	auditService := services.NewAuditService(db, cfg.EnableAuditLogging, cfg.AuditLogBufferSize)
+// initializeMetricsCache initializes the metrics cache based on configuration
+func initializeMetricsCache(cfg *config.Config) (cache.Cache, func() error) {
+	if !cfg.MetricsEnabled || !cfg.MetricsGaugeUpdateEnabled {
+		return nil, nil
+	}
 
+	var metricsCache cache.Cache
+	var err error
+
+	switch cfg.MetricsCacheType {
+	case config.MetricsCacheTypeRedisAside:
+		metricsCache, err = cache.NewRueidisAsideCache(
+			cfg.RedisAddr,
+			cfg.RedisPassword,
+			cfg.RedisDB,
+			"metrics:",
+			cfg.MetricsCacheClientTTL,
+			cfg.MetricsCacheSizePerConn,
+		)
+		if err != nil {
+			log.Fatalf("Failed to initialize redis-aside metrics cache: %v", err)
+		}
+		log.Printf(
+			"Metrics cache: redis-aside (addr=%s, db=%d, client_ttl=%s, cache_size_per_conn=%dMB)",
+			cfg.RedisAddr,
+			cfg.RedisDB,
+			cfg.MetricsCacheClientTTL,
+			cfg.MetricsCacheSizePerConn,
+		)
+	case config.MetricsCacheTypeRedis:
+		metricsCache, err = cache.NewRueidisCache(
+			cfg.RedisAddr,
+			cfg.RedisPassword,
+			cfg.RedisDB,
+			"metrics:",
+		)
+		if err != nil {
+			log.Fatalf("Failed to initialize redis metrics cache: %v", err)
+		}
+		log.Printf("Metrics cache: redis (addr=%s, db=%d)", cfg.RedisAddr, cfg.RedisDB)
+	default: // memory
+		metricsCache = cache.NewMemoryCache()
+		log.Println("Metrics cache: memory (single instance only)")
+	}
+
+	return metricsCache, metricsCache.Close
+}
+
+// initializeServices creates all business logic services
+func initializeServices(
+	cfg *config.Config,
+	db *store.Store,
+	auditService *services.AuditService,
+	prometheusMetrics metrics.MetricsRecorder,
+) (*services.UserService, *services.DeviceService, *services.TokenService, *services.ClientService) {
 	// Initialize authentication providers
 	localProvider := auth.NewLocalAuthProvider(db)
 	httpAPIProvider := initializeHTTPAPIAuthProvider(cfg)
@@ -172,71 +281,125 @@ func runServer() {
 	)
 	clientService := services.NewClientService(db, auditService)
 
-	// Initialize OAuth providers
-	oauthProviders := initializeOAuthProviders(cfg)
-	logOAuthProvidersStatus(oauthProviders)
+	return userService, deviceService, tokenService, clientService
+}
 
-	// Create HTTP client for OAuth requests
-	oauthHTTPClient := createOAuthHTTPClient(cfg)
+// handlerSet holds all HTTP handlers and required services
+type handlerSet struct {
+	auth        *handlers.AuthHandler
+	device      *handlers.DeviceHandler
+	token       *handlers.TokenHandler
+	client      *handlers.ClientHandler
+	session     *handlers.SessionHandler
+	oauth       *handlers.OAuthHandler
+	audit       *handlers.AuditHandler
+	userService *services.UserService
+}
 
-	// Initialize handlers
-	authHandler := handlers.NewAuthHandler(
-		userService,
-		cfg.BaseURL,
-		cfg.SessionFingerprint,
-		cfg.SessionFingerprintIP,
-		prometheusMetrics,
-	)
-	deviceHandler := handlers.NewDeviceHandler(deviceService, userService, cfg)
-	tokenHandler := handlers.NewTokenHandler(tokenService, cfg)
-	clientHandler := handlers.NewClientHandler(clientService)
-	sessionHandler := handlers.NewSessionHandler(tokenService, userService)
-	oauthHandler := handlers.NewOAuthHandler(
-		oauthProviders,
-		userService,
-		oauthHTTPClient,
-		cfg.SessionFingerprint,
-		cfg.SessionFingerprintIP,
-		prometheusMetrics,
-	)
-	auditHandler := handlers.NewAuditHandler(auditService)
+// initializeHandlers creates all HTTP handlers
+func initializeHandlers(
+	cfg *config.Config,
+	userService *services.UserService,
+	deviceService *services.DeviceService,
+	tokenService *services.TokenService,
+	clientService *services.ClientService,
+	auditService *services.AuditService,
+	oauthProviders map[string]*auth.OAuthProvider,
+	oauthHTTPClient *http.Client,
+	prometheusMetrics metrics.MetricsRecorder,
+) handlerSet {
+	return handlerSet{
+		auth: handlers.NewAuthHandler(
+			userService,
+			cfg.BaseURL,
+			cfg.SessionFingerprint,
+			cfg.SessionFingerprintIP,
+			prometheusMetrics,
+		),
+		device:  handlers.NewDeviceHandler(deviceService, userService, cfg),
+		token:   handlers.NewTokenHandler(tokenService, cfg),
+		client:  handlers.NewClientHandler(clientService),
+		session: handlers.NewSessionHandler(tokenService, userService),
+		oauth: handlers.NewOAuthHandler(
+			oauthProviders,
+			userService,
+			oauthHTTPClient,
+			cfg.SessionFingerprint,
+			cfg.SessionFingerprintIP,
+			prometheusMetrics,
+		),
+		audit:       handlers.NewAuditHandler(auditService),
+		userService: userService,
+	}
+}
 
-	// Setup Gin
+// setupRouter configures the Gin router with all routes and middleware
+func setupRouter(
+	cfg *config.Config,
+	db *store.Store,
+	h handlerSet,
+	prometheusMetrics metrics.MetricsRecorder,
+	auditService *services.AuditService,
+) (*gin.Engine, *redis.Client) {
+	// Setup Gin mode
 	setupGinMode(cfg)
 	r := gin.New()
-	// Setup Prometheus metrics middleware (must be before other routes)
+
+	// Setup middleware
 	r.Use(metrics.HTTPMetricsMiddleware(prometheusMetrics))
 	r.Use(gin.Logger(), gin.Recovery())
-
-	// Setup IP middleware (for audit logging)
 	r.Use(util.IPMiddleware())
 
 	// Setup session middleware
+	setupSessionMiddleware(r, cfg)
+
+	// Serve embedded static files
+	serveStaticFiles(r)
+
+	// Health check endpoint
+	r.GET("/health", createHealthCheckHandler(db))
+
+	// Setup metrics endpoint
+	setupMetricsEndpoint(r, cfg)
+
+	// Setup rate limiting
+	rateLimiters, redisClient := setupRateLimiting(cfg, auditService)
+
+	// Setup all routes
+	setupAllRoutes(r, cfg, h, rateLimiters)
+
+	// Log server startup info
+	logServerStartup(cfg)
+
+	return r, redisClient
+}
+
+// setupSessionMiddleware configures session handling middleware
+func setupSessionMiddleware(r *gin.Engine, cfg *config.Config) {
 	sessionStore := cookie.NewStore([]byte(cfg.SessionSecret))
 	sessionStore.Options(sessions.Options{
 		Path:     "/",
-		MaxAge:   cfg.SessionMaxAge, // Configurable session lifetime (default: 1 hour)
+		MaxAge:   cfg.SessionMaxAge,
 		HttpOnly: true,
-		Secure:   cfg.IsProduction,     // Require HTTPS in production
-		SameSite: http.SameSiteLaxMode, // Lax mode required for OAuth callbacks
+		Secure:   cfg.IsProduction,
+		SameSite: http.SameSiteLaxMode,
 	})
 	r.Use(sessions.Sessions("oauth_session", sessionStore))
-
-	// Setup session security middleware
 	r.Use(middleware.SessionIdleTimeout(cfg.SessionIdleTimeout))
 	r.Use(middleware.SessionFingerprintMiddleware(cfg.SessionFingerprint, cfg.SessionFingerprintIP))
+}
 
-	// Serve embedded static files
+// serveStaticFiles configures static file serving
+func serveStaticFiles(r *gin.Engine) {
 	staticSubFS, err := fs.Sub(templatesFS, "internal/templates/static")
 	if err != nil {
 		log.Fatalf("Failed to create static sub filesystem: %v", err)
 	}
 	r.StaticFS("/static", http.FS(staticSubFS))
+}
 
-	// Health check endpoint
-	r.GET("/health", createHealthCheckHandler(db))
-
-	// Prometheus metrics endpoint (with optional authentication)
+// setupMetricsEndpoint configures the Prometheus metrics endpoint
+func setupMetricsEndpoint(r *gin.Engine, cfg *config.Config) {
 	switch {
 	case !cfg.MetricsEnabled:
 		log.Printf("Prometheus metrics disabled")
@@ -251,9 +414,17 @@ func runServer() {
 		log.Printf("Prometheus metrics enabled at /metrics (no authentication)")
 		r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	}
+}
 
-	// Setup rate limiting
-	rateLimiters, redisClient := setupRateLimiting(cfg, auditService)
+// setupAllRoutes configures all application routes
+func setupAllRoutes(
+	r *gin.Engine,
+	cfg *config.Config,
+	h handlerSet,
+	rateLimiters rateLimitMiddlewares,
+) {
+	// Get OAuth providers
+	oauthProviders := initializeOAuthProviders(cfg)
 
 	// Public routes
 	r.GET("/", func(c *gin.Context) {
@@ -266,93 +437,119 @@ func runServer() {
 		log.Println("Swagger UI enabled at: http://localhost:8080/swagger/index.html")
 	}
 
+	// Login routes
 	r.GET("/login", func(c *gin.Context) {
-		authHandler.LoginPageWithOAuth(c, oauthProviders)
+		h.auth.LoginPageWithOAuth(c, oauthProviders)
 	})
 	r.POST("/login", rateLimiters.login, func(c *gin.Context) {
-		authHandler.Login(c, oauthProviders)
+		h.auth.Login(c, oauthProviders)
 	})
-	r.GET("/logout", authHandler.Logout)
+	r.GET("/logout", h.auth.Logout)
 
 	// OAuth routes (public)
-	setupOAuthRoutes(r, oauthProviders, oauthHandler)
+	setupOAuthRoutes(r, oauthProviders, h.oauth)
 
 	// OAuth API routes (public, called by CLI)
 	oauth := r.Group("/oauth")
 	{
-		oauth.POST("/device/code", rateLimiters.deviceCode, deviceHandler.DeviceCodeRequest)
-		oauth.POST("/token", rateLimiters.token, tokenHandler.Token)
-		oauth.GET("/tokeninfo", tokenHandler.TokenInfo)
-		oauth.POST("/revoke", tokenHandler.Revoke)
+		oauth.POST("/device/code", rateLimiters.deviceCode, h.device.DeviceCodeRequest)
+		oauth.POST("/token", rateLimiters.token, h.token.Token)
+		oauth.GET("/tokeninfo", h.token.TokenInfo)
+		oauth.POST("/revoke", h.token.Revoke)
 	}
 
 	// Protected routes (require login)
 	protected := r.Group("")
-	protected.Use(middleware.RequireAuth(userService), middleware.CSRFMiddleware())
+	protected.Use(middleware.RequireAuth(h.userService), middleware.CSRFMiddleware())
 	{
-		protected.GET("/device", deviceHandler.DevicePage)
-		protected.POST("/device/verify", rateLimiters.deviceVerify, deviceHandler.DeviceVerify)
+		protected.GET("/device", h.device.DevicePage)
+		protected.POST("/device/verify", rateLimiters.deviceVerify, h.device.DeviceVerify)
 	}
 
 	// Account routes (require login)
 	account := r.Group("/account")
-	account.Use(middleware.RequireAuth(userService), middleware.CSRFMiddleware())
+	account.Use(middleware.RequireAuth(h.userService), middleware.CSRFMiddleware())
 	{
-		account.GET("/sessions", sessionHandler.ListSessions)
-		account.POST("/sessions/:id/revoke", sessionHandler.RevokeSession)
-		account.POST("/sessions/:id/disable", sessionHandler.DisableSession)
-		account.POST("/sessions/:id/enable", sessionHandler.EnableSession)
-		account.POST("/sessions/revoke-all", sessionHandler.RevokeAllSessions)
+		account.GET("/sessions", h.session.ListSessions)
+		account.POST("/sessions/:id/revoke", h.session.RevokeSession)
+		account.POST("/sessions/:id/disable", h.session.DisableSession)
+		account.POST("/sessions/:id/enable", h.session.EnableSession)
+		account.POST("/sessions/revoke-all", h.session.RevokeAllSessions)
 	}
 
 	// Admin routes (require admin role)
 	admin := r.Group("/admin")
 	admin.Use(
-		middleware.RequireAuth(userService),
-		middleware.RequireAdmin(userService),
+		middleware.RequireAuth(h.userService),
+		middleware.RequireAdmin(h.userService),
 		middleware.CSRFMiddleware(),
 	)
 	{
-		admin.GET("/clients", clientHandler.ShowClientsPage)
-		admin.GET("/clients/new", clientHandler.ShowCreateClientPage)
-		admin.POST("/clients", clientHandler.CreateClient)
-		admin.GET("/clients/:id", clientHandler.ViewClient)
-		admin.GET("/clients/:id/edit", clientHandler.ShowEditClientPage)
-		admin.POST("/clients/:id", clientHandler.UpdateClient)
-		admin.POST("/clients/:id/delete", clientHandler.DeleteClient)
-		admin.GET("/clients/:id/regenerate-secret", clientHandler.RegenerateSecret)
+		admin.GET("/clients", h.client.ShowClientsPage)
+		admin.GET("/clients/new", h.client.ShowCreateClientPage)
+		admin.POST("/clients", h.client.CreateClient)
+		admin.GET("/clients/:id", h.client.ViewClient)
+		admin.GET("/clients/:id/edit", h.client.ShowEditClientPage)
+		admin.POST("/clients/:id", h.client.UpdateClient)
+		admin.POST("/clients/:id/delete", h.client.DeleteClient)
+		admin.GET("/clients/:id/regenerate-secret", h.client.RegenerateSecret)
 
 		// Audit log routes (HTML pages)
-		admin.GET("/audit", auditHandler.ShowAuditLogsPage)
-		admin.GET("/audit/export", auditHandler.ExportAuditLogs)
+		admin.GET("/audit", h.audit.ShowAuditLogsPage)
+		admin.GET("/audit/export", h.audit.ExportAuditLogs)
 
 		// Audit log API routes (JSON)
-		admin.GET("/audit/api", auditHandler.ListAuditLogs)
-		admin.GET("/audit/api/stats", auditHandler.GetAuditLogStats)
+		admin.GET("/audit/api", h.audit.ListAuditLogs)
+		admin.GET("/audit/api/stats", h.audit.GetAuditLogStats)
 	}
+}
 
-	// Start server
-	log.Printf("Authentication mode: %s", cfg.AuthMode)
-	log.Printf("OAuth Device Flow server starting on %s", cfg.ServerAddr)
-	log.Printf("Verification URL: %s/device", cfg.BaseURL)
-	log.Printf("  (Tip: Add ?user_code=XXXX-XXXX to pre-fill the code)")
-	log.Printf("Default user: admin (check logs for password if first run)")
-	log.Printf("Default client: AuthGate CLI (check logs for client_id)")
-
-	// Create HTTP server
-	srv := &http.Server{
+// createHTTPServer creates the HTTP server instance
+func createHTTPServer(cfg *config.Config, handler http.Handler) *http.Server {
+	return &http.Server{
 		Addr:              cfg.ServerAddr,
-		Handler:           r,
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
+}
 
-	// Create graceful manager
+// startServerWithGracefulShutdown starts the HTTP server and handles graceful shutdown
+func startServerWithGracefulShutdown(
+	srv *http.Server,
+	cfg *config.Config,
+	db *store.Store,
+	auditService *services.AuditService,
+	prometheusMetrics metrics.MetricsRecorder,
+	metricsCache cache.Cache,
+	metricsCacheCloser func() error,
+	redisClient *redis.Client,
+) {
 	m := graceful.NewManager()
 
-	// Add server as a running job
+	// Add server running job
+	addServerRunningJob(m, srv)
+
+	// Add shutdown jobs
+	addServerShutdownJob(m, srv)
+	addRedisClientShutdownJob(m, redisClient)
+	addAuditServiceShutdownJob(m, auditService)
+
+	// Add background jobs
+	addAuditLogCleanupJob(m, cfg, auditService)
+	addMetricsGaugeUpdateJob(m, cfg, db, prometheusMetrics, metricsCache)
+
+	// Add cache cleanup
+	addCacheCleanupJob(m, metricsCacheCloser)
+
+	// Wait for graceful shutdown
+	<-m.Done()
+}
+
+// addServerRunningJob adds the HTTP server running job
+func addServerRunningJob(m *graceful.Manager, srv *http.Server) {
 	m.AddRunningJob(func(ctx context.Context) error {
 		go func() {
 			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -362,8 +559,10 @@ func runServer() {
 		<-ctx.Done()
 		return nil
 	})
+}
 
-	// Add shutdown job for HTTP server
+// addServerShutdownJob adds HTTP server shutdown handler
+func addServerShutdownJob(m *graceful.Manager, srv *http.Server) {
 	m.AddShutdownJob(func() error {
 		log.Println("Shutting down server...")
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -377,21 +576,27 @@ func runServer() {
 		log.Println("Server exited")
 		return nil
 	})
+}
 
-	// Add shutdown job for Redis client (if used)
-	if redisClient != nil {
-		m.AddShutdownJob(func() error {
-			log.Println("Closing Redis connection...")
-			if err := redisClient.Close(); err != nil {
-				log.Printf("Error closing Redis client: %v", err)
-				return err
-			}
-			log.Println("Redis connection closed")
-			return nil
-		})
+// addRedisClientShutdownJob adds Redis client shutdown handler
+func addRedisClientShutdownJob(m *graceful.Manager, redisClient *redis.Client) {
+	if redisClient == nil {
+		return
 	}
 
-	// Add shutdown job for audit service
+	m.AddShutdownJob(func() error {
+		log.Println("Closing Redis connection...")
+		if err := redisClient.Close(); err != nil {
+			log.Printf("Error closing Redis client: %v", err)
+			return err
+		}
+		log.Println("Redis connection closed")
+		return nil
+	})
+}
+
+// addAuditServiceShutdownJob adds audit service shutdown handler
+func addAuditServiceShutdownJob(m *graceful.Manager, auditService *services.AuditService) {
 	m.AddShutdownJob(func() error {
 		log.Println("Shutting down audit service...")
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -403,59 +608,113 @@ func runServer() {
 		}
 		return nil
 	})
+}
 
-	// Add cleanup job for old audit logs (runs daily)
-	if cfg.EnableAuditLogging && cfg.AuditLogRetention > 0 {
-		m.AddRunningJob(func(ctx context.Context) error {
-			ticker := time.NewTicker(24 * time.Hour)
-			defer ticker.Stop()
-
-			// Run cleanup immediately on startup
-			if deleted, err := auditService.CleanupOldLogs(cfg.AuditLogRetention); err != nil {
-				log.Printf("Failed to cleanup old audit logs: %v", err)
-			} else if deleted > 0 {
-				log.Printf("Cleaned up %d old audit logs", deleted)
-			}
-
-			for {
-				select {
-				case <-ticker.C:
-					if deleted, err := auditService.CleanupOldLogs(
-						cfg.AuditLogRetention,
-					); err != nil {
-						log.Printf("Failed to cleanup old audit logs: %v", err)
-					} else if deleted > 0 {
-						log.Printf("Cleaned up %d old audit logs", deleted)
-					}
-				case <-ctx.Done():
-					return nil
-				}
-			}
-		})
+// addAuditLogCleanupJob adds periodic audit log cleanup job
+func addAuditLogCleanupJob(
+	m *graceful.Manager,
+	cfg *config.Config,
+	auditService *services.AuditService,
+) {
+	if !cfg.EnableAuditLogging || cfg.AuditLogRetention <= 0 {
+		return
 	}
 
-	// Add metrics gauge update job (runs every 30 seconds)
-	if cfg.MetricsEnabled {
-		m.AddRunningJob(func(ctx context.Context) error {
-			ticker := time.NewTicker(30 * time.Second)
-			defer ticker.Stop()
+	m.AddRunningJob(func(ctx context.Context) error {
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
 
-			// Update immediately on startup
-			updateGaugeMetrics(db, prometheusMetrics)
+		// Run cleanup immediately on startup
+		if deleted, err := auditService.CleanupOldLogs(cfg.AuditLogRetention); err != nil {
+			log.Printf("Failed to cleanup old audit logs: %v", err)
+		} else if deleted > 0 {
+			log.Printf("Cleaned up %d old audit logs", deleted)
+		}
 
-			for {
-				select {
-				case <-ticker.C:
-					updateGaugeMetrics(db, prometheusMetrics)
-				case <-ctx.Done():
-					return nil
+		for {
+			select {
+			case <-ticker.C:
+				if deleted, err := auditService.CleanupOldLogs(
+					cfg.AuditLogRetention,
+				); err != nil {
+					log.Printf("Failed to cleanup old audit logs: %v", err)
+				} else if deleted > 0 {
+					log.Printf("Cleaned up %d old audit logs", deleted)
 				}
+			case <-ctx.Done():
+				return nil
 			}
-		})
+		}
+	})
+}
+
+// addMetricsGaugeUpdateJob adds periodic metrics gauge update job
+func addMetricsGaugeUpdateJob(
+	m *graceful.Manager,
+	cfg *config.Config,
+	db *store.Store,
+	prometheusMetrics metrics.MetricsRecorder,
+	metricsCache cache.Cache,
+) {
+	if !cfg.MetricsEnabled || !cfg.MetricsGaugeUpdateEnabled {
+		return
 	}
 
-	// Wait for graceful shutdown
-	<-m.Done()
+	m.AddRunningJob(func(ctx context.Context) error {
+		ticker := time.NewTicker(cfg.MetricsGaugeUpdateInterval)
+		defer ticker.Stop()
+
+		// Create cache wrapper
+		cacheWrapper := metrics.NewMetricsCacheWrapper(db, metricsCache)
+
+		// Update immediately on startup
+		updateGaugeMetricsWithCache(
+			ctx,
+			cacheWrapper,
+			prometheusMetrics,
+			cfg.MetricsGaugeUpdateInterval,
+		)
+
+		for {
+			select {
+			case <-ticker.C:
+				updateGaugeMetricsWithCache(
+					ctx,
+					cacheWrapper,
+					prometheusMetrics,
+					cfg.MetricsGaugeUpdateInterval,
+				)
+			case <-ctx.Done():
+				return nil
+			}
+		}
+	})
+}
+
+// addCacheCleanupJob adds cache cleanup on shutdown
+func addCacheCleanupJob(m *graceful.Manager, metricsCacheCloser func() error) {
+	if metricsCacheCloser == nil {
+		return
+	}
+
+	m.AddShutdownJob(func() error {
+		if err := metricsCacheCloser(); err != nil {
+			log.Printf("Error closing metrics cache: %v", err)
+		} else {
+			log.Println("Metrics cache closed")
+		}
+		return nil
+	})
+}
+
+// logServerStartup logs server startup information
+func logServerStartup(cfg *config.Config) {
+	log.Printf("Authentication mode: %s", cfg.AuthMode)
+	log.Printf("OAuth Device Flow server starting on %s", cfg.ServerAddr)
+	log.Printf("Verification URL: %s/device", cfg.BaseURL)
+	log.Printf("  (Tip: Add ?user_code=XXXX-XXXX to pre-fill the code)")
+	log.Printf("Default user: admin (check logs for password if first run)")
+	log.Printf("Default client: AuthGate CLI (check logs for client_id)")
 }
 
 // validateAuthConfig checks that required config is present for selected auth mode
@@ -809,12 +1068,17 @@ func (e *errorLogger) logIfNeeded(operation string, err error) {
 
 var gaugeErrorLogger = newErrorLogger()
 
-// updateGaugeMetrics updates gauge metrics with current database state
-// Errors are recorded via metrics and rate-limited logs to avoid log noise during outages
-// Processing continues even if one query fails to maximize available metrics
-func updateGaugeMetrics(db *store.Store, m metrics.MetricsRecorder) {
+// updateGaugeMetricsWithCache updates gauge metrics using a cache-backed store.
+// This reduces database load in multi-instance deployments by caching query results.
+// The cache TTL should match the update interval to ensure consistent behavior.
+func updateGaugeMetricsWithCache(
+	ctx context.Context,
+	cacheWrapper *metrics.MetricsCacheWrapper,
+	m metrics.MetricsRecorder,
+	cacheTTL time.Duration,
+) {
 	// Update active access tokens count
-	activeAccessTokens, err := db.CountActiveTokensByCategory("access")
+	activeAccessTokens, err := cacheWrapper.GetActiveTokensCount(ctx, "access", cacheTTL)
 	if err != nil {
 		m.RecordDatabaseQueryError("count_access_tokens")
 		gaugeErrorLogger.logIfNeeded("count_access_tokens", err)
@@ -823,7 +1087,7 @@ func updateGaugeMetrics(db *store.Store, m metrics.MetricsRecorder) {
 	}
 
 	// Update active refresh tokens count
-	activeRefreshTokens, err := db.CountActiveTokensByCategory("refresh")
+	activeRefreshTokens, err := cacheWrapper.GetActiveTokensCount(ctx, "refresh", cacheTTL)
 	if err != nil {
 		m.RecordDatabaseQueryError("count_refresh_tokens")
 		gaugeErrorLogger.logIfNeeded("count_refresh_tokens", err)
@@ -832,11 +1096,19 @@ func updateGaugeMetrics(db *store.Store, m metrics.MetricsRecorder) {
 	}
 
 	// Update active device codes count
-	totalDeviceCodes, pendingDeviceCodes, err := db.CountDeviceCodes()
+	totalDeviceCodes, err := cacheWrapper.GetTotalDeviceCodesCount(ctx, cacheTTL)
 	if err != nil {
-		m.RecordDatabaseQueryError("count_device_codes")
-		gaugeErrorLogger.logIfNeeded("count_device_codes", err)
-	} else {
-		m.SetActiveDeviceCodesCount(int(totalDeviceCodes), int(pendingDeviceCodes))
+		m.RecordDatabaseQueryError("count_total_device_codes")
+		gaugeErrorLogger.logIfNeeded("count_total_device_codes", err)
+		totalDeviceCodes = 0
 	}
+
+	pendingDeviceCodes, err := cacheWrapper.GetPendingDeviceCodesCount(ctx, cacheTTL)
+	if err != nil {
+		m.RecordDatabaseQueryError("count_pending_device_codes")
+		gaugeErrorLogger.logIfNeeded("count_pending_device_codes", err)
+		pendingDeviceCodes = 0
+	}
+
+	m.SetActiveDeviceCodesCount(int(totalDeviceCodes), int(pendingDeviceCodes))
 }
