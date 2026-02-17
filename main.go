@@ -876,40 +876,6 @@ func (e *errorLogger) logIfNeeded(operation string, err error) {
 
 var gaugeErrorLogger = newErrorLogger()
 
-// updateGaugeMetrics updates gauge metrics with current database state
-// Errors are recorded via metrics and rate-limited logs to avoid log noise during outages
-// Processing continues even if one query fails to maximize available metrics
-//
-//nolint:unused // Kept for backward compatibility and direct database queries without cache
-func updateGaugeMetrics(db *store.Store, m metrics.MetricsRecorder) {
-	// Update active access tokens count
-	activeAccessTokens, err := db.CountActiveTokensByCategory("access")
-	if err != nil {
-		m.RecordDatabaseQueryError("count_access_tokens")
-		gaugeErrorLogger.logIfNeeded("count_access_tokens", err)
-	} else {
-		m.SetActiveTokensCount("access", int(activeAccessTokens))
-	}
-
-	// Update active refresh tokens count
-	activeRefreshTokens, err := db.CountActiveTokensByCategory("refresh")
-	if err != nil {
-		m.RecordDatabaseQueryError("count_refresh_tokens")
-		gaugeErrorLogger.logIfNeeded("count_refresh_tokens", err)
-	} else {
-		m.SetActiveTokensCount("refresh", int(activeRefreshTokens))
-	}
-
-	// Update active device codes count
-	totalDeviceCodes, pendingDeviceCodes, err := db.CountDeviceCodes()
-	if err != nil {
-		m.RecordDatabaseQueryError("count_device_codes")
-		gaugeErrorLogger.logIfNeeded("count_device_codes", err)
-	} else {
-		m.SetActiveDeviceCodesCount(int(totalDeviceCodes), int(pendingDeviceCodes))
-	}
-}
-
 // updateGaugeMetricsWithCache updates gauge metrics using a cache-backed store.
 // This reduces database load in multi-instance deployments by caching query results.
 // The cache TTL should match the update interval to ensure consistent behavior.
