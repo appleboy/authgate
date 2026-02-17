@@ -87,7 +87,7 @@ Modern CLI tools and IoT devices need secure user authentication, but traditiona
 
 ### Prerequisites
 
-- Go 1.24 or higher
+- Go 1.25 or higher
 - Make (optional, but recommended)
 
 ### Installation
