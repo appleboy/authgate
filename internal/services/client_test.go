@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"testing"
 
 	"github.com/appleboy/authgate/internal/models"
@@ -235,4 +236,258 @@ func TestGetUsersByIDs(t *testing.T) {
 		assert.Equal(t, "user1", userMap[user1.ID].Username)
 		assert.Equal(t, "user2", userMap[user2.ID].Username)
 	})
+}
+
+// ============================================================
+// CreateClient – Authorization Code Flow fields
+// ============================================================
+
+func TestCreateClient_AuthCodeFlowEnabled(t *testing.T) {
+	s := setupTestStore(t)
+	svc := NewClientService(s, nil)
+	userID := uuid.New().String()
+
+	req := CreateClientRequest{
+		ClientName:         "Auth Code Client",
+		UserID:             userID,
+		CreatedBy:          userID,
+		Scopes:             "read write",
+		EnableAuthCodeFlow: true,
+		EnableDeviceFlow:   true, // both flows active
+		RedirectURIs:       []string{"https://app.example.com/callback"},
+	}
+
+	resp, err := svc.CreateClient(context.Background(), req)
+	require.NoError(t, err)
+
+	assert.True(t, resp.EnableAuthCodeFlow)
+	assert.True(t, resp.EnableDeviceFlow)
+	assert.NotEmpty(t, resp.ClientID)
+	assert.NotEmpty(t, resp.ClientSecretPlain) // Secret returned on creation only
+}
+
+func TestCreateClient_PublicClientType(t *testing.T) {
+	s := setupTestStore(t)
+	svc := NewClientService(s, nil)
+	userID := uuid.New().String()
+
+	req := CreateClientRequest{
+		ClientName:         "Public SPA Client",
+		UserID:             userID,
+		CreatedBy:          userID,
+		Scopes:             "read",
+		ClientType:         ClientTypePublic,
+		EnableAuthCodeFlow: true,
+		RedirectURIs:       []string{"https://spa.example.com/callback"},
+	}
+
+	resp, err := svc.CreateClient(context.Background(), req)
+	require.NoError(t, err)
+
+	assert.Equal(t, ClientTypePublic, resp.ClientType)
+}
+
+func TestCreateClient_DefaultClientType(t *testing.T) {
+	s := setupTestStore(t)
+	svc := NewClientService(s, nil)
+	userID := uuid.New().String()
+
+	req := CreateClientRequest{
+		ClientName: "Default Client",
+		UserID:     userID,
+		CreatedBy:  userID,
+		Scopes:     "read",
+		// ClientType not set → should default to "confidential"
+	}
+
+	resp, err := svc.CreateClient(context.Background(), req)
+	require.NoError(t, err)
+
+	assert.Equal(t, ClientTypeConfidential, resp.ClientType)
+}
+
+func TestCreateClient_OnlyAuthCodeFlow(t *testing.T) {
+	// When only auth code flow is enabled, the service should not force device flow on.
+	// The result depends on how the service handles the "neither enabled" default case.
+	s := setupTestStore(t)
+	svc := NewClientService(s, nil)
+	userID := uuid.New().String()
+
+	req := CreateClientRequest{
+		ClientName:         "Auth-Code-Only Client",
+		UserID:             userID,
+		CreatedBy:          userID,
+		Scopes:             "read write",
+		EnableDeviceFlow:   false, // explicitly false
+		EnableAuthCodeFlow: true,
+		RedirectURIs:       []string{"https://app.example.com/callback"},
+	}
+
+	resp, err := svc.CreateClient(context.Background(), req)
+	require.NoError(t, err)
+
+	// Auth code flow must be enabled
+	assert.True(t, resp.EnableAuthCodeFlow)
+	// GrantTypes must include authorization_code
+	assert.Contains(t, resp.GrantTypes, "authorization_code")
+	assert.NotEmpty(t, resp.ClientID)
+}
+
+func TestCreateClient_NameRequired(t *testing.T) {
+	s := setupTestStore(t)
+	svc := NewClientService(s, nil)
+
+	req := CreateClientRequest{
+		ClientName: "", // Empty name
+		UserID:     uuid.New().String(),
+	}
+
+	_, err := svc.CreateClient(context.Background(), req)
+	assert.ErrorIs(t, err, ErrClientNameRequired)
+}
+
+func TestCreateClient_AuthCodeFlowRequiresRedirectURI(t *testing.T) {
+	s := setupTestStore(t)
+	svc := NewClientService(s, nil)
+	userID := uuid.New().String()
+
+	req := CreateClientRequest{
+		ClientName:         "No Redirect Client",
+		UserID:             userID,
+		CreatedBy:          userID,
+		EnableAuthCodeFlow: true,
+		RedirectURIs:       []string{}, // empty → must be rejected
+	}
+
+	_, err := svc.CreateClient(context.Background(), req)
+	assert.ErrorIs(t, err, ErrRedirectURIRequired)
+}
+
+func TestCreateClient_DeviceFlowOnlyNoRedirectURIRequired(t *testing.T) {
+	s := setupTestStore(t)
+	svc := NewClientService(s, nil)
+	userID := uuid.New().String()
+
+	req := CreateClientRequest{
+		ClientName:       "Device Only Client",
+		UserID:           userID,
+		CreatedBy:        userID,
+		EnableDeviceFlow: true,
+		// No redirect URIs and no auth code flow → should succeed
+	}
+
+	resp, err := svc.CreateClient(context.Background(), req)
+	require.NoError(t, err)
+	assert.True(t, resp.EnableDeviceFlow)
+	assert.False(t, resp.EnableAuthCodeFlow)
+}
+
+func TestUpdateClient_AuthCodeFlowRequiresRedirectURI(t *testing.T) {
+	s := setupTestStore(t)
+	svc := NewClientService(s, nil)
+	userID := uuid.New().String()
+
+	// Create a valid client first
+	createReq := CreateClientRequest{
+		ClientName:       "Update Target",
+		UserID:           userID,
+		CreatedBy:        userID,
+		EnableDeviceFlow: true,
+		RedirectURIs:     []string{"https://example.com/callback"},
+	}
+	resp, err := svc.CreateClient(context.Background(), createReq)
+	require.NoError(t, err)
+
+	updateReq := UpdateClientRequest{
+		ClientName:         "Update Target",
+		IsActive:           true,
+		EnableAuthCodeFlow: true,
+		RedirectURIs:       []string{}, // empty → must be rejected
+	}
+
+	err = svc.UpdateClient(context.Background(), resp.ClientID, userID, updateReq)
+	assert.ErrorIs(t, err, ErrRedirectURIRequired)
+}
+
+func TestUpdateClient_AuthCodeFlowWithRedirectURISucceeds(t *testing.T) {
+	s := setupTestStore(t)
+	svc := NewClientService(s, nil)
+	userID := uuid.New().String()
+
+	createReq := CreateClientRequest{
+		ClientName:       "Update Target",
+		UserID:           userID,
+		CreatedBy:        userID,
+		EnableDeviceFlow: true,
+		RedirectURIs:     []string{"https://example.com/callback"},
+	}
+	resp, err := svc.CreateClient(context.Background(), createReq)
+	require.NoError(t, err)
+
+	updateReq := UpdateClientRequest{
+		ClientName:         "Update Target",
+		IsActive:           true,
+		EnableAuthCodeFlow: true,
+		RedirectURIs:       []string{"https://example.com/callback"},
+	}
+
+	err = svc.UpdateClient(context.Background(), resp.ClientID, userID, updateReq)
+	require.NoError(t, err)
+}
+
+func TestUpdateClient_BothGrantTypesDisabledRejected(t *testing.T) {
+	s := setupTestStore(t)
+	svc := NewClientService(s, nil)
+	userID := uuid.New().String()
+
+	createReq := CreateClientRequest{
+		ClientName:       "Grant Type Client",
+		UserID:           userID,
+		CreatedBy:        userID,
+		EnableDeviceFlow: true,
+	}
+	resp, err := svc.CreateClient(context.Background(), createReq)
+	require.NoError(t, err)
+
+	updateReq := UpdateClientRequest{
+		ClientName:         "Grant Type Client",
+		IsActive:           true,
+		EnableDeviceFlow:   false, // both disabled → must be rejected
+		EnableAuthCodeFlow: false,
+	}
+
+	err = svc.UpdateClient(context.Background(), resp.ClientID, userID, updateReq)
+	assert.ErrorIs(t, err, ErrAtLeastOneGrantRequired)
+}
+
+func TestUpdateClient_GrantTypesReflectFlags(t *testing.T) {
+	s := setupTestStore(t)
+	svc := NewClientService(s, nil)
+	userID := uuid.New().String()
+
+	createReq := CreateClientRequest{
+		ClientName:       "Grant Flags Client",
+		UserID:           userID,
+		CreatedBy:        userID,
+		EnableDeviceFlow: true,
+	}
+	resp, err := svc.CreateClient(context.Background(), createReq)
+	require.NoError(t, err)
+
+	// Switch to auth code only
+	updateReq := UpdateClientRequest{
+		ClientName:         "Grant Flags Client",
+		IsActive:           true,
+		EnableDeviceFlow:   false,
+		EnableAuthCodeFlow: true,
+		RedirectURIs:       []string{"https://example.com/callback"},
+	}
+	err = svc.UpdateClient(context.Background(), resp.ClientID, userID, updateReq)
+	require.NoError(t, err)
+
+	updated, err := svc.GetClient(resp.ClientID)
+	require.NoError(t, err)
+	assert.False(t, updated.EnableDeviceFlow)
+	assert.True(t, updated.EnableAuthCodeFlow)
+	assert.Equal(t, "authorization_code", updated.GrantTypes)
 }

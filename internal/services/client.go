@@ -19,9 +19,11 @@ const (
 )
 
 var (
-	ErrClientNotFound     = errors.New("client not found")
-	ErrInvalidClientData  = errors.New("invalid client data")
-	ErrClientNameRequired = errors.New("client name is required")
+	ErrClientNotFound            = errors.New("client not found")
+	ErrInvalidClientData         = errors.New("invalid client data")
+	ErrClientNameRequired        = errors.New("client name is required")
+	ErrRedirectURIRequired       = errors.New("at least one redirect URI is required when Authorization Code Flow is enabled")
+	ErrAtLeastOneGrantRequired   = errors.New("at least one grant type must be enabled")
 )
 
 type ClientService struct {
@@ -76,6 +78,10 @@ func (s *ClientService) CreateClient(
 ) (*ClientResponse, error) {
 	if strings.TrimSpace(req.ClientName) == "" {
 		return nil, ErrClientNameRequired
+	}
+
+	if req.EnableAuthCodeFlow && len(req.RedirectURIs) == 0 {
+		return nil, ErrRedirectURIRequired
 	}
 
 	// Generate client ID and secret
@@ -171,6 +177,14 @@ func (s *ClientService) UpdateClient(
 		return ErrClientNameRequired
 	}
 
+	if !req.EnableDeviceFlow && !req.EnableAuthCodeFlow {
+		return ErrAtLeastOneGrantRequired
+	}
+
+	if req.EnableAuthCodeFlow && len(req.RedirectURIs) == 0 {
+		return ErrRedirectURIRequired
+	}
+
 	client, err := s.store.GetClient(clientID)
 	if err != nil {
 		return ErrClientNotFound
@@ -199,9 +213,7 @@ func (s *ClientService) UpdateClient(
 	if req.EnableAuthCodeFlow {
 		grants = append(grants, "authorization_code")
 	}
-	if len(grants) > 0 {
-		client.GrantTypes = strings.Join(grants, " ")
-	}
+	client.GrantTypes = strings.Join(grants, " ")
 
 	err = s.store.UpdateClient(client)
 	if err != nil {
