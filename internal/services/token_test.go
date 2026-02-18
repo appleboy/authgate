@@ -645,7 +645,6 @@ func createTestAuthCodeRecord(
 		RedirectURI:   "https://app.example.com/callback",
 		Scopes:        "read write",
 		ExpiresAt:     now.Add(10 * time.Minute),
-		UsedAt:        &now, // Mark as already-used (just for token issuance; ExchangeCode validates before calling this)
 	}
 	require.NoError(t, s.CreateAuthorizationCode(code))
 	return code
