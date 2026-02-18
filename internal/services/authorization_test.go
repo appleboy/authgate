@@ -676,32 +676,16 @@ func TestExchangeCode_PublicClientMissingCodeChallenge(t *testing.T) {
 	client := createAuthCodeFlowClient(t, svc, "public")
 	userID := uuid.New().String()
 
-	// Bypass normal flow: directly insert a code record without PKCE (simulates a corrupt record)
-	record := &models.AuthorizationCode{
-		UUID:                "test-uuid-" + uuid.New().String(),
-		CodeHash:            "aabbccdd" + uuid.New().String(), // won't be looked up by hash
-		CodePrefix:          "aabbccdd",
-		ApplicationID:       client.ID,
-		ClientID:            client.ClientID,
-		UserID:              userID,
-		RedirectURI:         "https://app.example.com/callback",
-		Scopes:              "read",
-		CodeChallenge:       "", // missing!
-		CodeChallengeMethod: "",
-		ExpiresAt:           time.Now().Add(10 * time.Minute),
-	}
-	require.NoError(t, svc.store.CreateAuthorizationCode(record))
-
-	// Create a valid code via the normal path first so we can look it up by hash
+	// Create a code without a PKCE challenge (simulates a code stored without PKCE)
 	plainCode, _, err := svc.CreateAuthorizationCode(
 		context.Background(),
 		client.ID, client.ClientID, userID,
 		"https://app.example.com/callback", "read",
-		"", "", // no PKCE challenge stored
+		"", "", // no PKCE challenge
 	)
 	require.NoError(t, err)
 
-	// Exchange: public client, code has no challenge → PKCERequired error
+	// Exchange: public client with no stored challenge → ErrPKCERequired
 	_, err = svc.ExchangeCode(
 		context.Background(),
 		plainCode, client.ClientID,
