@@ -10,11 +10,23 @@ templ Navbar(props *NavbarProps) {
 			<div class="navbar-menu" id="navbarMenu">
 				<div class="navbar-links">
 					@NavLink("/device", "Device Authorization", props.ActiveLink == "device", false)
-					@NavLink("/account/sessions", "Active Sessions", props.ActiveLink == "sessions", false)
-					@NavLink("/account/authorizations", "Authorized Apps", props.ActiveLink == "authorizations", false)
+					@NavDropdown(
+						"Account",
+						props.ActiveLink == "sessions" || props.ActiveLink == "authorizations",
+						false,
+					) {
+						@NavDropdownItem("/account/sessions", "Active Sessions", props.ActiveLink == "sessions", false)
+						@NavDropdownItem("/account/authorizations", "Authorized Apps", props.ActiveLink == "authorizations", false)
+					}
+					@NavDropdown("API Docs", props.ActiveLink == "apidocs", false) {
+						@NavDropdownItem("/swagger/index.html", "Swagger UI", props.ActiveLink == "apidocs", false)
+					}
 					if props.IsAdmin {
-						@NavLink("/admin/clients", "OAuth Clients", props.ActiveLink == "clients", true)
-						@NavLink("/admin/audit", "Audit Logs", props.ActiveLink == "audit", true)
+						<div class="navbar-admin-divider" aria-hidden="true"></div>
+						@NavAdminDropdown(props.ActiveLink == "clients" || props.ActiveLink == "audit") {
+							@NavDropdownItem("/admin/clients", "OAuth Clients", props.ActiveLink == "clients", true)
+							@NavDropdownItem("/admin/audit", "Audit Logs", props.ActiveLink == "audit", true)
+						}
 					}
 				</div>
 				<div class="navbar-user">
@@ -30,6 +42,65 @@ templ NavLink(href, label string, isActive bool, isAdmin bool) {
 	<a
 		href={ templ.URL(href) }
 		class={ templ.Classes("navbar-link", templ.KV("active", isActive), templ.KV("admin", isAdmin)) }
+	>
+		{ label }
+	</a>
+}
+
+templ NavDropdown(label string, isActive bool, isAdmin bool) {
+	<div class={ templ.Classes("navbar-dropdown", templ.KV("active", isActive), templ.KV("admin", isAdmin)) }>
+		<button
+			class={ templ.Classes("navbar-link", "navbar-dropdown-trigger", templ.KV("active", isActive), templ.KV("admin", isAdmin)) }
+			aria-haspopup="true"
+			aria-expanded="false"
+			onclick="toggleDropdown(this)"
+		>
+			{ label }
+			<span class="navbar-dropdown-arrow" aria-hidden="true">
+				<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+					<path d="M2 4L6 8L10 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+			</span>
+		</button>
+		<div class="navbar-dropdown-menu" role="menu">
+			{ children... }
+		</div>
+	</div>
+}
+
+templ NavAdminDropdown(isActive bool) {
+	<div class={ templ.Classes("navbar-dropdown", "navbar-dropdown--admin", templ.KV("active", isActive)) }>
+		<button
+			class={ templ.Classes("navbar-link", "navbar-dropdown-trigger", "navbar-dropdown-trigger--admin", templ.KV("active", isActive)) }
+			aria-haspopup="true"
+			aria-expanded="false"
+			onclick="toggleDropdown(this)"
+		>
+			<span class="navbar-admin-icon" aria-hidden="true">
+				<svg width="13" height="13" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+					<rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" stroke-width="2"></rect>
+					<path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+				</svg>
+			</span>
+			Admin
+			<span class="navbar-admin-badge">ADMIN</span>
+			<span class="navbar-dropdown-arrow" aria-hidden="true">
+				<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+					<path d="M2 4L6 8L10 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+			</span>
+		</button>
+		<div class="navbar-dropdown-menu navbar-dropdown-menu--admin" role="menu">
+			{ children... }
+		</div>
+	</div>
+}
+
+templ NavDropdownItem(href, label string, isActive bool, isAdmin bool) {
+	<a
+		href={ templ.URL(href) }
+		class={ templ.Classes("navbar-dropdown-item", templ.KV("active", isActive), templ.KV("admin", isAdmin)) }
+		role="menuitem"
 	>
 		{ label }
 	</a>
