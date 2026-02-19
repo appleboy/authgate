@@ -207,17 +207,279 @@
   }
 }
 
-/* Admin-specific navbar styling */
-.navbar-link.admin {
+/* ============================================
+   Admin Divider
+   ============================================ */
+
+.navbar-admin-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border);
+  margin: 0 var(--space-1);
+  flex-shrink: 0;
+}
+
+/* ============================================
+   Admin Dropdown — Amber "Restricted" Theme
+   ============================================ */
+
+/* Resting state: subtle amber tint to signal elevated access */
+.navbar-dropdown-trigger--admin {
+  color: var(--color-warning);
+  background: rgba(245, 158, 11, 0.06);
+  border-color: rgba(245, 158, 11, 0.18);
+}
+
+.navbar-dropdown-trigger--admin:hover,
+.navbar-dropdown-trigger--admin.active {
+  color: #b45309;
+  background: var(--color-warning-pale);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+/* Lock icon */
+.navbar-admin-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+/* ADMIN badge chip */
+.navbar-admin-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #92400e;
+  background: rgba(245, 158, 11, 0.18);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: var(--radius-full);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* Admin dropdown panel: amber accent top border */
+.navbar-dropdown-menu--admin {
+  border-top: 3px solid var(--color-warning);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+/* Admin dropdown items */
+.navbar-dropdown-item.admin {
+  color: var(--color-text-secondary);
+}
+
+.navbar-dropdown-item.admin:hover {
+  color: #b45309;
+  background: var(--color-warning-pale);
+}
+
+.navbar-dropdown-item.admin.active {
+  color: #b45309;
+  background: var(--color-warning-pale);
+  font-weight: 700;
+}
+
+/* Hover trigger for admin dropdown (desktop) */
+@media (hover: hover) {
+  .navbar-dropdown--admin:hover .navbar-dropdown-trigger--admin {
+    color: #b45309;
+    background: var(--color-warning-pale);
+    border-color: rgba(245, 158, 11, 0.35);
+  }
+}
+
+/* Mobile: admin divider becomes horizontal */
+@media (max-width: 768px) {
+  .navbar-admin-divider {
+    width: 100%;
+    height: 1px;
+    margin: var(--space-2) 0;
+  }
+}
+
+/* ============================================
+   Dropdown Menu
+   ============================================ */
+
+.navbar-dropdown {
+  position: relative;
+}
+
+.navbar-dropdown-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.navbar-dropdown-arrow {
+  display: flex;
+  align-items: center;
+  transition: transform var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.navbar-dropdown-trigger[aria-expanded="true"] .navbar-dropdown-arrow {
+  transform: rotate(180deg);
+}
+
+.navbar-dropdown-menu {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  left: 0;
+  min-width: 180px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-1);
+  z-index: calc(var(--z-sticky) + 1);
+  /* Hidden by default */
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-6px);
+  transition:
+    opacity var(--transition-fast),
+    visibility var(--transition-fast),
+    transform var(--transition-fast);
+  pointer-events: none;
+}
+
+/* Invisible bridge that fills the gap between trigger and menu,
+   preventing hover loss when the mouse moves through the gap */
+.navbar-dropdown-menu::before {
+  content: '';
+  position: absolute;
+  top: calc(-1 * var(--space-2) - 2px);
+  left: 0;
+  right: 0;
+  height: calc(var(--space-2) + 2px);
+}
+
+/* Open state via JS (aria-expanded) */
+.navbar-dropdown-trigger[aria-expanded="true"] + .navbar-dropdown-menu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* Also open on hover for desktop */
+@media (hover: hover) {
+  .navbar-dropdown:hover .navbar-dropdown-menu {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  .navbar-dropdown:hover .navbar-dropdown-trigger {
+    color: var(--color-primary);
+    background: var(--color-primary-pale);
+    border-color: rgba(0, 114, 255, 0.2);
+  }
+
+  .navbar-dropdown--admin:hover .navbar-dropdown-trigger--admin {
+    color: #b45309;
+    background: var(--color-warning-pale);
+    border-color: rgba(245, 158, 11, 0.35);
+  }
+}
+
+.navbar-dropdown-item {
+  display: flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.navbar-dropdown-item:hover {
+  color: var(--color-primary);
+  background: var(--color-primary-pale);
+}
+
+.navbar-dropdown-item.active {
+  color: var(--color-primary);
+  background: var(--color-primary-pale);
+  font-weight: 700;
+}
+
+.navbar-dropdown-item.admin {
   color: var(--color-success);
 }
 
-.navbar-link.admin:hover {
+.navbar-dropdown-item.admin:hover {
   background: var(--color-success-pale);
-  border-color: rgba(16, 185, 129, 0.2);
 }
 
-.navbar-link.admin.active {
+.navbar-dropdown-item.admin.active {
   background: var(--color-success-pale);
-  border-color: rgba(16, 185, 129, 0.3);
+  font-weight: 700;
+}
+
+/* Mobile dropdown: accordion style */
+@media (max-width: 768px) {
+  .navbar-dropdown {
+    width: 100%;
+  }
+
+  .navbar-dropdown-menu {
+    position: static;
+    box-shadow: none;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    margin-left: var(--space-4);
+    min-width: 0;
+    background: transparent;
+    /* Override hover-open; mobile uses JS only */
+    opacity: 0;
+    visibility: hidden;
+    transform: none;
+    max-height: 0;
+    overflow: hidden;
+    transition:
+      opacity var(--transition-fast),
+      visibility var(--transition-fast),
+      max-height var(--transition-base);
+  }
+
+  .navbar-dropdown-trigger[aria-expanded="true"] + .navbar-dropdown-menu {
+    opacity: 1;
+    visibility: visible;
+    max-height: 300px;
+  }
+
+  /* Disable hover-open on mobile */
+  .navbar-dropdown:hover .navbar-dropdown-menu {
+    opacity: 0;
+    visibility: hidden;
+    transform: none;
+    max-height: 0;
+    pointer-events: none;
+  }
+
+  .navbar-dropdown-trigger[aria-expanded="true"] + .navbar-dropdown-menu {
+    opacity: 1 !important;
+    visibility: visible !important;
+    max-height: 300px !important;
+    pointer-events: auto !important;
+  }
+
+  .navbar-dropdown-item {
+    padding: var(--space-2) var(--space-4);
+    border-radius: 0;
+    width: 100%;
+  }
 }
