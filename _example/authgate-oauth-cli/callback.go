@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"html"
 	"net"
 	"net/http"
 	"time"
@@ -132,5 +133,5 @@ func writeCallbackPage(w http.ResponseWriter, success bool, errCode, errDesc str
   <p>%s</p>
   <p>You can close this tab and check your terminal for details.</p>
 </body>
-</html>`, msg)
+</html>`, html.EscapeString(msg))
 }
