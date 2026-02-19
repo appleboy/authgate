@@ -6,6 +6,7 @@ import (
 	"html"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -29,6 +30,14 @@ type callbackResult struct {
 func startCallbackServer(port int, expectedState string) (string, error) {
 	resultCh := make(chan callbackResult, 1)
 
+	// sendResult delivers the result exactly once. Any concurrent or subsequent
+	// invocations (e.g. a browser retry or automated agent) are silently
+	// discarded, preventing a goroutine from blocking forever on the send.
+	var once sync.Once
+	sendResult := func(r callbackResult) {
+		once.Do(func() { resultCh <- r })
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -37,7 +46,7 @@ func startCallbackServer(port int, expectedState string) (string, error) {
 		if oauthErr := q.Get("error"); oauthErr != "" {
 			desc := q.Get("error_description")
 			writeCallbackPage(w, false, oauthErr, desc)
-			resultCh <- callbackResult{Error: oauthErr, Desc: desc}
+			sendResult(callbackResult{Error: oauthErr, Desc: desc})
 			return
 		}
 
@@ -46,22 +55,22 @@ func startCallbackServer(port int, expectedState string) (string, error) {
 		if state != expectedState {
 			writeCallbackPage(w, false, "state_mismatch",
 				"State parameter does not match. Possible CSRF attack.")
-			resultCh <- callbackResult{
+			sendResult(callbackResult{
 				Error: "state_mismatch",
 				Desc:  "state parameter mismatch",
-			}
+			})
 			return
 		}
 
 		code := q.Get("code")
 		if code == "" {
 			writeCallbackPage(w, false, "missing_code", "No authorization code in callback.")
-			resultCh <- callbackResult{Error: "missing_code", Desc: "code parameter missing"}
+			sendResult(callbackResult{Error: "missing_code", Desc: "code parameter missing"})
 			return
 		}
 
 		writeCallbackPage(w, true, "", "")
-		resultCh <- callbackResult{Code: code}
+		sendResult(callbackResult{Code: code})
 	})
 
 	srv := &http.Server{

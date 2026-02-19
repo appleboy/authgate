@@ -128,6 +128,51 @@ func TestCallbackServer_OAuthError(t *testing.T) {
 	}
 }
 
+// TestCallbackServer_DoubleCallback verifies that a second /callback hit while
+// the first result is still in the channel does not block the handler goroutine
+// forever. Before the sync.Once fix, the second goroutine could block on the
+// buffered-channel send until the shutdown context timed out.
+func TestCallbackServer_DoubleCallback(t *testing.T) {
+	const port = 19005
+	state := "test-state-double"
+
+	ch := startCallbackServerAsync(t, port, state)
+
+	url := fmt.Sprintf("http://127.0.0.1:%d/callback?code=mycode&state=%s", port, state)
+
+	// Fire two requests nearly simultaneously so both are in-flight before the
+	// server has a chance to process the first result.
+	done := make(chan error, 2)
+	for range 2 {
+		go func() {
+			resp, err := http.Get(url) //nolint:noctx
+			if err == nil {
+				resp.Body.Close()
+			}
+			done <- err
+		}()
+	}
+
+	// Both handler goroutines must finish — neither should block on the send.
+	for range 2 {
+		select {
+		case <-done:
+		case <-time.After(3 * time.Second):
+			t.Fatal("a callback handler goroutine hung on channel send")
+		}
+	}
+
+	// startCallbackServer must also return promptly.
+	select {
+	case result := <-ch:
+		if result != "mycode" {
+			t.Errorf("expected mycode, got: %s", result)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for callback result")
+	}
+}
+
 func TestCallbackServer_MissingCode(t *testing.T) {
 	const port = 19004
 	state := "state-for-missing-code"
