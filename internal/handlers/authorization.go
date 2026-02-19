@@ -99,7 +99,12 @@ func (h *AuthorizationHandler) ShowAuthorizePage(c *gin.Context) {
 
 	// Render the consent page
 	templates.RenderTempl(c, http.StatusOK, templates.AuthorizePage(templates.AuthorizePageProps{
-		BaseProps:           templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
+		BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
+		NavbarProps: templates.NavbarProps{
+			Username:   user.Username,
+			IsAdmin:    user.IsAdmin(),
+			ActiveLink: "",
+		},
 		Username:            user.Username,
 		ClientID:            req.Client.ClientID,
 		ClientName:          req.Client.ClientName,

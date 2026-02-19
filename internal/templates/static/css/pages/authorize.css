@@ -3,10 +3,11 @@
    Focused, no-distraction consent flow
    ============================================ */
 
-/* Page container: centered, no-navbar layout */
+/* Page container: centered within main-content */
 .authorize-container {
   width: 100%;
   max-width: 480px;
+  margin: 0 auto;
   animation: fadeInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 

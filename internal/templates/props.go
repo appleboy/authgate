@@ -147,6 +147,7 @@ type ClientDetailPageProps struct {
 // AuthorizePageProps contains properties for the OAuth consent page
 type AuthorizePageProps struct {
 	BaseProps
+	NavbarProps
 	Username            string
 	ClientID            string
 	ClientName          string
