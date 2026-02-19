@@ -135,8 +135,12 @@ Server starts on `http://localhost:8080`
 
 ### Test with Example CLI
 
+Two example CLIs are provided in `_example/`. Each demonstrates a different OAuth 2.0 flow.
+
+**Device Code Flow** (`_example/authgate-device-cli/`) — for headless environments:
+
 ```bash
-cd _example/authgate-cli
+cd _example/authgate-device-cli
 
 # Configure client
 cp .env.example .env
@@ -146,7 +150,20 @@ nano .env  # Add CLIENT_ID from server logs
 go run main.go
 ```
 
-The CLI demonstrates the complete device authorization flow with automatic token refresh.
+**Authorization Code Flow** (`_example/authgate-oauth-cli/`) — for apps that can open a browser:
+
+```bash
+cd _example/authgate-oauth-cli
+
+# Configure client
+cp .env.example .env
+nano .env  # Add CLIENT_ID (and CLIENT_SECRET for confidential clients)
+
+# Run the CLI
+go run .
+```
+
+The Authorization Code Flow CLI starts a local callback server, opens your browser at the consent page, and exchanges the returned code for tokens automatically. It supports both **public clients (PKCE)** and **confidential clients**.
 
 ---
 
@@ -346,7 +363,9 @@ authgate/
 ├── templates/       # Type-safe templ templates
 ├── docs/            # Documentation
 ├── docker/          # Docker configuration
-└── _example/        # Example CLI client
+└── _example/
+    ├── authgate-device-cli/       # Device Code Flow CLI (RFC 8628)
+    └── authgate-oauth-cli/ # Authorization Code Flow CLI (RFC 6749 + PKCE)
 ```
 
 **[Architecture Deep Dive →](docs/ARCHITECTURE.md)**
