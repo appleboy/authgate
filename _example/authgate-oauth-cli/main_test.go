@@ -117,7 +117,11 @@ func TestSaveAndLoadTokens(t *testing.T) {
 		t.Errorf("AccessToken mismatch: got %q, want %q", loaded.AccessToken, storage.AccessToken)
 	}
 	if loaded.RefreshToken != storage.RefreshToken {
-		t.Errorf("RefreshToken mismatch: got %q, want %q", loaded.RefreshToken, storage.RefreshToken)
+		t.Errorf(
+			"RefreshToken mismatch: got %q, want %q",
+			loaded.RefreshToken,
+			storage.RefreshToken,
+		)
 	}
 	if loaded.ClientID != storage.ClientID {
 		t.Errorf("ClientID mismatch: got %q, want %q", loaded.ClientID, storage.ClientID)

@@ -35,7 +35,11 @@ func acquireFileLock(filePath string) (*fileLock, error) {
 			if info, statErr := os.Stat(lockPath); statErr == nil {
 				if time.Since(info.ModTime()) > 30*time.Second {
 					if remErr := os.Remove(lockPath); remErr != nil && !os.IsNotExist(remErr) {
-						return nil, fmt.Errorf("failed to remove stale lock file %s: %w", lockPath, remErr)
+						return nil, fmt.Errorf(
+							"failed to remove stale lock file %s: %w",
+							lockPath,
+							remErr,
+						)
 					}
 					continue
 				}
@@ -47,7 +51,10 @@ func acquireFileLock(filePath string) (*fileLock, error) {
 		return nil, fmt.Errorf("failed to acquire file lock: %w", err)
 	}
 
-	return nil, fmt.Errorf("timeout waiting for file lock after %v", time.Duration(maxRetries)*retryDelay)
+	return nil, fmt.Errorf(
+		"timeout waiting for file lock after %v",
+		time.Duration(maxRetries)*retryDelay,
+	)
 }
 
 // release releases the file lock.

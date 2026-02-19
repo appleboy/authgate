@@ -230,7 +230,9 @@ func (s *DeviceService) AuthorizeDeviceCode(
 }
 
 // GetClientByUserCode retrieves the OAuth client and device code associated with a user code
-func (s *DeviceService) GetClientByUserCode(userCode string) (*models.OAuthApplication, *models.DeviceCode, error) {
+func (s *DeviceService) GetClientByUserCode(
+	userCode string,
+) (*models.OAuthApplication, *models.DeviceCode, error) {
 	dc, err := s.GetDeviceCodeByUserCode(userCode)
 	if err != nil {
 		return nil, nil, err

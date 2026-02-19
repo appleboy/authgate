@@ -112,8 +112,14 @@ func initConfig() {
 	}
 
 	if strings.HasPrefix(strings.ToLower(serverURL), "http://") {
-		fmt.Fprintln(os.Stderr, "WARNING: Using HTTP instead of HTTPS. Tokens will be transmitted in plaintext!")
-		fmt.Fprintln(os.Stderr, "WARNING: This is only safe for local development. Use HTTPS in production.")
+		fmt.Fprintln(
+			os.Stderr,
+			"WARNING: Using HTTP instead of HTTPS. Tokens will be transmitted in plaintext!",
+		)
+		fmt.Fprintln(
+			os.Stderr,
+			"WARNING: This is only safe for local development. Use HTTPS in production.",
+		)
 		fmt.Fprintln(os.Stderr)
 	}
 
@@ -127,7 +133,11 @@ func initConfig() {
 	}
 
 	if _, err := uuid.Parse(clientID); err != nil {
-		fmt.Fprintf(os.Stderr, "WARNING: CLIENT_ID doesn't appear to be a valid UUID: %s\n", clientID)
+		fmt.Fprintf(
+			os.Stderr,
+			"WARNING: CLIENT_ID doesn't appear to be a valid UUID: %s\n",
+			clientID,
+		)
 		fmt.Fprintln(os.Stderr)
 	}
 
@@ -264,7 +274,11 @@ func saveTokens(storage *TokenStorage) error {
 	}
 	if err := os.Rename(tempFile, tokenFile); err != nil {
 		if removeErr := os.Remove(tempFile); removeErr != nil {
-			return fmt.Errorf("failed to rename temp file: %v; also failed to remove temp file: %w", err, removeErr)
+			return fmt.Errorf(
+				"failed to rename temp file: %v; also failed to remove temp file: %w",
+				err,
+				removeErr,
+			)
 		}
 		return fmt.Errorf("failed to rename temp file: %w", err)
 	}
@@ -404,7 +418,11 @@ func exchangeCode(code, codeVerifier string) (*TokenStorage, error) {
 		if jsonErr := json.Unmarshal(body, &errResp); jsonErr == nil && errResp.Error != "" {
 			return nil, fmt.Errorf("%s: %s", errResp.Error, errResp.ErrorDescription)
 		}
-		return nil, fmt.Errorf("token exchange failed with status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf(
+			"token exchange failed with status %d: %s",
+			resp.StatusCode,
+			string(body),
+		)
 	}
 
 	var tokenResp struct {
@@ -418,7 +436,11 @@ func exchangeCode(code, codeVerifier string) (*TokenStorage, error) {
 		return nil, fmt.Errorf("failed to parse token response: %w", err)
 	}
 
-	if err := validateTokenResponse(tokenResp.AccessToken, tokenResp.TokenType, tokenResp.ExpiresIn); err != nil {
+	if err := validateTokenResponse(
+		tokenResp.AccessToken,
+		tokenResp.TokenType,
+		tokenResp.ExpiresIn,
+	); err != nil {
 		return nil, fmt.Errorf("invalid token response: %w", err)
 	}
 
@@ -490,7 +512,11 @@ func refreshAccessToken(refreshToken string) (*TokenStorage, error) {
 		return nil, fmt.Errorf("failed to parse token response: %w", err)
 	}
 
-	if err := validateTokenResponse(tokenResp.AccessToken, tokenResp.TokenType, tokenResp.ExpiresIn); err != nil {
+	if err := validateTokenResponse(
+		tokenResp.AccessToken,
+		tokenResp.TokenType,
+		tokenResp.ExpiresIn,
+	); err != nil {
 		return nil, fmt.Errorf("invalid token response: %w", err)
 	}
 
