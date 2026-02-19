@@ -1,6 +1,6 @@
 # AuthGate
 
-> A lightweight OAuth 2.0 Authorization Server supporting Device Authorization Grant (RFC 8628) and Authorization Code Flow with PKCE (RFC 6749 + RFC 7636)
+> A lightweight OAuth 2.0 Authorization Server supporting Device Authorization Grant ([RFC 8628][rfc8628]) and Authorization Code Flow with PKCE ([RFC 6749][rfc6749] + [RFC 7636][rfc7636])
 
 [![Security Scanning](https://github.com/appleboy/authgate/actions/workflows/security.yml/badge.svg)](https://github.com/appleboy/authgate/actions/workflows/security.yml)
 [![Lint and Testing](https://github.com/appleboy/authgate/actions/workflows/testing.yml/badge.svg)](https://github.com/appleboy/authgate/actions/workflows/testing.yml)
@@ -62,7 +62,7 @@
 
 ## Why AuthGate?
 
-Modern CLI tools and IoT devices need secure user authentication, but traditional OAuth flows don't work well for devices without browsers or keyboards. **AuthGate** implements the OAuth 2.0 Device Authorization Grant (RFC 8628), allowing users to authenticate on a separate device while keeping credentials secure.
+Modern CLI tools and IoT devices need secure user authentication, but traditional OAuth flows don't work well for devices without browsers or keyboards. **AuthGate** implements the OAuth 2.0 Device Authorization Grant ([RFC 8628][rfc8628]), allowing users to authenticate on a separate device while keeping credentials secure.
 
 **Perfect for:**
 
@@ -76,7 +76,7 @@ Modern CLI tools and IoT devices need secure user authentication, but traditiona
 
 ## ✨ Key Features
 
-- **Dual OAuth 2.0 Flows**: Device Authorization Grant (RFC 8628) for CLI/IoT tools, and Authorization Code Flow with PKCE (RFC 6749 + RFC 7636) for web and mobile apps
+- **Dual OAuth 2.0 Flows**: Device Authorization Grant ([RFC 8628][rfc8628]) for CLI/IoT tools, and Authorization Code Flow with PKCE ([RFC 6749][rfc6749] + [RFC 7636][rfc7636]) for web and mobile apps
 - **User Consent Management**: Users can review and revoke per-app access at `/account/authorizations`; admins can force re-authentication for all users of any client
 - **Security First**: Rate limiting, audit logging, CSRF protection, PKCE enforcement, and session management built-in
 - **Production Ready**: Built-in monitoring with Prometheus metrics, health checks, and comprehensive audit trails
@@ -184,7 +184,7 @@ The CLI demonstrates the complete device authorization flow with automatic token
 
 AuthGate supports two OAuth 2.0 authorization flows.
 
-### Device Code Flow (RFC 8628) — for CLI / IoT
+### Device Code Flow ([RFC 8628][rfc8628]) — for CLI / IoT
 
 ```mermaid
 sequenceDiagram
@@ -204,7 +204,7 @@ sequenceDiagram
     AuthGate-->>CLI: access_token + refresh_token
 ```
 
-### Authorization Code Flow (RFC 6749) — for Web / Mobile
+### Authorization Code Flow ([RFC 6749][rfc6749]) — for Web / Mobile
 
 ```mermaid
 sequenceDiagram
@@ -224,21 +224,21 @@ sequenceDiagram
 
 **Key Endpoints:**
 
-| Endpoint                              | Method | Purpose                                      |
-| ------------------------------------- | ------ | -------------------------------------------- |
-| `/oauth/device/code`                  | POST   | Request device code (CLI)                    |
-| `/oauth/authorize`                    | GET    | Authorization consent page (web apps)        |
-| `/oauth/authorize`                    | POST   | Submit consent decision                      |
-| `/oauth/token`                        | POST   | Exchange code / device code / refresh token  |
-| `/oauth/tokeninfo`                    | GET    | Verify token validity                        |
-| `/oauth/revoke`                       | POST   | Revoke tokens (RFC 7009)                     |
-| `/device`                             | GET    | Device code entry page (browser)             |
-| `/account/sessions`                   | GET    | Manage active token sessions                 |
-| `/account/authorizations`             | GET    | Manage per-app consent grants                |
-| `/admin/clients/:id/authorizations`   | GET    | Admin: view all authorized users for a client|
-| `/admin/clients/:id/revoke-all`       | POST   | Admin: force re-auth for all users           |
-| `/health`                             | GET    | Health check                                 |
-| `/metrics`                            | GET    | Prometheus metrics (optional auth)           |
+| Endpoint                            | Method | Purpose                                       |
+| ----------------------------------- | ------ | --------------------------------------------- |
+| `/oauth/device/code`                | POST   | Request device code (CLI)                     |
+| `/oauth/authorize`                  | GET    | Authorization consent page (web apps)         |
+| `/oauth/authorize`                  | POST   | Submit consent decision                       |
+| `/oauth/token`                      | POST   | Exchange code / device code / refresh token   |
+| `/oauth/tokeninfo`                  | GET    | Verify token validity                         |
+| `/oauth/revoke`                     | POST   | Revoke tokens ([RFC 7009][rfc7009])           |
+| `/device`                           | GET    | Device code entry page (browser)              |
+| `/account/sessions`                 | GET    | Manage active token sessions                  |
+| `/account/authorizations`           | GET    | Manage per-app consent grants                 |
+| `/admin/clients/:id/authorizations` | GET    | Admin: view all authorized users for a client |
+| `/admin/clients/:id/revoke-all`     | POST   | Admin: force re-auth for all users            |
+| `/health`                           | GET    | Health check                                  |
+| `/metrics`                          | GET    | Prometheus metrics (optional auth)            |
 
 **[Full API Reference →](docs/ARCHITECTURE.md#key-endpoints)** | **[Metrics Documentation →](docs/METRICS.md)**
 
@@ -478,7 +478,7 @@ Implement custom registration handlers. See [Development Guide](docs/DEVELOPMENT
 
 ### Q: Does it support refresh tokens?
 
-Yes! AuthGate fully supports RFC 6749 refresh tokens with two modes:
+Yes! AuthGate fully supports [RFC 6749][rfc6749] refresh tokens with two modes:
 
 - **Fixed Mode** (default): Reusable tokens, perfect for multi-device
 - **Rotation Mode**: High-security one-time-use tokens
@@ -519,11 +519,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📚 References
 
-- [RFC 8628 - OAuth 2.0 Device Authorization Grant](https://datatracker.ietf.org/doc/html/rfc8628)
-- [RFC 6749 - OAuth 2.0 Authorization Framework](https://datatracker.ietf.org/doc/html/rfc6749)
-- [RFC 7636 - PKCE for OAuth Public Clients](https://datatracker.ietf.org/doc/html/rfc7636)
-- [RFC 7009 - OAuth 2.0 Token Revocation](https://datatracker.ietf.org/doc/html/rfc7009)
-- [RFC 8725 - JWT Best Practices](https://datatracker.ietf.org/doc/html/rfc8725)
+- [RFC 8628 - OAuth 2.0 Device Authorization Grant][rfc8628]
+- [RFC 6749 - OAuth 2.0 Authorization Framework][rfc6749]
+- [RFC 7636 - PKCE for OAuth Public Clients][rfc7636]
+- [RFC 7009 - OAuth 2.0 Token Revocation][rfc7009]
+- [RFC 8725 - JWT Best Practices][rfc8725]
 
 ---
 
@@ -541,3 +541,11 @@ Built with:
 **Need Help?** Check the [Troubleshooting Guide](docs/TROUBLESHOOTING.md) or open an issue on GitHub.
 
 **Ready to Deploy?** Start with the [Deployment Guide](docs/DEPLOYMENT.md).
+
+<!-- RFC link definitions -->
+
+[rfc8628]: https://datatracker.ietf.org/doc/html/rfc8628
+[rfc6749]: https://datatracker.ietf.org/doc/html/rfc6749
+[rfc7636]: https://datatracker.ietf.org/doc/html/rfc7636
+[rfc7009]: https://datatracker.ietf.org/doc/html/rfc7009
+[rfc8725]: https://datatracker.ietf.org/doc/html/rfc8725
