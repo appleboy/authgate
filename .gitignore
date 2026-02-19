@@ -1,6 +1,6 @@
 # Binary
 authgate
-_example/authgate-cli/authgate-cli
+_example/authgate-device-cli/authgate-device-cli
 
 # Database
 *.db

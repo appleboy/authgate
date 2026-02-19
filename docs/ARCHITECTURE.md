@@ -77,7 +77,7 @@ authgate/
 │   ├── TROUBLESHOOTING.md          # Common issues and FAQ
 │   └── USE_CASES.md                # Real-world examples
 ├── _example/        # Example CLI client implementation
-│   └── authgate-cli/
+│   └── authgate-device-cli/
 ├── version/         # Version information (embedded at build time)
 ├── Makefile         # Build automation and targets
 ├── main.go          # Application entry point and router setup

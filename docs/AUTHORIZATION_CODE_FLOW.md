@@ -16,6 +16,7 @@ AuthGate supports two OAuth 2.0 flows side-by-side. This guide covers the **Auth
   - [API Reference](#api-reference)
     - [1. Redirect to Authorization Page](#1-redirect-to-authorization-page)
     - [2. Exchange Code for Tokens](#2-exchange-code-for-tokens)
+  - [Example CLI Client](#example-cli-client)
   - [User Consent Management](#user-consent-management)
     - [View Authorized Apps](#view-authorized-apps)
     - [Revoke Access for an App](#revoke-access-for-an-app)
@@ -253,6 +254,36 @@ curl -X POST https://auth.example.com/oauth/token \
   -d refresh_token=eyJ... \
   -d client_id=550e8400-...
 ```
+
+---
+
+## Example CLI Client
+
+`_example/authgate-oauth-cli/` contains a working Go CLI that demonstrates the complete Authorization Code Flow with PKCE:
+
+```bash
+cd _example/authgate-oauth-cli
+cp .env.example .env      # Fill in CLIENT_ID (and CLIENT_SECRET for confidential clients)
+go run .
+```
+
+**What the example demonstrates:**
+
+1. Generates a cryptographically random `state` (CSRF protection) and PKCE `code_verifier` / `code_challenge` on every run
+2. Opens the authorization URL in your default browser
+3. Starts a local HTTP server on `localhost:8888/callback` to receive the redirect
+4. Validates the returned `state` and exchanges the `code` for tokens
+5. Saves tokens to `.authgate-tokens.json` (supports multiple client IDs in one file)
+6. On subsequent runs, reuses valid tokens or refreshes them silently
+
+**Supported client modes:**
+
+| Mode | `CLIENT_SECRET` | PKCE |
+| --- | --- | --- |
+| Public client (SPA, mobile, CLI) | Leave empty | Always used |
+| Confidential client (server-side) | Set the secret | Also used (defence-in-depth) |
+
+See [`_example/authgate-oauth-cli/README.md`](../_example/authgate-oauth-cli/README.md) for full configuration options.
 
 ---
 
