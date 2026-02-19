@@ -340,14 +340,15 @@ func TestMarkAuthorizationCodeUsed_AtomicDoubleCall(t *testing.T) {
 	require.NoError(t, err)
 
 	code := &models.AuthorizationCode{
-		UUID:        uuid.New().String(),
-		CodeHash:    uuid.New().String(),
-		CodePrefix:  "abcd1234",
-		ClientID:    uuid.New().String(),
-		UserID:      uuid.New().String(),
-		RedirectURI: "https://example.com/cb",
-		Scopes:      "read",
-		ExpiresAt:   time.Now().Add(10 * time.Minute),
+		UUID:          uuid.New().String(),
+		CodeHash:      uuid.New().String(),
+		CodePrefix:    "abcd1234",
+		ApplicationID: 1,
+		ClientID:      uuid.New().String(),
+		UserID:        uuid.New().String(),
+		RedirectURI:   "https://example.com/cb",
+		Scopes:        "read",
+		ExpiresAt:     time.Now().Add(10 * time.Minute),
 	}
 	require.NoError(t, store.CreateAuthorizationCode(code))
 
@@ -357,6 +358,158 @@ func TestMarkAuthorizationCodeUsed_AtomicDoubleCall(t *testing.T) {
 	// Second call must fail with ErrAuthCodeAlreadyUsed (0 rows updated).
 	err = store.MarkAuthorizationCodeUsed(code.ID)
 	require.ErrorIs(t, err, ErrAuthCodeAlreadyUsed)
+}
+
+// TestUpsertUserAuthorization_NewRecord verifies that the first call for a
+// (user_id, application_id) pair creates a new active record.
+func TestUpsertUserAuthorization_NewRecord(t *testing.T) {
+	s, err := New("sqlite", ":memory:", getTestConfig())
+	require.NoError(t, err)
+
+	auth := &models.UserAuthorization{
+		UUID:          uuid.New().String(),
+		UserID:        uuid.New().String(),
+		ApplicationID: 1,
+		ClientID:      uuid.New().String(),
+		Scopes:        "read",
+	}
+
+	require.NoError(t, s.UpsertUserAuthorization(auth))
+
+	stored, err := s.GetUserAuthorization(auth.UserID, auth.ApplicationID)
+	require.NoError(t, err)
+	assert.True(t, stored.IsActive)
+	assert.Nil(t, stored.RevokedAt)
+	assert.Equal(t, "read", stored.Scopes)
+	assert.Equal(t, auth.ClientID, stored.ClientID)
+	assert.False(t, stored.GrantedAt.IsZero())
+}
+
+// TestUpsertUserAuthorization_ConflictUpdatesRecord verifies that a second call
+// for the same (user_id, application_id) updates the existing row rather than
+// inserting a duplicate.
+func TestUpsertUserAuthorization_ConflictUpdatesRecord(t *testing.T) {
+	s, err := New("sqlite", ":memory:", getTestConfig())
+	require.NoError(t, err)
+
+	userID := uuid.New().String()
+	clientID := uuid.New().String()
+	const appID int64 = 1
+
+	first := &models.UserAuthorization{
+		UUID:          uuid.New().String(),
+		UserID:        userID,
+		ApplicationID: appID,
+		ClientID:      clientID,
+		Scopes:        "read",
+	}
+	require.NoError(t, s.UpsertUserAuthorization(first))
+
+	// Second upsert with expanded scopes and a new UUID.
+	second := &models.UserAuthorization{
+		UUID:          uuid.New().String(),
+		UserID:        userID,
+		ApplicationID: appID,
+		ClientID:      clientID,
+		Scopes:        "read write",
+	}
+	require.NoError(t, s.UpsertUserAuthorization(second))
+
+	stored, err := s.GetUserAuthorization(userID, appID)
+	require.NoError(t, err)
+	assert.Equal(t, "read write", stored.Scopes)
+	assert.True(t, stored.IsActive)
+
+	// Only one record should exist for this (user, app) pair.
+	var count int64
+	s.db.Model(&models.UserAuthorization{}).
+		Where("user_id = ? AND application_id = ?", userID, appID).
+		Count(&count)
+	assert.Equal(t, int64(1), count)
+}
+
+// TestUpsertUserAuthorization_ReactivatesRevoked verifies that upserting after a
+// revocation re-activates the record and clears RevokedAt.
+func TestUpsertUserAuthorization_ReactivatesRevoked(t *testing.T) {
+	s, err := New("sqlite", ":memory:", getTestConfig())
+	require.NoError(t, err)
+
+	userID := uuid.New().String()
+	clientID := uuid.New().String()
+	const appID int64 = 1
+
+	// Create and then revoke.
+	auth := &models.UserAuthorization{
+		UUID:          uuid.New().String(),
+		UserID:        userID,
+		ApplicationID: appID,
+		ClientID:      clientID,
+		Scopes:        "read",
+	}
+	require.NoError(t, s.UpsertUserAuthorization(auth))
+
+	stored, err := s.GetUserAuthorization(userID, appID)
+	require.NoError(t, err)
+	_, err = s.RevokeUserAuthorization(stored.UUID, userID)
+	require.NoError(t, err)
+
+	// After revocation, GetUserAuthorization should return nothing (active=false).
+	_, err = s.GetUserAuthorization(userID, appID)
+	require.Error(t, err)
+
+	// Re-upsert: should re-activate the record.
+	reauth := &models.UserAuthorization{
+		UUID:          uuid.New().String(),
+		UserID:        userID,
+		ApplicationID: appID,
+		ClientID:      clientID,
+		Scopes:        "read write",
+	}
+	require.NoError(t, s.UpsertUserAuthorization(reauth))
+
+	reactivated, err := s.GetUserAuthorization(userID, appID)
+	require.NoError(t, err)
+	assert.True(t, reactivated.IsActive)
+	assert.Nil(t, reactivated.RevokedAt)
+	assert.Equal(t, "read write", reactivated.Scopes)
+}
+
+// TestUpsertUserAuthorization_DifferentUsersSameApp verifies that two distinct
+// users can each hold an independent consent record for the same application.
+func TestUpsertUserAuthorization_DifferentUsersSameApp(t *testing.T) {
+	s, err := New("sqlite", ":memory:", getTestConfig())
+	require.NoError(t, err)
+
+	clientID := uuid.New().String()
+	const appID int64 = 1
+	userA := uuid.New().String()
+	userB := uuid.New().String()
+
+	for _, uid := range []string{userA, userB} {
+		a := &models.UserAuthorization{
+			UUID:          uuid.New().String(),
+			UserID:        uid,
+			ApplicationID: appID,
+			ClientID:      clientID,
+			Scopes:        "read",
+		}
+		require.NoError(t, s.UpsertUserAuthorization(a))
+	}
+
+	storedA, err := s.GetUserAuthorization(userA, appID)
+	require.NoError(t, err)
+	assert.Equal(t, userA, storedA.UserID)
+
+	storedB, err := s.GetUserAuthorization(userB, appID)
+	require.NoError(t, err)
+	assert.Equal(t, userB, storedB.UserID)
+
+	// Two separate rows, not one.
+	var count int64
+	s.db.Model(&models.UserAuthorization{}).
+		Where("application_id = ?", appID).
+		Count(&count)
+	assert.Equal(t, int64(2), count)
 }
 
 // BenchmarkStoreOperations benchmarks basic store operations
