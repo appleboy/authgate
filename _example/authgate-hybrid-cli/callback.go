@@ -15,6 +15,11 @@ const (
 	callbackTimeout = 2 * time.Minute
 )
 
+// ErrCallbackTimeout is returned when no browser callback is received within callbackTimeout.
+// Callers can use errors.Is to distinguish a timeout from other authorization errors
+// and decide whether to fall back to Device Code Flow.
+var ErrCallbackTimeout = fmt.Errorf("browser authorization timed out")
+
 // callbackResult holds the outcome of the local callback round-trip.
 type callbackResult struct {
 	Code  string
@@ -101,7 +106,7 @@ func startCallbackServer(port int, expectedState string) (string, error) {
 		return result.Code, nil
 
 	case <-time.After(callbackTimeout):
-		return "", fmt.Errorf("timed out waiting for browser authorization (%s)", callbackTimeout)
+		return "", fmt.Errorf("%w after %s", ErrCallbackTimeout, callbackTimeout)
 	}
 }
 
