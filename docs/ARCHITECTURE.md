@@ -78,8 +78,7 @@ authgate/
 │   └── USE_CASES.md                # Real-world examples
 ├── _example/        # Example CLI client implementations
 │   ├── authgate-device-cli/    # Device Code Flow (RFC 8628)
-│   ├── authgate-oauth-cli/     # Authorization Code Flow + PKCE (RFC 6749)
-│   └── authgate-hybrid-cli/    # Hybrid: browser flow with auto-fallback to Device Code
+│   └── authgate-oauth-cli/     # Authorization Code Flow + PKCE (RFC 6749)
 ├── version/         # Version information (embedded at build time)
 ├── Makefile         # Build automation and targets
 ├── main.go          # Application entry point and router setup

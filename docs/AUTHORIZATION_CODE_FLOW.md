@@ -18,7 +18,7 @@ AuthGate supports two OAuth 2.0 flows side-by-side. This guide covers the **Auth
     - [2. Exchange Code for Tokens](#2-exchange-code-for-tokens)
   - [Example CLI Clients](#example-cli-clients)
     - [`authgate-oauth-cli` — pure browser flow](#authgate-oauth-cli--pure-browser-flow)
-    - [`authgate-hybrid-cli` — auto-detect environment](#authgate-hybrid-cli--auto-detect-environment)
+    - [`go-authgate/cli` — auto-detect environment](#go-authgatecli--auto-detect-environment)
   - [User Consent Management](#user-consent-management)
     - [View Authorized Apps](#view-authorized-apps)
     - [Revoke Access for an App](#revoke-access-for-an-app)
@@ -291,18 +291,9 @@ go run .
 
 See [`_example/authgate-oauth-cli/README.md`](../_example/authgate-oauth-cli/README.md) for full configuration options.
 
-### `authgate-hybrid-cli` — auto-detect environment
+### `go-authgate/cli` — auto-detect environment
 
-`_example/authgate-hybrid-cli/` automatically selects the flow based on the environment: browser flow on a local machine, Device Code Flow over SSH or in headless environments. This is the recommended pattern for CLIs that must run in both contexts.
-
-```bash
-cd _example/authgate-hybrid-cli
-cp .env.example .env      # Fill in CLIENT_ID
-go run .                  # auto-detects local vs remote
-go run . --device         # force Device Code Flow
-```
-
-See [`_example/authgate-hybrid-cli/README.md`](../_example/authgate-hybrid-cli/README.md) for the full detection logic and flow diagram.
+[github.com/go-authgate/cli](https://github.com/go-authgate/cli) automatically selects the flow based on the environment: browser flow on a local machine, Device Code Flow over SSH or in headless environments. This is the recommended pattern for CLIs that must run in both contexts.
 
 ---
 

@@ -222,7 +222,7 @@ Seeded automatically on first run (store/sqlite.go:seedData):
 - User: `admin` / `<random_password>` (16-character random password, logged at startup, bcrypt hashed)
 - Client: `AuthGate CLI` (client_id is auto-generated UUID, logged at startup)
 
-## Example CLI Client
+## Example CLI Clients
 
 `_example/authgate-device-cli/` contains a demo CLI that demonstrates the device flow:
 
@@ -231,6 +231,10 @@ cd _example/authgate-device-cli
 cp .env.example .env      # Add CLIENT_ID from server logs
 go run main.go
 ```
+
+`_example/authgate-oauth-cli/` demonstrates Authorization Code Flow + PKCE.
+
+For a hybrid CLI that auto-detects the environment (browser on local, Device Code over SSH), see [github.com/go-authgate/cli](https://github.com/go-authgate/cli).
 
 ## External API Integration
 

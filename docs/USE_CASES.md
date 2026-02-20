@@ -738,4 +738,4 @@ Show helpful information:
 - [Development Guide](DEVELOPMENT.md) - Build your own integration
 - [API Reference (README)](../README.md#key-endpoints) - Endpoint documentation
 - [Device Code CLI](../_example/authgate-device-cli/) - Working reference implementation
-- [Hybrid CLI](../_example/authgate-hybrid-cli/) - Browser flow with auto-fallback to Device Code
+- [Hybrid CLI](https://github.com/go-authgate/cli) - Browser flow with auto-fallback to Device Code

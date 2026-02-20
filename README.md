@@ -165,23 +165,7 @@ go run .
 
 The Authorization Code Flow CLI starts a local callback server, opens your browser at the consent page, and exchanges the returned code for tokens automatically. It supports both **public clients (PKCE)** and **confidential clients**.
 
-**Hybrid Flow** (`_example/authgate-hybrid-cli/`) — auto-detects the environment and picks the right flow:
-
-```bash
-cd _example/authgate-hybrid-cli
-
-# Configure client
-cp .env.example .env
-nano .env  # Add CLIENT_ID from server logs
-
-# Run the CLI (auto-detects local vs remote environment)
-go run .
-
-# Force Device Code Flow (SSH / CI / headless)
-go run . --device
-```
-
-On a local machine the CLI opens a browser (Authorization Code Flow + PKCE). In an SSH session or headless environment it automatically falls back to Device Code Flow. Use `--device` / `--no-browser` to override.
+**Hybrid Flow** ([github.com/go-authgate/cli](https://github.com/go-authgate/cli)) — auto-detects the environment and picks the right flow. On a local machine the CLI opens a browser (Authorization Code Flow + PKCE). In an SSH session or headless environment it automatically falls back to Device Code Flow.
 
 ---
 
@@ -383,8 +367,7 @@ authgate/
 ├── docker/          # Docker configuration
 └── _example/
     ├── authgate-device-cli/   # Device Code Flow CLI (RFC 8628)
-    ├── authgate-oauth-cli/    # Authorization Code Flow CLI (RFC 6749 + PKCE)
-    └── authgate-hybrid-cli/   # Hybrid: browser flow with auto-fallback to Device Code
+    └── authgate-oauth-cli/    # Authorization Code Flow CLI (RFC 6749 + PKCE)
 ```
 
 **[Architecture Deep Dive →](docs/ARCHITECTURE.md)**
