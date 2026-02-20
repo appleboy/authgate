@@ -232,7 +232,7 @@ cp .env.example .env      # Add CLIENT_ID from server logs
 go run main.go
 ```
 
-`_example/authgate-oauth-cli/` demonstrates Authorization Code Flow + PKCE.
+[github.com/go-authgate/oauth-cli](https://github.com/go-authgate/oauth-cli) demonstrates Authorization Code Flow + PKCE.
 
 For a hybrid CLI that auto-detects the environment (browser on local, Device Code over SSH), see [github.com/go-authgate/cli](https://github.com/go-authgate/cli).
 

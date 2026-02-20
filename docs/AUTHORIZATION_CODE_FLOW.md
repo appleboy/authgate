@@ -17,7 +17,7 @@ AuthGate supports two OAuth 2.0 flows side-by-side. This guide covers the **Auth
     - [1. Redirect to Authorization Page](#1-redirect-to-authorization-page)
     - [2. Exchange Code for Tokens](#2-exchange-code-for-tokens)
   - [Example CLI Clients](#example-cli-clients)
-    - [`authgate-oauth-cli` — pure browser flow](#authgate-oauth-cli--pure-browser-flow)
+    - [`go-authgate/oauth-cli` — pure browser flow](#go-authgateoauth-cli--pure-browser-flow)
     - [`go-authgate/cli` — auto-detect environment](#go-authgatecli--auto-detect-environment)
   - [User Consent Management](#user-consent-management)
     - [View Authorized Apps](#view-authorized-apps)
@@ -263,12 +263,13 @@ curl -X POST https://auth.example.com/oauth/token \
 
 Two CLI examples demonstrate Authorization Code Flow. Choose the one that fits your use case.
 
-### `authgate-oauth-cli` — pure browser flow
+### `go-authgate/oauth-cli` — pure browser flow
 
-`_example/authgate-oauth-cli/` always uses the browser, suitable for desktop apps and scripts that run on a machine with a display.
+[github.com/go-authgate/oauth-cli](https://github.com/go-authgate/oauth-cli) always uses the browser, suitable for desktop apps and scripts that run on a machine with a display.
 
 ```bash
-cd _example/authgate-oauth-cli
+git clone https://github.com/go-authgate/oauth-cli
+cd oauth-cli
 cp .env.example .env      # Fill in CLIENT_ID (and CLIENT_SECRET for confidential clients)
 go run .
 ```
@@ -289,7 +290,7 @@ go run .
 | Public client (SPA, mobile, CLI)  | Leave empty     | Always used                  |
 | Confidential client (server-side) | Set the secret  | Also used (defence-in-depth) |
 
-See [`_example/authgate-oauth-cli/README.md`](../_example/authgate-oauth-cli/README.md) for full configuration options.
+See [go-authgate/oauth-cli](https://github.com/go-authgate/oauth-cli) for full configuration options.
 
 ### `go-authgate/cli` — auto-detect environment
 
