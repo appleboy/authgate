@@ -92,7 +92,7 @@ func createOAuthHTTPClient(cfg *config.Config) *http.Client {
 	// Create optimized transport with connection pool settings
 	transport := client.CreateOptimizedTransport(cfg.OAuthInsecureSkipVerify)
 
-	httpClient, err := httpclient.NewAuthClient(httpclient.AuthModeNone, "",
+	httpClient, err := httpclient.NewClient(
 		httpclient.WithTimeout(cfg.OAuthTimeout),
 		httpclient.WithTransport(transport),
 	)
