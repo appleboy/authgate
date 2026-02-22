@@ -10,10 +10,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/appleboy/authgate/internal/auth"
+	"github.com/appleboy/authgate/internal/config"
+	"github.com/appleboy/authgate/internal/services"
+	"github.com/appleboy/authgate/internal/store"
+
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func setupTestRouter() *gin.Engine {
@@ -25,6 +31,29 @@ func setupTestRouter() *gin.Engine {
 	r.Use(sessions.Sessions("test_session", store))
 
 	return r
+}
+
+// createTestUserService creates a minimal UserService for testing.
+// Uses an in-memory SQLite database to avoid nil pointer issues.
+func createTestUserService(t *testing.T) *services.UserService {
+	t.Helper()
+
+	// Create in-memory store
+	testStore, err := store.New("sqlite", ":memory:", &config.Config{})
+	require.NoError(t, err)
+
+	// Create minimal auth providers
+	localProvider := auth.NewLocalAuthProvider(testStore)
+
+	// Create UserService with nil audit service (not needed for these tests)
+	return services.NewUserService(
+		testStore,
+		localProvider,
+		nil, // httpAPIProvider not needed
+		"local",
+		false, // oauthAutoRegister
+		nil,   // auditService not needed for these tests
+	)
 }
 
 func TestSessionIdleTimeout_Disabled(t *testing.T) {
@@ -301,8 +330,10 @@ func TestSessionFingerprintMiddleware_NoSession(t *testing.T) {
 func TestRequireAuth_RedirectURLEncoded(t *testing.T) {
 	r := setupTestRouter()
 
-	// Mock UserService (not needed since we're testing unauthenticated case)
-	r.Use(RequireAuth(nil))
+	// Create test UserService (needed even though we're testing unauthenticated path
+	// to ensure the middleware won't panic if the code path changes in the future)
+	userService := createTestUserService(t)
+	r.Use(RequireAuth(userService))
 
 	r.GET("/oauth/authorize", func(c *gin.Context) {
 		c.String(http.StatusOK, "Should not reach here")
