@@ -106,7 +106,7 @@ func (h *DocsHandler) ShowDocsPage(c *gin.Context) {
 
 	// Resolve optional navbar props from session
 	navbarProps := templates.NavbarProps{
-		ActiveLink: "docs",
+		ActiveLink: "docs-" + slug,
 	}
 
 	if u, exists := c.Get("user"); exists {
