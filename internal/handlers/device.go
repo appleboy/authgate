@@ -126,12 +126,14 @@ func (h *DeviceHandler) DevicePage(c *gin.Context) {
 	userCode := c.Query("user_code")
 
 	usernameStr := ""
+	fullNameStr := ""
 	isAdmin := false
 	// Get user info from database
 	if userID != nil {
 		user, err := h.userService.GetUserByID(userID.(string))
 		if err == nil {
 			usernameStr = user.Username
+			fullNameStr = user.FullName
 			isAdmin = user.IsAdmin()
 		}
 	}
@@ -149,6 +151,7 @@ func (h *DeviceHandler) DevicePage(c *gin.Context) {
 		BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
 		NavbarProps: templates.NavbarProps{
 			Username:   usernameStr,
+			FullName:   fullNameStr,
 			IsAdmin:    isAdmin,
 			ActiveLink: "device",
 		},
@@ -168,19 +171,16 @@ func (h *DeviceHandler) DeviceVerify(c *gin.Context) {
 		return
 	}
 
-	username := session.Get(SessionUsername)
 	userCode := c.PostForm("user_code")
 
 	usernameStr := ""
-	if username != nil {
-		usernameStr = username.(string)
-	}
-
-	// Check if user is admin for navbar
+	fullNameStr := ""
 	isAdmin := false
 	user, err := h.userService.GetUserByID(userID.(string))
-	if err == nil && user.IsAdmin() {
-		isAdmin = true
+	if err == nil {
+		usernameStr = user.Username
+		fullNameStr = user.FullName
+		isAdmin = user.IsAdmin()
 	}
 
 	if userCode == "" {
@@ -191,6 +191,7 @@ func (h *DeviceHandler) DeviceVerify(c *gin.Context) {
 				BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
 				NavbarProps: templates.NavbarProps{
 					Username:   usernameStr,
+					FullName:   fullNameStr,
 					IsAdmin:    isAdmin,
 					ActiveLink: "device",
 				},
@@ -220,6 +221,7 @@ func (h *DeviceHandler) DeviceVerify(c *gin.Context) {
 				BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
 				NavbarProps: templates.NavbarProps{
 					Username:   usernameStr,
+					FullName:   fullNameStr,
 					IsAdmin:    isAdmin,
 					ActiveLink: "device",
 				},
@@ -239,6 +241,7 @@ func (h *DeviceHandler) DeviceVerify(c *gin.Context) {
 				BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
 				NavbarProps: templates.NavbarProps{
 					Username:   usernameStr,
+					FullName:   fullNameStr,
 					IsAdmin:    isAdmin,
 					ActiveLink: "device",
 				},
@@ -275,6 +278,7 @@ func (h *DeviceHandler) DeviceVerify(c *gin.Context) {
 				BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
 				NavbarProps: templates.NavbarProps{
 					Username:   usernameStr,
+					FullName:   fullNameStr,
 					IsAdmin:    isAdmin,
 					ActiveLink: "device",
 				},
@@ -302,6 +306,7 @@ func (h *DeviceHandler) DeviceVerify(c *gin.Context) {
 				BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
 				NavbarProps: templates.NavbarProps{
 					Username:   usernameStr,
+					FullName:   fullNameStr,
 					IsAdmin:    isAdmin,
 					ActiveLink: "device",
 				},

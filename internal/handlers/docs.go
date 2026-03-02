@@ -112,6 +112,7 @@ func (h *DocsHandler) ShowDocsPage(c *gin.Context) {
 	if u, exists := c.Get("user"); exists {
 		if user, ok := u.(*models.User); ok {
 			navbarProps.Username = user.Username
+			navbarProps.FullName = user.FullName
 			navbarProps.IsAdmin = user.IsAdmin()
 		}
 	}

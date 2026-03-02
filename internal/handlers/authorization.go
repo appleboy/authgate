@@ -115,6 +115,7 @@ func (h *AuthorizationHandler) ShowAuthorizePage(c *gin.Context) {
 		BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
 		NavbarProps: templates.NavbarProps{
 			Username:   user.Username,
+			FullName:   user.FullName,
 			IsAdmin:    user.IsAdmin(),
 			ActiveLink: "",
 		},
@@ -325,12 +326,15 @@ func (h *AuthorizationHandler) ListAuthorizations(c *gin.Context) {
 
 	isAdmin := false
 	username := ""
+	fullName := ""
 	if um, ok := user.(*models.User); ok {
 		isAdmin = um.IsAdmin()
 		username = um.Username
+		fullName = um.FullName
 	} else if u, err := h.userService.GetUserByID(userIDStr); err == nil {
 		isAdmin = u.IsAdmin()
 		username = u.Username
+		fullName = u.FullName
 	}
 
 	templates.RenderTempl(
@@ -340,6 +344,7 @@ func (h *AuthorizationHandler) ListAuthorizations(c *gin.Context) {
 			BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
 			NavbarProps: templates.NavbarProps{
 				Username:   username,
+				FullName:   fullName,
 				IsAdmin:    isAdmin,
 				ActiveLink: "authorizations",
 			},

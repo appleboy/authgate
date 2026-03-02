@@ -79,6 +79,7 @@ func (h *SessionHandler) ListSessions(c *gin.Context) {
 		BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
 		NavbarProps: templates.NavbarProps{
 			Username:   user.Username,
+			FullName:   user.FullName,
 			IsAdmin:    user.IsAdmin(),
 			ActiveLink: "sessions",
 		},

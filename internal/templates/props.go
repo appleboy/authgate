@@ -16,8 +16,17 @@ type BaseProps struct {
 // NavbarProps contains properties for the navigation bar
 type NavbarProps struct {
 	Username   string
+	FullName   string
 	IsAdmin    bool
 	ActiveLink string // "device", "sessions", "clients", "audit"
+}
+
+// DisplayName returns FullName if set, otherwise Username.
+func (p *NavbarProps) DisplayName() string {
+	if p.FullName != "" {
+		return p.FullName
+	}
+	return p.Username
 }
 
 // PaginationProps contains properties for pagination component

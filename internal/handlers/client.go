@@ -87,6 +87,7 @@ func (h *ClientHandler) ShowClientsPage(c *gin.Context) {
 		BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
 		NavbarProps: templates.NavbarProps{
 			Username:   userModel.Username,
+			FullName:   userModel.FullName,
 			IsAdmin:    userModel.IsAdmin(),
 			ActiveLink: "clients",
 		},
@@ -108,6 +109,7 @@ func (h *ClientHandler) ShowCreateClientPage(c *gin.Context) {
 		BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
 		NavbarProps: templates.NavbarProps{
 			Username:   userModel.Username,
+			FullName:   userModel.FullName,
 			IsAdmin:    userModel.IsAdmin(),
 			ActiveLink: "clients",
 		},
@@ -159,6 +161,7 @@ func (h *ClientHandler) CreateClient(c *gin.Context) {
 				BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
 				NavbarProps: templates.NavbarProps{
 					Username:   userModel.Username,
+					FullName:   userModel.FullName,
 					IsAdmin:    userModel.IsAdmin(),
 					ActiveLink: "clients",
 				},
@@ -200,6 +203,7 @@ func (h *ClientHandler) CreateClient(c *gin.Context) {
 			BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
 			NavbarProps: templates.NavbarProps{
 				Username:   userModel.Username,
+				FullName:   userModel.FullName,
 				IsAdmin:    userModel.IsAdmin(),
 				ActiveLink: "clients",
 			},
@@ -246,6 +250,7 @@ func (h *ClientHandler) ShowEditClientPage(c *gin.Context) {
 		BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
 		NavbarProps: templates.NavbarProps{
 			Username:   userModel.Username,
+			FullName:   userModel.FullName,
 			IsAdmin:    userModel.IsAdmin(),
 			ActiveLink: "clients",
 		},
@@ -305,6 +310,7 @@ func (h *ClientHandler) UpdateClient(c *gin.Context) {
 				BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
 				NavbarProps: templates.NavbarProps{
 					Username:   userModel.Username,
+					FullName:   userModel.FullName,
 					IsAdmin:    userModel.IsAdmin(),
 					ActiveLink: "clients",
 				},
@@ -388,6 +394,7 @@ func (h *ClientHandler) RegenerateSecret(c *gin.Context) {
 			BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
 			NavbarProps: templates.NavbarProps{
 				Username:   userModel.Username,
+				FullName:   userModel.FullName,
 				IsAdmin:    userModel.IsAdmin(),
 				ActiveLink: "clients",
 			},
@@ -430,6 +437,7 @@ func (h *ClientHandler) ViewClient(c *gin.Context) {
 			BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
 			NavbarProps: templates.NavbarProps{
 				Username:   userModel.Username,
+				FullName:   userModel.FullName,
 				IsAdmin:    userModel.IsAdmin(),
 				ActiveLink: "clients",
 			},
@@ -486,6 +494,7 @@ func (h *ClientHandler) ListClientAuthorizations(c *gin.Context) {
 			BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
 			NavbarProps: templates.NavbarProps{
 				Username:   userModel.Username,
+				FullName:   userModel.FullName,
 				IsAdmin:    userModel.IsAdmin(),
 				ActiveLink: "clients",
 			},
@@ -518,6 +527,7 @@ func (h *ClientHandler) RevokeAllTokens(c *gin.Context) {
 				BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
 				NavbarProps: templates.NavbarProps{
 					Username:   userModel.Username,
+					FullName:   userModel.FullName,
 					IsAdmin:    userModel.IsAdmin(),
 					ActiveLink: "clients",
 				},

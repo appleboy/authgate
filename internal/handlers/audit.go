@@ -108,6 +108,7 @@ func (h *AuditHandler) ShowAuditLogsPage(c *gin.Context) {
 		BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
 		NavbarProps: templates.NavbarProps{
 			Username:   userModel.Username,
+			FullName:   userModel.FullName,
 			IsAdmin:    userModel.IsAdmin(),
 			ActiveLink: "audit",
 		},

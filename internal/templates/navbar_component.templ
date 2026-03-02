@@ -38,7 +38,7 @@ templ Navbar(props *NavbarProps) {
 						}
 					</div>
 					<div class="navbar-user">
-						<span class="navbar-username">{ props.Username }</span>
+						<span class="navbar-username">{ props.DisplayName() }</span>
 						<a href="/logout" class="navbar-logout">Logout</a>
 					</div>
 				} else {
