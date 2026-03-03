@@ -353,6 +353,15 @@ func (s *TokenService) GetUserTokens(userID string) ([]models.AccessToken, error
 	return s.store.GetTokensByUserID(userID)
 }
 
+// IsTokenOwnedByUser returns true if the token with the given ID belongs to the given user.
+func (s *TokenService) IsTokenOwnedByUser(tokenID, userID string) (bool, error) {
+	tok, err := s.store.GetAccessTokenByID(tokenID)
+	if err != nil {
+		return false, err
+	}
+	return tok.UserID == userID, nil
+}
+
 // GetUserTokensWithClient returns all active tokens for a user with client information
 func (s *TokenService) GetUserTokensWithClient(userID string) ([]TokenWithClient, error) {
 	tokens, err := s.store.GetTokensByUserID(userID)
