@@ -33,12 +33,8 @@ type Application struct {
 	RateLimitRedisClient *redis.Client
 
 	// Services
-	AuditService         *services.AuditService
-	UserService          *services.UserService
-	DeviceService        *services.DeviceService
-	TokenService         *services.TokenService
-	ClientService        *services.ClientService
-	AuthorizationService *services.AuthorizationService
+	AuditService *services.AuditService
+	Services     serviceSet
 
 	// HTTP
 	HandlerSet  handlerSet
@@ -125,11 +121,7 @@ func (app *Application) initializeBusinessLayer() {
 	)
 
 	// Initialize all business services
-	app.UserService,
-		app.DeviceService,
-		app.TokenService,
-		app.ClientService,
-		app.AuthorizationService = initializeServices(
+	app.Services = initializeServices(
 		app.Config,
 		app.DB,
 		app.AuditService,
@@ -146,19 +138,15 @@ func (app *Application) initializeHTTPLayer() {
 	oauthHTTPClient := createOAuthHTTPClient(app.Config)
 
 	// Handlers
-	app.HandlerSet = initializeHandlers(
-		app.Config,
-		app.UserService,
-		app.DeviceService,
-		app.TokenService,
-		app.ClientService,
-		app.AuthorizationService,
-		app.AuditService,
-		oauthProviders,
-		oauthHTTPClient,
-		app.MetricsRecorder,
-		app.TemplatesFS,
-	)
+	app.HandlerSet = initializeHandlers(handlerDeps{
+		cfg:            app.Config,
+		services:       app.Services,
+		auditService:   app.AuditService,
+		oauthProviders: oauthProviders,
+		oauthClient:    oauthHTTPClient,
+		metrics:        app.MetricsRecorder,
+		templatesFS:    app.TemplatesFS,
+	})
 
 	// Router
 	app.Router = setupRouter(
@@ -169,6 +157,7 @@ func (app *Application) initializeHTTPLayer() {
 		app.AuditService,
 		app.RateLimitRedisClient,
 		app.TemplatesFS,
+		oauthProviders,
 	)
 
 	// HTTP Server

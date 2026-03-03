@@ -33,6 +33,7 @@ func setupRouter(
 	auditService *services.AuditService,
 	rateLimitRedisClient *redis.Client,
 	templatesFS embed.FS,
+	oauthProviders map[string]*auth.OAuthProvider,
 ) *gin.Engine {
 	// Setup Gin mode
 	setupGinMode(cfg)
@@ -62,7 +63,7 @@ func setupRouter(
 	rateLimiters := setupRateLimiting(cfg, auditService, rateLimitRedisClient)
 
 	// Setup all routes
-	setupAllRoutes(r, cfg, h, rateLimiters)
+	setupAllRoutes(r, cfg, h, rateLimiters, oauthProviders)
 
 	// Log server startup info
 	logServerStartup(cfg)
@@ -118,10 +119,8 @@ func setupAllRoutes(
 	cfg *config.Config,
 	h handlerSet,
 	rateLimiters rateLimitMiddlewares,
+	oauthProviders map[string]*auth.OAuthProvider,
 ) {
-	// Get OAuth providers
-	oauthProviders := initializeOAuthProviders(cfg)
-
 	// Public routes
 	r.GET("/", func(c *gin.Context) {
 		c.Redirect(http.StatusFound, "/account/sessions")

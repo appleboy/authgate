@@ -9,6 +9,15 @@ import (
 	"github.com/go-authgate/authgate/internal/store"
 )
 
+// serviceSet holds all initialized business logic services
+type serviceSet struct {
+	user          *services.UserService
+	device        *services.DeviceService
+	token         *services.TokenService
+	client        *services.ClientService
+	authorization *services.AuthorizationService
+}
+
 // initializeServices creates all business logic services
 func initializeServices(
 	cfg *config.Config,
@@ -16,7 +25,7 @@ func initializeServices(
 	auditService *services.AuditService,
 	prometheusMetrics core.Recorder,
 	userCache core.Cache[models.User],
-) (*services.UserService, *services.DeviceService, *services.TokenService, *services.ClientService, *services.AuthorizationService) {
+) serviceSet {
 	// Initialize authentication providers
 	localProvider := auth.NewLocalAuthProvider(db)
 	httpAPIProvider := initializeHTTPAPIAuthProvider(cfg)
@@ -47,5 +56,11 @@ func initializeServices(
 	clientService := services.NewClientService(db, auditService)
 	authorizationService := services.NewAuthorizationService(db, cfg, auditService)
 
-	return userService, deviceService, tokenService, clientService, authorizationService
+	return serviceSet{
+		user:          userService,
+		device:        deviceService,
+		token:         tokenService,
+		client:        clientService,
+		authorization: authorizationService,
+	}
 }
