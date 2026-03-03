@@ -26,50 +26,58 @@ type handlerSet struct {
 	userService   *services.UserService
 }
 
+// handlerDeps holds all dependencies needed to construct the handler set
+type handlerDeps struct {
+	cfg            *config.Config
+	services       serviceSet
+	auditService   *services.AuditService
+	oauthProviders map[string]*auth.OAuthProvider
+	oauthClient    *http.Client
+	metrics        core.Recorder
+	templatesFS    embed.FS
+}
+
 // initializeHandlers creates all HTTP handlers
-func initializeHandlers(
-	cfg *config.Config,
-	userService *services.UserService,
-	deviceService *services.DeviceService,
-	tokenService *services.TokenService,
-	clientService *services.ClientService,
-	authorizationService *services.AuthorizationService,
-	auditService *services.AuditService,
-	oauthProviders map[string]*auth.OAuthProvider,
-	oauthHTTPClient *http.Client,
-	prometheusMetrics core.Recorder,
-	templatesFS embed.FS,
-) handlerSet {
+func initializeHandlers(deps handlerDeps) handlerSet {
 	return handlerSet{
 		auth: handlers.NewAuthHandler(
-			userService,
-			cfg.BaseURL,
-			cfg.SessionFingerprint,
-			cfg.SessionFingerprintIP,
-			prometheusMetrics,
+			deps.services.user,
+			deps.cfg.BaseURL,
+			deps.cfg.SessionFingerprint,
+			deps.cfg.SessionFingerprintIP,
+			deps.metrics,
 		),
-		device:  handlers.NewDeviceHandler(deviceService, userService, authorizationService, cfg),
-		token:   handlers.NewTokenHandler(tokenService, authorizationService, cfg),
-		client:  handlers.NewClientHandler(clientService, authorizationService),
-		session: handlers.NewSessionHandler(tokenService, userService),
+		device: handlers.NewDeviceHandler(
+			deps.services.device,
+			deps.services.user,
+			deps.services.authorization,
+			deps.cfg,
+		),
+		token: handlers.NewTokenHandler(
+			deps.services.token,
+			deps.services.authorization,
+			deps.cfg,
+		),
+		client:  handlers.NewClientHandler(deps.services.client, deps.services.authorization),
+		session: handlers.NewSessionHandler(deps.services.token, deps.services.user),
 		oauth: handlers.NewOAuthHandler(
-			oauthProviders,
-			userService,
-			oauthHTTPClient,
-			cfg.BaseURL,
-			cfg.SessionFingerprint,
-			cfg.SessionFingerprintIP,
-			prometheusMetrics,
+			deps.oauthProviders,
+			deps.services.user,
+			deps.oauthClient,
+			deps.cfg.BaseURL,
+			deps.cfg.SessionFingerprint,
+			deps.cfg.SessionFingerprintIP,
+			deps.metrics,
 		),
-		audit: handlers.NewAuditHandler(auditService),
+		audit: handlers.NewAuditHandler(deps.auditService),
 		authorization: handlers.NewAuthorizationHandler(
-			authorizationService,
-			tokenService,
-			userService,
-			cfg,
+			deps.services.authorization,
+			deps.services.token,
+			deps.services.user,
+			deps.cfg,
 		),
-		oidc:        handlers.NewOIDCHandler(tokenService, userService, cfg),
-		docs:        handlers.NewDocsHandler(templatesFS),
-		userService: userService,
+		oidc:        handlers.NewOIDCHandler(deps.services.token, deps.services.user, deps.cfg),
+		docs:        handlers.NewDocsHandler(deps.templatesFS),
+		userService: deps.services.user,
 	}
 }
