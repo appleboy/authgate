@@ -209,6 +209,24 @@
   color: white;
 }
 
+/* GitLab button */
+.login-oauth-btn.gitlab {
+  background: #fc6d26;
+  color: white;
+  box-shadow: 0 4px 12px rgba(252, 109, 38, 0.3);
+}
+
+.login-oauth-btn.gitlab svg {
+  width: 24px;
+  height: 24px;
+}
+
+.login-oauth-btn.gitlab:hover {
+  background: #e85c1a;
+  box-shadow: 0 6px 20px rgba(252, 109, 38, 0.4);
+  color: white;
+}
+
 /* Divider */
 .login-divider {
   position: relative;
