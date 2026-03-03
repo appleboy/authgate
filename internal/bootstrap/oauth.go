@@ -71,6 +71,26 @@ func initializeOAuthProviders(cfg *config.Config) map[string]*auth.OAuthProvider
 		)
 	}
 
+	// GitLab OAuth
+	switch {
+	case !cfg.GitLabOAuthEnabled:
+		// Skip GitLab OAuth
+	case cfg.GitLabClientID == "" || cfg.GitLabClientSecret == "":
+		log.Printf("Warning: GitLab OAuth enabled but CLIENT_ID or CLIENT_SECRET missing")
+	default:
+		providers["gitlab"] = auth.NewGitLabProvider(auth.OAuthProviderConfig{
+			ClientID:     cfg.GitLabClientID,
+			ClientSecret: cfg.GitLabClientSecret,
+			RedirectURL:  cfg.GitLabOAuthRedirectURL,
+			Scopes:       cfg.GitLabOAuthScopes,
+		}, cfg.GitLabURL)
+		log.Printf(
+			"GitLab OAuth configured: server=%s redirect=%s",
+			cfg.GitLabURL,
+			cfg.GitLabOAuthRedirectURL,
+		)
+	}
+
 	return providers
 }
 
