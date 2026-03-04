@@ -34,10 +34,10 @@ type Application struct {
 
 	// Services
 	AuditService *services.AuditService
-	Services     serviceSet
+	services     serviceSet
 
 	// HTTP
-	HandlerSet  handlerSet
+	handlerSet  handlerSet
 	Router      *gin.Engine
 	Server      *http.Server
 	TemplatesFS embed.FS
@@ -121,7 +121,7 @@ func (app *Application) initializeBusinessLayer() {
 	)
 
 	// Initialize all business services
-	app.Services = initializeServices(
+	app.services = initializeServices(
 		app.Config,
 		app.DB,
 		app.AuditService,
@@ -138,9 +138,9 @@ func (app *Application) initializeHTTPLayer() {
 	oauthHTTPClient := createOAuthHTTPClient(app.Config)
 
 	// Handlers
-	app.HandlerSet = initializeHandlers(handlerDeps{
+	app.handlerSet = initializeHandlers(handlerDeps{
 		cfg:            app.Config,
-		services:       app.Services,
+		services:       app.services,
 		auditService:   app.AuditService,
 		oauthProviders: oauthProviders,
 		oauthClient:    oauthHTTPClient,
@@ -152,7 +152,7 @@ func (app *Application) initializeHTTPLayer() {
 	app.Router = setupRouter(
 		app.Config,
 		app.DB,
-		app.HandlerSet,
+		app.handlerSet,
 		app.MetricsRecorder,
 		app.AuditService,
 		app.RateLimitRedisClient,
