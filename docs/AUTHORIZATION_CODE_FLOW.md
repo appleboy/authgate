@@ -165,7 +165,7 @@ GET /oauth/authorize?
   client_id=550e8400-e29b-41d4-a716-446655440000
   &redirect_uri=https%3A%2F%2Fapp.example.com%2Fcallback
   &response_type=code
-  &scope=read%20write
+  &scope=email%20profile
   &state=abc123xyz
 ```
 
@@ -176,7 +176,7 @@ GET /oauth/authorize?
   client_id=550e8400-e29b-41d4-a716-446655440000
   &redirect_uri=https%3A%2F%2Fapp.example.com%2Fcallback
   &response_type=code
-  &scope=read
+  &scope=email
   &state=abc123xyz
   &code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM
   &code_challenge_method=S256
@@ -246,7 +246,7 @@ curl -X POST https://auth.example.com/oauth/token \
   "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "token_type": "Bearer",
   "expires_in": 3600,
-  "scope": "read write"
+  "scope": "email profile"
 }
 ```
 

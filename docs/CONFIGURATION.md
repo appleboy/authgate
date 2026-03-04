@@ -389,7 +389,7 @@ Request:
 {
   "user_id": "user-uuid",
   "client_id": "client-uuid",
-  "scopes": "read write",
+  "scopes": "email profile",
   "expires_in": 3600
 }
 ```
@@ -425,7 +425,7 @@ Response (Valid):
   "valid": true,
   "user_id": "user-uuid",
   "client_id": "client-uuid",
-  "scopes": "read write",
+  "scopes": "email profile",
   "expires_at": 1736899200,
   "claims": {
     "custom_claim": "value"

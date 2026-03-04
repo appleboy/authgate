@@ -346,9 +346,10 @@ Modify `services/device.go` to validate and store additional scopes:
 func (s *DeviceService) ValidateScopes(scopes string) error {
     // Add custom scope validation logic
     validScopes := map[string]bool{
-        "read":   true,
-        "write":  true,
-        "admin":  true,
+        "email":          true,
+        "profile":        true,
+        "offline_access": true,
+        "admin":          true, // example custom scope
         // Add your custom scopes here
     }
 
