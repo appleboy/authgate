@@ -101,13 +101,13 @@ templ AdminClientForm(props ClientFormPageProps) {
 						</div>
 						<!-- Scopes -->
 						<div class="admin-form-group">
-							<label class="admin-form-label">Scopes</label>
+							<label for="scopeTextInput" class="admin-form-label">Scopes</label>
 							if props.Client != nil {
 								<input type="hidden" id="scopes" name="scopes" value={ props.Client.Scopes }/>
 							} else {
 								<input type="hidden" id="scopes" name="scopes" value="email profile"/>
 							}
-							<div class="admin-scope-picker" id="scopePicker" tabindex="0">
+							<div class="admin-scope-picker" id="scopePicker">
 								<div class="admin-scope-tags" id="scopeTags"></div>
 								<input type="text" class="admin-scope-text-input" id="scopeTextInput"
 									placeholder="Add scope..." autocomplete="off" spellcheck="false"/>
@@ -233,9 +233,9 @@ templ AdminClientForm(props ClientFormPageProps) {
 							function render() { renderTags(); renderPresets(); syncHidden(); }
 
 							function addScope(raw) {
-								var s = raw.trim().toLowerCase();
-								if (!s || selected.indexOf(s) !== -1) return;
-								selected.push(s);
+								raw.trim().toLowerCase().split(/\s+/).forEach(function (s) {
+									if (s && selected.indexOf(s) === -1) { selected.push(s); }
+								});
 								render();
 							}
 
