@@ -53,6 +53,7 @@ var (
 	ErrClientOwnershipRequired  = errors.New("you do not own this client")
 	ErrCannotDeleteActiveClient = errors.New("cannot delete an active client")
 	ErrInvalidScopeForUser      = errors.New("scope not allowed for user-created clients")
+	ErrInvalidClientStatus      = errors.New("status must be \"active\", \"inactive\", or \"pending\"")
 )
 
 // validateRedirectURIs checks that every URI in the slice is an absolute http/https
@@ -266,6 +267,13 @@ func (s *ClientService) UpdateClient(
 	client, err := s.store.GetClient(clientID)
 	if err != nil {
 		return ErrClientNotFound
+	}
+
+	switch req.Status {
+	case models.ClientStatusActive, models.ClientStatusInactive, models.ClientStatusPending:
+		// valid
+	default:
+		return ErrInvalidClientStatus
 	}
 
 	client.ClientName = strings.TrimSpace(req.ClientName)

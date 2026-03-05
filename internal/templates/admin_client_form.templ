@@ -24,6 +24,9 @@ templ AdminClientForm(props ClientFormPageProps) {
 							<div class="admin-form-group">
 								<label for="status" class="admin-form-label">Status</label>
 								<select id="status" name="status" class="admin-form-select">
+									if props.Client != nil && props.Client.Status == "pending" {
+										<option value="pending" selected disabled>Pending (use Approve / Reject buttons to change)</option>
+									}
 									<option value="active" selected?={ props.Client != nil && props.Client.Status == "active" }>Active</option>
 									<option value="inactive" selected?={ props.Client != nil && props.Client.Status == "inactive" }>Inactive</option>
 								</select>
