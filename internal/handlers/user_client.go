@@ -44,7 +44,7 @@ func (h *UserClientHandler) ShowMyAppsPage(c *gin.Context) {
 
 	templates.RenderTempl(c, http.StatusOK, templates.MyApps(templates.MyAppsPageProps{
 		BaseProps:   templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
-		NavbarProps: buildNavbarProps(userModel, "my-apps"),
+		NavbarProps: buildNavbarProps(c, userModel, "my-apps"),
 		Apps:        apps,
 		Pagination:  pagination,
 		PageSize:    pageSize,
@@ -59,7 +59,7 @@ func (h *UserClientHandler) ShowCreateAppPage(c *gin.Context) {
 
 	templates.RenderTempl(c, http.StatusOK, templates.UserAppForm(templates.UserClientFormPageProps{
 		BaseProps:   templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
-		NavbarProps: buildNavbarProps(userModel, "my-apps"),
+		NavbarProps: buildNavbarProps(c, userModel, "my-apps"),
 		Title:       "Register New App",
 		Method:      http.MethodPost,
 		Action:      "/apps",
@@ -128,7 +128,7 @@ func (h *UserClientHandler) CreateApp(c *gin.Context) {
 		http.StatusOK,
 		templates.UserAppCreated(templates.UserClientCreatedPageProps{
 			BaseProps:   templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
-			NavbarProps: buildNavbarProps(userModel, "my-apps"),
+			NavbarProps: buildNavbarProps(c, userModel, "my-apps"),
 			Client:      clientDisplay,
 			PlainSecret: resp.ClientSecretPlain,
 		}),
@@ -165,7 +165,7 @@ func (h *UserClientHandler) ShowAppPage(c *gin.Context) {
 		http.StatusOK,
 		templates.UserAppDetail(templates.UserClientDetailPageProps{
 			BaseProps:    templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
-			NavbarProps:  buildNavbarProps(userModel, "my-apps"),
+			NavbarProps:  buildNavbarProps(c, userModel, "my-apps"),
 			Client:       appToDisplay(client),
 			ActiveTokens: activeTokens,
 			Success:      successMsg,
@@ -194,7 +194,7 @@ func (h *UserClientHandler) ShowEditAppPage(c *gin.Context) {
 	action := "/apps/" + clientID
 	templates.RenderTempl(c, http.StatusOK, templates.UserAppForm(templates.UserClientFormPageProps{
 		BaseProps:   templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
-		NavbarProps: buildNavbarProps(userModel, "my-apps"),
+		NavbarProps: buildNavbarProps(c, userModel, "my-apps"),
 		Title:       "Edit App",
 		Method:      http.MethodPost,
 		Action:      action,
@@ -311,7 +311,7 @@ func (h *UserClientHandler) RegenerateAppSecret(c *gin.Context) {
 		http.StatusOK,
 		templates.UserAppCreated(templates.UserClientCreatedPageProps{
 			BaseProps:   templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
-			NavbarProps: buildNavbarProps(userModel, "my-apps"),
+			NavbarProps: buildNavbarProps(c, userModel, "my-apps"),
 			Client:      display,
 			PlainSecret: newSecret,
 		}),
@@ -360,7 +360,7 @@ func renderUserAppForm(
 		http.StatusBadRequest,
 		templates.UserAppForm(templates.UserClientFormPageProps{
 			BaseProps:   templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
-			NavbarProps: buildNavbarProps(user, "my-apps"),
+			NavbarProps: buildNavbarProps(c, user, "my-apps"),
 			Title:       title,
 			Method:      http.MethodPost,
 			Action:      action,

@@ -42,6 +42,22 @@ func parseRedirectURIs(input string) []string {
 	return redirectURIs
 }
 
+// InjectPendingCount is a middleware that queries the pending client count for
+// admin users and stores it in the gin context so buildNavbarProps can show the
+// badge on every page. Non-admin users are skipped to avoid unnecessary queries.
+func (h *ClientHandler) InjectPendingCount() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if u, exists := c.Get("user"); exists {
+			if user, ok := u.(*models.User); ok && user.IsAdmin() {
+				if count, err := h.clientService.CountPendingClients(); err == nil {
+					c.Set(ctxKeyPendingClientsCount, int(count))
+				}
+			}
+		}
+		c.Next()
+	}
+}
+
 // ShowClientsPage displays the list of all OAuth clients
 func (h *ClientHandler) ShowClientsPage(c *gin.Context) {
 	// Parse pagination parameters
@@ -61,9 +77,6 @@ func (h *ClientHandler) ShowClientsPage(c *gin.Context) {
 		return
 	}
 
-	// Count pending clients for navbar badge
-	pendingCount, _ := h.clientService.CountPendingClients()
-
 	// Get flash messages from session
 	session := sessions.Default(c)
 	flashes := session.Flashes()
@@ -82,8 +95,7 @@ func (h *ClientHandler) ShowClientsPage(c *gin.Context) {
 	user, _ := c.Get("user")
 	userModel := user.(*models.User)
 
-	navbar := buildNavbarProps(userModel, "clients")
-	navbar.PendingClientsCount = int(pendingCount)
+	navbar := buildNavbarProps(c, userModel, "clients")
 
 	templates.RenderTempl(c, http.StatusOK, templates.AdminClients(templates.ClientsPageProps{
 		BaseProps:    templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
@@ -105,7 +117,7 @@ func (h *ClientHandler) ShowCreateClientPage(c *gin.Context) {
 
 	templates.RenderTempl(c, http.StatusOK, templates.AdminClientForm(templates.ClientFormPageProps{
 		BaseProps:   templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
-		NavbarProps: buildNavbarProps(userModel, "clients"),
+		NavbarProps: buildNavbarProps(c, userModel, "clients"),
 		Title:       "Create OAuth Client",
 		Method:      http.MethodPost,
 		Action:      "/admin/clients",
@@ -153,7 +165,7 @@ func (h *ClientHandler) CreateClient(c *gin.Context) {
 			http.StatusBadRequest,
 			templates.AdminClientForm(templates.ClientFormPageProps{
 				BaseProps:   templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
-				NavbarProps: buildNavbarProps(userModel, "clients"),
+				NavbarProps: buildNavbarProps(c, userModel, "clients"),
 				Client:      clientData,
 				Error:       err.Error(),
 				Title:       "Create OAuth Client",
@@ -191,7 +203,7 @@ func (h *ClientHandler) CreateClient(c *gin.Context) {
 		http.StatusOK,
 		templates.AdminClientCreated(templates.ClientCreatedPageProps{
 			BaseProps:    templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
-			NavbarProps:  buildNavbarProps(userModel, "clients"),
+			NavbarProps:  buildNavbarProps(c, userModel, "clients"),
 			Client:       clientDisplay,
 			ClientSecret: resp.ClientSecretPlain,
 		}),
@@ -231,7 +243,7 @@ func (h *ClientHandler) ShowEditClientPage(c *gin.Context) {
 
 	templates.RenderTempl(c, http.StatusOK, templates.AdminClientForm(templates.ClientFormPageProps{
 		BaseProps:   templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
-		NavbarProps: buildNavbarProps(userModel, "clients"),
+		NavbarProps: buildNavbarProps(c, userModel, "clients"),
 		Client:      clientDisplay,
 		Title:       "Edit OAuth Client",
 		Method:      http.MethodPost,
@@ -286,7 +298,7 @@ func (h *ClientHandler) UpdateClient(c *gin.Context) {
 			http.StatusBadRequest,
 			templates.AdminClientForm(templates.ClientFormPageProps{
 				BaseProps:   templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
-				NavbarProps: buildNavbarProps(userModel, "clients"),
+				NavbarProps: buildNavbarProps(c, userModel, "clients"),
 				Client:      clientDisplay,
 				Error:       err.Error(),
 				Title:       "Edit OAuth Client",
@@ -351,7 +363,7 @@ func (h *ClientHandler) RegenerateSecret(c *gin.Context) {
 		http.StatusOK,
 		templates.AdminClientSecret(templates.ClientSecretPageProps{
 			BaseProps:    templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
-			NavbarProps:  buildNavbarProps(userModel, "clients"),
+			NavbarProps:  buildNavbarProps(c, userModel, "clients"),
 			Client:       client,
 			ClientSecret: newSecret,
 		}),
@@ -391,7 +403,7 @@ func (h *ClientHandler) ViewClient(c *gin.Context) {
 		http.StatusOK,
 		templates.AdminClientDetail(templates.ClientDetailPageProps{
 			BaseProps:        templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
-			NavbarProps:      buildNavbarProps(userModel, "clients"),
+			NavbarProps:      buildNavbarProps(c, userModel, "clients"),
 			Client:           client,
 			ActiveTokenCount: activeTokenCount,
 			Success:          successMsg,
@@ -473,7 +485,7 @@ func (h *ClientHandler) ListClientAuthorizations(c *gin.Context) {
 		http.StatusOK,
 		templates.AdminClientAuthorizations(templates.ClientAuthorizationsPageProps{
 			BaseProps:      templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
-			NavbarProps:    buildNavbarProps(userModel, "clients"),
+			NavbarProps:    buildNavbarProps(c, userModel, "clients"),
 			Client:         client,
 			Authorizations: displayAuths,
 		}),
@@ -501,7 +513,7 @@ func (h *ClientHandler) RevokeAllTokens(c *gin.Context) {
 			http.StatusInternalServerError,
 			templates.AdminClientDetail(templates.ClientDetailPageProps{
 				BaseProps:        templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
-				NavbarProps:      buildNavbarProps(userModel, "clients"),
+				NavbarProps:      buildNavbarProps(c, userModel, "clients"),
 				Client:           client,
 				ActiveTokenCount: activeTokenCount,
 				Error:            "Failed to revoke tokens: " + err.Error(),

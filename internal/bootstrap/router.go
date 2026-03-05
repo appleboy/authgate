@@ -172,9 +172,13 @@ func setupAllRoutes(
 		oauthProtected.POST("/authorize", h.authorization.HandleAuthorize)
 	}
 
+	// injectPendingCount adds the pending client count to context for admin users.
+	// Applied to all authenticated route groups so the navbar badge is visible site-wide.
+	injectPending := h.client.InjectPendingCount()
+
 	// Protected routes (require login)
 	protected := r.Group("")
-	protected.Use(middleware.RequireAuth(h.userService), middleware.CSRFMiddleware())
+	protected.Use(middleware.RequireAuth(h.userService), middleware.CSRFMiddleware(), injectPending)
 	{
 		protected.GET("/device", h.device.DevicePage)
 		protected.POST("/device/verify", rateLimiters.deviceVerify, h.device.DeviceVerify)
@@ -182,7 +186,7 @@ func setupAllRoutes(
 
 	// Account routes (require login)
 	account := r.Group("/account")
-	account.Use(middleware.RequireAuth(h.userService), middleware.CSRFMiddleware())
+	account.Use(middleware.RequireAuth(h.userService), middleware.CSRFMiddleware(), injectPending)
 	{
 		account.GET("/sessions", h.session.ListSessions)
 		account.POST("/sessions/:id/revoke", h.session.RevokeSession)
@@ -196,7 +200,7 @@ func setupAllRoutes(
 
 	// User apps area (all authenticated users, not admin-only)
 	apps := r.Group("/apps")
-	apps.Use(middleware.RequireAuth(h.userService), middleware.CSRFMiddleware())
+	apps.Use(middleware.RequireAuth(h.userService), middleware.CSRFMiddleware(), injectPending)
 	{
 		apps.GET("", h.userClient.ShowMyAppsPage)
 		apps.GET("/new", h.userClient.ShowCreateAppPage)
@@ -214,6 +218,7 @@ func setupAllRoutes(
 		middleware.RequireAuth(h.userService),
 		middleware.RequireAdmin(h.userService),
 		middleware.CSRFMiddleware(),
+		injectPending,
 	)
 	{
 		admin.GET("/clients", h.client.ShowClientsPage)
