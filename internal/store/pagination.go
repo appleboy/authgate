@@ -44,6 +44,13 @@ func NewPaginationParams(page, pageSize int, search string) PaginationParams {
 	}
 }
 
+// Offset returns the zero-based row offset for use in LIMIT/OFFSET queries.
+// It uses CurrentPage (already clamped to valid bounds) rather than the raw
+// caller-supplied page number.
+func (p PaginationResult) Offset() int {
+	return (p.CurrentPage - 1) * p.PageSize
+}
+
 // CalculatePagination calculates pagination metadata
 func CalculatePagination(total int64, currentPage, pageSize int) PaginationResult {
 	totalPages := int(math.Ceil(float64(total) / float64(pageSize)))

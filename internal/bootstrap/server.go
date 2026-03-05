@@ -250,6 +250,41 @@ func addUserCacheCleanupJob(
 	addNamedCacheShutdownJob(m, "user cache", userCache.Close, cfg.CacheCloseTimeout)
 }
 
+// addExpiredTokenCleanupJob adds a periodic job that purges expired access tokens
+// and device codes from the database to prevent unbounded table growth.
+func addExpiredTokenCleanupJob(m *graceful.Manager, db *store.Store, cfg *config.Config) {
+	if !cfg.EnableExpiredTokenCleanup {
+		return
+	}
+
+	m.AddRunningJob(func(ctx context.Context) error {
+		ticker := time.NewTicker(cfg.ExpiredTokenCleanupInterval)
+		defer ticker.Stop()
+
+		// Run cleanup immediately on startup
+		if err := db.DeleteExpiredTokens(); err != nil {
+			log.Printf("Failed to cleanup expired tokens: %v", err)
+		}
+		if err := db.DeleteExpiredDeviceCodes(); err != nil {
+			log.Printf("Failed to cleanup expired device codes: %v", err)
+		}
+
+		for {
+			select {
+			case <-ticker.C:
+				if err := db.DeleteExpiredTokens(); err != nil {
+					log.Printf("Failed to cleanup expired tokens: %v", err)
+				}
+				if err := db.DeleteExpiredDeviceCodes(); err != nil {
+					log.Printf("Failed to cleanup expired device codes: %v", err)
+				}
+			case <-ctx.Done():
+				return nil
+			}
+		}
+	})
+}
+
 // addDatabaseShutdownJob adds database connection close handler
 func addDatabaseShutdownJob(m *graceful.Manager, db *store.Store, cfg *config.Config) {
 	m.AddShutdownJob(func() error {

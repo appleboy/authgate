@@ -51,32 +51,6 @@ func New(ctx context.Context, driver, dsn string, cfg *config.Config) (*Store, e
 		return nil, err
 	}
 
-	// One-time migration: drop the now-redundant is_active column.
-	// The data-fix query runs first to correct any records where is_active=false
-	// but status='active' (the original bug). Both operations are gated on column
-	// existence so subsequent startups incur zero extra queries.
-	if err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Only run if the legacy is_active column still exists.
-		if !tx.Migrator().HasColumn(&models.OAuthApplication{}, "is_active") {
-			return nil
-		}
-		// Portable, parameterized update: lets the dialect handle boolean values.
-		if err := tx.Model(&models.OAuthApplication{}).
-			Where("is_active = ? AND status = ?", false, "active").
-			Update("status", "inactive").Error; err != nil {
-			return fmt.Errorf(
-				"failed to backfill oauth_applications.status from is_active: %w",
-				err,
-			)
-		}
-		// Drop the now-redundant column only if the update above succeeded.
-		if err := tx.Migrator().DropColumn(&models.OAuthApplication{}, "is_active"); err != nil {
-			return fmt.Errorf("failed to drop is_active column: %w", err)
-		}
-		return nil
-	}); err != nil {
-		log.Printf("Warning: one-time migration for oauth_applications.is_active failed: %v", err)
-	}
 	// Configure connection pool (after AutoMigrate)
 	// Only configure if values are provided (non-zero)
 	if cfg.DBMaxOpenConns > 0 || cfg.DBMaxIdleConns > 0 ||
@@ -158,7 +132,7 @@ func generateRandomPassword(length int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return base64.URLEncoding.EncodeToString(b)[:length], nil
+	return base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(b)[:length], nil
 }
 
 func (s *Store) seedData(ctx context.Context, cfg *config.Config) error {
@@ -391,10 +365,9 @@ func (s *Store) ListClientsPaginated(
 	pagination := CalculatePagination(total, params.Page, params.PageSize)
 
 	// Apply pagination and fetch results
-	offset := (params.Page - 1) * params.PageSize
 	if err := query.Order("created_at DESC").
 		Limit(params.PageSize).
-		Offset(offset).
+		Offset(pagination.Offset()).
 		Find(&clients).Error; err != nil {
 		return nil, PaginationResult{}, err
 	}
@@ -425,11 +398,10 @@ func (s *Store) ListClientsByUserID(
 	}
 
 	pagination := CalculatePagination(total, params.Page, params.PageSize)
-	offset := (params.Page - 1) * params.PageSize
 
 	if err := query.Order("created_at DESC").
 		Limit(params.PageSize).
-		Offset(offset).
+		Offset(pagination.Offset()).
 		Find(&clients).Error; err != nil {
 		return nil, PaginationResult{}, err
 	}
@@ -598,10 +570,9 @@ func (s *Store) GetTokensByUserIDPaginated(
 	pagination := CalculatePagination(total, params.Page, params.PageSize)
 
 	// Apply pagination and fetch results
-	offset := (params.Page - 1) * params.PageSize
 	if err := query.Order("created_at DESC").
 		Limit(params.PageSize).
-		Offset(offset).
+		Offset(pagination.Offset()).
 		Find(&tokens).Error; err != nil {
 		return nil, PaginationResult{}, err
 	}
@@ -809,10 +780,9 @@ func (s *Store) GetAuditLogsPaginated(
 	pagination := CalculatePagination(total, params.Page, params.PageSize)
 
 	// Apply pagination and fetch results
-	offset := (params.Page - 1) * params.PageSize
 	if err := query.Order("event_time DESC").
 		Limit(params.PageSize).
-		Offset(offset).
+		Offset(pagination.Offset()).
 		Find(&logs).Error; err != nil {
 		return nil, PaginationResult{}, err
 	}
@@ -889,7 +859,7 @@ func (s *Store) CountActiveTokensByCategory(category string) (int64, error) {
 	var count int64
 	err := s.db.Model(&models.AccessToken{}).
 		Where("token_category = ? AND status = ? AND expires_at > ?",
-			category, "active", time.Now()).
+			category, models.TokenStatusActive, time.Now()).
 		Count(&count).
 		Error
 	return count, err
@@ -1044,15 +1014,15 @@ func (s *Store) ListUserAuthorizations(userID string) ([]models.UserAuthorizatio
 // RevokeTokensByAuthorizationID revokes all active tokens linked to a specific UserAuthorization
 func (s *Store) RevokeTokensByAuthorizationID(authorizationID uint) error {
 	return s.db.Model(&models.AccessToken{}).
-		Where("authorization_id = ? AND status = ?", authorizationID, "active").
-		Update("status", "revoked").Error
+		Where("authorization_id = ? AND status = ?", authorizationID, models.TokenStatusActive).
+		Update("status", models.TokenStatusRevoked).Error
 }
 
 // RevokeAllActiveTokensByClientID revokes every active token for a client and returns the count
 func (s *Store) RevokeAllActiveTokensByClientID(clientID string) (int64, error) {
 	result := s.db.Model(&models.AccessToken{}).
-		Where("client_id = ? AND status = ?", clientID, "active").
-		Update("status", "revoked")
+		Where("client_id = ? AND status = ?", clientID, models.TokenStatusActive).
+		Update("status", models.TokenStatusRevoked)
 	return result.RowsAffected, result.Error
 }
 
@@ -1071,7 +1041,7 @@ func (s *Store) RevokeAllUserAuthorizationsByClientID(clientID string) error {
 func (s *Store) CountActiveTokensByClientID(clientID string) (int64, error) {
 	var count int64
 	err := s.db.Model(&models.AccessToken{}).
-		Where("client_id = ? AND status = ?", clientID, "active").
+		Where("client_id = ? AND status = ?", clientID, models.TokenStatusActive).
 		Count(&count).Error
 	return count, err
 }

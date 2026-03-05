@@ -172,6 +172,10 @@ type Config struct {
 	AuditLogBufferSize      int           // Async buffer size (default: 1000)
 	AuditLogCleanupInterval time.Duration // Cleanup interval (default: 24 hours)
 
+	// Token/Device Code cleanup settings
+	EnableExpiredTokenCleanup   bool          // Enable periodic cleanup of expired tokens and device codes (default: false)
+	ExpiredTokenCleanupInterval time.Duration // How often to purge expired rows (default: 1h)
+
 	// Prometheus Metrics settings
 	MetricsEnabled             bool          // Enable Prometheus metrics endpoint (default: false)
 	MetricsToken               string        // Bearer token for /metrics (empty = no auth, recommended for production)
@@ -346,6 +350,10 @@ func Load() *Config {
 		AuditLogRetention:       getEnvDuration("AUDIT_LOG_RETENTION", 90*24*time.Hour), // 90 days
 		AuditLogBufferSize:      getEnvInt("AUDIT_LOG_BUFFER_SIZE", 1000),
 		AuditLogCleanupInterval: getEnvDuration("AUDIT_LOG_CLEANUP_INTERVAL", 24*time.Hour),
+
+		// Token/Device Code cleanup settings
+		EnableExpiredTokenCleanup:   getEnvBool("ENABLE_EXPIRED_TOKEN_CLEANUP", false),
+		ExpiredTokenCleanupInterval: getEnvDuration("EXPIRED_TOKEN_CLEANUP_INTERVAL", time.Hour),
 
 		// Prometheus Metrics settings
 		MetricsEnabled:             getEnvBool("METRICS_ENABLED", false),

@@ -177,6 +177,7 @@ func (app *Application) startWithGracefulShutdown() {
 	addUserCacheCleanupJob(m, app.UserCache, app.Config)
 	addDatabaseShutdownJob(m, app.DB, app.Config)
 	addAuditLogCleanupJob(m, app.Config, app.AuditService)
+	addExpiredTokenCleanupJob(m, app.DB, app.Config)
 	addMetricsGaugeUpdateJob(m, app.Config, app.DB, app.MetricsRecorder, app.MetricsCache)
 
 	// Wait for graceful shutdown
