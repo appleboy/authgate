@@ -532,8 +532,8 @@ func (s *UserService) createUserWithOAuth(
 		Email:        oauthUserInfo.Email,
 		FullName:     oauthUserInfo.FullName,
 		AvatarURL:    oauthUserInfo.AvatarURL,
-		Role:         "user",
-		AuthSource:   "local",
+		Role:         models.UserRoleUser,
+		AuthSource:   models.AuthSourceLocal,
 		PasswordHash: "", // OAuth users have no password
 	}
 

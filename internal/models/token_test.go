@@ -43,9 +43,9 @@ func TestAccessToken_IsActive(t *testing.T) {
 		status string
 		want   bool
 	}{
-		{name: "active", status: "active", want: true},
-		{name: "revoked", status: "revoked", want: false},
-		{name: "disabled", status: "disabled", want: false},
+		{name: "active", status: TokenStatusActive, want: true},
+		{name: "revoked", status: TokenStatusRevoked, want: false},
+		{name: "disabled", status: TokenStatusDisabled, want: false},
 		{name: "empty", status: "", want: false},
 	}
 	for _, tt := range tests {
@@ -64,9 +64,9 @@ func TestAccessToken_IsRevoked(t *testing.T) {
 		status string
 		want   bool
 	}{
-		{name: "revoked", status: "revoked", want: true},
-		{name: "active", status: "active", want: false},
-		{name: "disabled", status: "disabled", want: false},
+		{name: "revoked", status: TokenStatusRevoked, want: true},
+		{name: "active", status: TokenStatusActive, want: false},
+		{name: "disabled", status: TokenStatusDisabled, want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -84,9 +84,9 @@ func TestAccessToken_IsDisabled(t *testing.T) {
 		status string
 		want   bool
 	}{
-		{name: "disabled", status: "disabled", want: true},
-		{name: "active", status: "active", want: false},
-		{name: "revoked", status: "revoked", want: false},
+		{name: "disabled", status: TokenStatusDisabled, want: true},
+		{name: "active", status: TokenStatusActive, want: false},
+		{name: "revoked", status: TokenStatusRevoked, want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -104,8 +104,8 @@ func TestAccessToken_IsAccessToken(t *testing.T) {
 		category string
 		want     bool
 	}{
-		{name: "access", category: "access", want: true},
-		{name: "refresh", category: "refresh", want: false},
+		{name: "access", category: TokenCategoryAccess, want: true},
+		{name: "refresh", category: TokenCategoryRefresh, want: false},
 		{name: "empty", category: "", want: false},
 		{name: "uppercase is not matched", category: "Access", want: false},
 	}
@@ -125,8 +125,8 @@ func TestAccessToken_IsRefreshToken(t *testing.T) {
 		category string
 		want     bool
 	}{
-		{name: "refresh", category: "refresh", want: true},
-		{name: "access", category: "access", want: false},
+		{name: "refresh", category: TokenCategoryRefresh, want: true},
+		{name: "access", category: TokenCategoryAccess, want: false},
 		{name: "empty", category: "", want: false},
 		{name: "uppercase is not matched", category: "Refresh", want: false},
 	}

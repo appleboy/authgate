@@ -8,6 +8,7 @@ import (
 	"github.com/go-authgate/authgate/internal/auth"
 	"github.com/go-authgate/authgate/internal/core"
 	"github.com/go-authgate/authgate/internal/middleware"
+	"github.com/go-authgate/authgate/internal/models"
 	"github.com/go-authgate/authgate/internal/services"
 	"github.com/go-authgate/authgate/internal/templates"
 	"github.com/go-authgate/authgate/internal/util"
@@ -175,7 +176,7 @@ func (h *AuthHandler) Login(c *gin.Context,
 	duration := time.Since(start)
 	authSource := user.AuthSource
 	if authSource == "" {
-		authSource = "local"
+		authSource = models.AuthSourceLocal
 	}
 	h.metrics.RecordLogin(authSource, true)
 	h.metrics.RecordAuthAttempt(authSource, true, duration)

@@ -96,17 +96,7 @@ func (s StringArray) Value() (driver.Value, error) {
 
 // Join returns a string with elements joined by the specified separator
 func (s StringArray) Join(sep string) string {
-	if len(s) == 0 {
-		return ""
-	}
-	var b strings.Builder
-	for i, str := range s {
-		if i > 0 {
-			b.WriteString(sep)
-		}
-		b.WriteString(str)
-	}
-	return b.String()
+	return strings.Join(s, sep)
 }
 
 // TableName overrides the table name used by OAuthApplication to `oauth_applications`

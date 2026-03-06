@@ -164,7 +164,7 @@ func (s *Store) seedData(ctx context.Context, cfg *config.Config) error {
 			Username:     "admin",
 			Email:        "admin@localhost", // Default email for admin
 			PasswordHash: string(hash),
-			Role:         "admin",
+			Role:         models.UserRoleAdmin,
 		}
 		if err := s.db.WithContext(ctx).Create(user).Error; err != nil {
 			return err
@@ -301,7 +301,7 @@ func (s *Store) UpsertExternalUser(
 		ID:           uuid.New().String(),
 		Username:     username,
 		PasswordHash: "", // No local password for external users
-		Role:         "user",
+		Role:         models.UserRoleUser,
 		ExternalID:   externalID,
 		AuthSource:   authSource,
 		Email:        email,

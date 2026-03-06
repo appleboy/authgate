@@ -4,6 +4,18 @@ import (
 	"time"
 )
 
+// User role constants
+const (
+	UserRoleAdmin = "admin"
+	UserRoleUser  = "user"
+)
+
+// AuthSource constants define where a user authenticates from.
+const (
+	AuthSourceLocal   = "local"
+	AuthSourceHTTPAPI = "http_api"
+)
+
 type User struct {
 	ID           string `gorm:"primaryKey"`
 	Username     string `gorm:"uniqueIndex;not null"`
@@ -23,10 +35,10 @@ type User struct {
 
 // IsAdmin returns true if the user has admin role
 func (u *User) IsAdmin() bool {
-	return u.Role == "admin"
+	return u.Role == UserRoleAdmin
 }
 
 // IsExternal returns true if user authenticates via external provider
 func (u *User) IsExternal() bool {
-	return u.AuthSource != "local" && u.AuthSource != ""
+	return u.AuthSource != AuthSourceLocal && u.AuthSource != ""
 }
