@@ -2,7 +2,6 @@ package cache
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -52,9 +51,7 @@ func NewRueidisCache[T any](
 
 // Get retrieves a value from Redis.
 func (r *RueidisCache[T]) Get(ctx context.Context, key string) (T, error) {
-	fullKey := r.keyPrefix + key
-
-	cmd := r.client.B().Get().Key(fullKey).Build()
+	cmd := r.client.B().Get().Key(prefixedKey(r.keyPrefix, key)).Build()
 	resp := r.client.Do(ctx, cmd)
 
 	if err := resp.Error(); err != nil {
@@ -71,27 +68,19 @@ func (r *RueidisCache[T]) Get(ctx context.Context, key string) (T, error) {
 		return zero, fmt.Errorf("%w: %v", ErrInvalidValue, err)
 	}
 
-	var value T
-	if err := json.Unmarshal([]byte(str), &value); err != nil {
-		var zero T
-		return zero, fmt.Errorf("%w: %v", ErrInvalidValue, err)
-	}
-
-	return value, nil
+	return unmarshalValue[T](str)
 }
 
 // Set stores a value in Redis with TTL.
 func (r *RueidisCache[T]) Set(ctx context.Context, key string, value T, ttl time.Duration) error {
-	fullKey := r.keyPrefix + key
-
-	encoded, err := json.Marshal(value)
+	encoded, err := marshalValue(value)
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrInvalidValue, err)
+		return err
 	}
 
 	cmd := r.client.B().Set().
-		Key(fullKey).
-		Value(string(encoded)).
+		Key(prefixedKey(r.keyPrefix, key)).
+		Value(encoded).
 		Ex(ttl).
 		Build()
 
@@ -108,13 +97,7 @@ func (r *RueidisCache[T]) MGet(ctx context.Context, keys []string) (map[string]T
 		return make(map[string]T), nil
 	}
 
-	// Build full keys
-	fullKeys := make([]string, len(keys))
-	for i, key := range keys {
-		fullKeys[i] = r.keyPrefix + key
-	}
-
-	cmd := r.client.B().Mget().Key(fullKeys...).Build()
+	cmd := r.client.B().Mget().Key(prefixedKeys(r.keyPrefix, keys)...).Build()
 	resp := r.client.Do(ctx, cmd)
 
 	if err := resp.Error(); err != nil {
@@ -126,26 +109,7 @@ func (r *RueidisCache[T]) MGet(ctx context.Context, keys []string) (map[string]T
 		return nil, fmt.Errorf("%w: %v", ErrInvalidValue, err)
 	}
 
-	result := make(map[string]T)
-	for i, val := range values {
-		if val.IsNil() {
-			continue // Skip missing keys
-		}
-
-		str, err := val.ToString()
-		if err != nil {
-			continue // Skip invalid values
-		}
-
-		var item T
-		if err := json.Unmarshal([]byte(str), &item); err != nil {
-			continue // Skip invalid values
-		}
-
-		result[keys[i]] = item
-	}
-
-	return result, nil
+	return parseMultiGetResponse[T](keys, values), nil
 }
 
 // MSet stores multiple values in Redis with TTL.
@@ -157,16 +121,14 @@ func (r *RueidisCache[T]) MSet(ctx context.Context, values map[string]T, ttl tim
 	// Use pipeline for multiple SET commands
 	cmds := make(rueidis.Commands, 0, len(values))
 	for key, value := range values {
-		fullKey := r.keyPrefix + key
-
-		encoded, err := json.Marshal(value)
+		encoded, err := marshalValue(value)
 		if err != nil {
-			return fmt.Errorf("%w: %v", ErrInvalidValue, err)
+			return err
 		}
 
 		cmd := r.client.B().Set().
-			Key(fullKey).
-			Value(string(encoded)).
+			Key(prefixedKey(r.keyPrefix, key)).
+			Value(encoded).
 			Ex(ttl).
 			Build()
 		cmds = append(cmds, cmd)
@@ -183,9 +145,7 @@ func (r *RueidisCache[T]) MSet(ctx context.Context, values map[string]T, ttl tim
 
 // Delete removes a key from Redis.
 func (r *RueidisCache[T]) Delete(ctx context.Context, key string) error {
-	fullKey := r.keyPrefix + key
-
-	cmd := r.client.B().Del().Key(fullKey).Build()
+	cmd := r.client.B().Del().Key(prefixedKey(r.keyPrefix, key)).Build()
 	if err := r.client.Do(ctx, cmd).Error(); err != nil {
 		return fmt.Errorf("%w: %v", ErrCacheUnavailable, err)
 	}
