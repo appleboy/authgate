@@ -73,22 +73,7 @@ func (r *RueidisCache[T]) Get(ctx context.Context, key string) (T, error) {
 
 // Set stores a value in Redis with TTL.
 func (r *RueidisCache[T]) Set(ctx context.Context, key string, value T, ttl time.Duration) error {
-	encoded, err := marshalValue(value)
-	if err != nil {
-		return err
-	}
-
-	cmd := r.client.B().Set().
-		Key(prefixedKey(r.keyPrefix, key)).
-		Value(encoded).
-		Ex(ttl).
-		Build()
-
-	if err := r.client.Do(ctx, cmd).Error(); err != nil {
-		return fmt.Errorf("%w: %v", ErrCacheUnavailable, err)
-	}
-
-	return nil
+	return redisSet(ctx, r.client, r.keyPrefix, key, value, ttl)
 }
 
 // MGet retrieves multiple values from Redis.
@@ -114,43 +99,12 @@ func (r *RueidisCache[T]) MGet(ctx context.Context, keys []string) (map[string]T
 
 // MSet stores multiple values in Redis with TTL.
 func (r *RueidisCache[T]) MSet(ctx context.Context, values map[string]T, ttl time.Duration) error {
-	if len(values) == 0 {
-		return nil
-	}
-
-	// Use pipeline for multiple SET commands
-	cmds := make(rueidis.Commands, 0, len(values))
-	for key, value := range values {
-		encoded, err := marshalValue(value)
-		if err != nil {
-			return err
-		}
-
-		cmd := r.client.B().Set().
-			Key(prefixedKey(r.keyPrefix, key)).
-			Value(encoded).
-			Ex(ttl).
-			Build()
-		cmds = append(cmds, cmd)
-	}
-
-	for _, resp := range r.client.DoMulti(ctx, cmds...) {
-		if err := resp.Error(); err != nil {
-			return fmt.Errorf("%w: %v", ErrCacheUnavailable, err)
-		}
-	}
-
-	return nil
+	return redisMSet(ctx, r.client, r.keyPrefix, values, ttl)
 }
 
 // Delete removes a key from Redis.
 func (r *RueidisCache[T]) Delete(ctx context.Context, key string) error {
-	cmd := r.client.B().Del().Key(prefixedKey(r.keyPrefix, key)).Build()
-	if err := r.client.Do(ctx, cmd).Error(); err != nil {
-		return fmt.Errorf("%w: %v", ErrCacheUnavailable, err)
-	}
-
-	return nil
+	return redisDelete(ctx, r.client, r.keyPrefix, key)
 }
 
 // Close closes the Redis connection.
@@ -161,11 +115,7 @@ func (r *RueidisCache[T]) Close() error {
 
 // Health checks if Redis is reachable.
 func (r *RueidisCache[T]) Health(ctx context.Context) error {
-	cmd := r.client.B().Ping().Build()
-	if err := r.client.Do(ctx, cmd).Error(); err != nil {
-		return fmt.Errorf("%w: %v", ErrCacheUnavailable, err)
-	}
-	return nil
+	return redisHealth(ctx, r.client)
 }
 
 // GetWithFetch retrieves a value using the cache-aside pattern.
@@ -177,14 +127,5 @@ func (r *RueidisCache[T]) GetWithFetch(
 	ttl time.Duration,
 	fetchFunc func(ctx context.Context, key string) (T, error),
 ) (T, error) {
-	if value, err := r.Get(ctx, key); err == nil {
-		return value, nil
-	}
-	value, err := fetchFunc(ctx, key)
-	if err != nil {
-		var zero T
-		return zero, err
-	}
-	_ = r.Set(ctx, key, value, ttl)
-	return value, nil
+	return defaultGetWithFetch(ctx, r, key, ttl, fetchFunc)
 }
