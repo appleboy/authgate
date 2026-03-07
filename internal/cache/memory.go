@@ -37,13 +37,7 @@ func (m *MemoryCache[T]) Get(ctx context.Context, key string) (T, error) {
 	defer m.mu.RUnlock()
 
 	item, exists := m.items[key]
-	if !exists {
-		var zero T
-		return zero, ErrCacheMiss
-	}
-
-	// Lazy expiration check
-	if time.Now().After(item.expiresAt) {
+	if !exists || time.Now().After(item.expiresAt) {
 		var zero T
 		return zero, ErrCacheMiss
 	}
