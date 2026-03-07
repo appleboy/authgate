@@ -368,7 +368,9 @@ func (s *TokenService) IsTokenOwnedByUser(tokenID, userID string) (bool, error) 
 }
 
 // enrichTokensWithClients batch-fetches client names and joins them onto a token slice.
-func (s *TokenService) enrichTokensWithClients(tokens []models.AccessToken) ([]TokenWithClient, error) {
+func (s *TokenService) enrichTokensWithClients(
+	tokens []models.AccessToken,
+) ([]TokenWithClient, error) {
 	clientIDSet := make(map[string]bool, len(tokens))
 	for _, tok := range tokens {
 		clientIDSet[tok.ClientID] = true
@@ -540,7 +542,9 @@ func (s *TokenService) RefreshAccessToken(
 		}
 
 		// Revoke old refresh token (soft delete)
-		if err := tx.Model(refreshToken).Update("status", models.TokenStatusRevoked).Error; err != nil {
+		if err := tx.Model(refreshToken).
+			Update("status", models.TokenStatusRevoked).
+			Error; err != nil {
 			tx.Rollback()
 			return nil, nil, fmt.Errorf("failed to revoke old refresh token: %w", err)
 		}
@@ -840,7 +844,11 @@ func (s *TokenService) RevokeTokenByStatus(tokenID string) error {
 
 // GetActiveRefreshTokens gets all active refresh tokens for a user
 func (s *TokenService) GetActiveRefreshTokens(userID string) ([]models.AccessToken, error) {
-	return s.store.GetTokensByCategoryAndStatus(userID, models.TokenCategoryRefresh, models.TokenStatusActive)
+	return s.store.GetTokensByCategoryAndStatus(
+		userID,
+		models.TokenCategoryRefresh,
+		models.TokenStatusActive,
+	)
 }
 
 // ExchangeAuthorizationCode issues an access token, a refresh token, and (when the openid scope
