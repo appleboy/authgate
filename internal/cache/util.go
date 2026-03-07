@@ -42,6 +42,11 @@ func unmarshalValue[T any](str string) (T, error) {
 
 // parseMultiGetResponse maps Redis MGET results back to their original keys,
 // skipping nil or unparseable entries.
+//
+// Note: rueidis.RedisMessage has unexported fields and cannot be constructed
+// outside the rueidis package, so this function is not directly unit-testable.
+// The decode path (unmarshalValue) is covered by TestMarshalValue/TestUnmarshalValue,
+// and the full MGet behaviour is exercised by Redis integration tests.
 func parseMultiGetResponse[T any](keys []string, values []rueidis.RedisMessage) map[string]T {
 	result := make(map[string]T, len(keys))
 	for i, val := range values {
