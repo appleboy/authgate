@@ -81,7 +81,6 @@ func (s *TokenService) ExchangeDeviceCode(
 ) (*models.AccessToken, *models.AccessToken, error) {
 	dc, err := s.deviceService.GetDeviceCode(deviceCode)
 	if err != nil {
-		// Record validation result
 		result := "invalid"
 		if errors.Is(err, ErrDeviceCodeExpired) {
 			result = "expired"

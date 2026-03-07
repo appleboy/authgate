@@ -540,7 +540,7 @@ func (s *UserService) createUserWithOAuth(
 	// Use transaction to ensure atomicity
 	err := s.store.DB().Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(user).Error; err != nil {
-			if strings.Contains(err.Error(), "UNIQUE constraint") {
+			if errors.Is(err, gorm.ErrDuplicatedKey) {
 				return fmt.Errorf("email already in use: %s", oauthUserInfo.Email)
 			}
 			return fmt.Errorf("failed to create user: %w", err)
@@ -599,7 +599,7 @@ func (s *UserService) generateUniqueUsername(baseUsername, provider string) stri
 
 	// Try with numbers
 	for i := 1; i <= 10; i++ {
-		candidate := sanitizeUsername(baseUsername) + "-" + provider + "-" + strconv.Itoa(i)
+		candidate := username + "-" + strconv.Itoa(i)
 		if _, err := s.store.GetUserByUsername(candidate); err != nil {
 			return candidate
 		}

@@ -251,18 +251,19 @@ func maskSensitiveDetails(details models.AuditDetails) models.AuditDetails {
 
 	masked := make(models.AuditDetails)
 	for key, value := range details {
-		// Complete masking for these fields
-		if isSensitiveField(key) {
-			masked[key] = "***REDACTED***"
-			continue
-		}
-
-		// Partial masking for tokens and codes
+		// Partial masking takes priority: token_id, device_code, etc. should
+		// show truncated values rather than being fully redacted.
 		if isPartialMaskField(key) {
 			if str, ok := value.(string); ok && len(str) > 12 {
 				masked[key] = str[:8] + "..." + str[len(str)-4:]
 				continue
 			}
+		}
+
+		// Complete masking for sensitive fields (passwords, secrets, raw tokens)
+		if isSensitiveField(key) {
+			masked[key] = "***REDACTED***"
+			continue
 		}
 
 		// Keep other fields as-is
@@ -272,10 +273,8 @@ func maskSensitiveDetails(details models.AuditDetails) models.AuditDetails {
 	return masked
 }
 
-// isSensitiveField checks if a field should be completely masked
-func isSensitiveField(key string) bool {
-	key = strings.ToLower(key)
-	sensitiveFields := []string{
+var (
+	sensitiveFields = []string{
 		"password",
 		"client_secret",
 		"token",
@@ -283,7 +282,12 @@ func isSensitiveField(key string) bool {
 		"refresh_token",
 		"secret",
 	}
+	partialMaskFields = []string{"device_code", "token_id"}
+)
 
+// isSensitiveField checks if a field should be completely masked
+func isSensitiveField(key string) bool {
+	key = strings.ToLower(key)
 	for _, field := range sensitiveFields {
 		if strings.Contains(key, field) {
 			return true
@@ -295,11 +299,6 @@ func isSensitiveField(key string) bool {
 // isPartialMaskField checks if a field should be partially masked
 func isPartialMaskField(key string) bool {
 	key = strings.ToLower(key)
-	partialMaskFields := []string{
-		"device_code",
-		"token_id",
-	}
-
 	for _, field := range partialMaskFields {
 		if strings.Contains(key, field) {
 			return true
