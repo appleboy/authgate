@@ -175,7 +175,7 @@ func TestAuthenticate_LocalSuccess(t *testing.T) {
 
 	mockLocalProvider.EXPECT().
 		Authenticate(gomock.Any(), u.Username, "correct-password").
-		Return(&core.AuthResult{Username: u.Username, Success: true}, nil).
+		Return(&core.AuthResult{Username: u.Username}, nil).
 		Times(1)
 
 	svc := newUserServiceForAuth(db, mockLocalProvider, nil, AuthModeLocal, mockCache)
@@ -228,7 +228,6 @@ func TestAuthenticate_HTTPAPIExistingUser(t *testing.T) {
 		Return(&core.AuthResult{
 			Username:   u.Username,
 			ExternalID: u.ExternalID,
-			Success:    true,
 		}, nil).
 		Times(1)
 
@@ -266,10 +265,9 @@ func TestAuthenticate_UserNotFound_LocalMode(t *testing.T) {
 	assert.ErrorIs(t, err, ErrInvalidCredentials)
 }
 
-// TestAuthenticate_LocalSuccessFalse covers the if !authResult.Success branch in
-// authenticateExistingUser when the provider returns a non-nil result with Success=false
-// and a nil error (distinct from the error-return path).
-func TestAuthenticate_LocalSuccessFalse(t *testing.T) {
+// TestAuthenticate_LocalAuthError covers the error-return path in
+// authenticateExistingUser when the local provider returns an error.
+func TestAuthenticate_LocalAuthError(t *testing.T) {
 	db := setupTestStore(t)
 	ctrl := gomock.NewController(t)
 	mockCache := mocks.NewMockCache[models.User](ctrl)
@@ -279,7 +277,7 @@ func TestAuthenticate_LocalSuccessFalse(t *testing.T) {
 
 	mockLocalProvider.EXPECT().
 		Authenticate(gomock.Any(), u.Username, "bad-pass").
-		Return(&core.AuthResult{Username: u.Username, Success: false}, nil).
+		Return(nil, errors.New("invalid credentials")).
 		Times(1)
 
 	svc := newUserServiceForAuth(db, mockLocalProvider, nil, AuthModeLocal, mockCache)
@@ -287,9 +285,9 @@ func TestAuthenticate_LocalSuccessFalse(t *testing.T) {
 	assert.ErrorIs(t, err, ErrInvalidCredentials)
 }
 
-// TestAuthenticate_HTTPAPIExistingUser_SuccessFalse covers the if !authResult.Success branch
-// for an existing HTTP API user (no sync occurs because Success=false).
-func TestAuthenticate_HTTPAPIExistingUser_SuccessFalse(t *testing.T) {
+// TestAuthenticate_HTTPAPIExistingUser_AuthError covers the error-return path
+// for an existing HTTP API user (no sync occurs because auth failed).
+func TestAuthenticate_HTTPAPIExistingUser_AuthError(t *testing.T) {
 	db := setupTestStore(t)
 	ctrl := gomock.NewController(t)
 	mockCache := mocks.NewMockCache[models.User](ctrl)
@@ -299,10 +297,10 @@ func TestAuthenticate_HTTPAPIExistingUser_SuccessFalse(t *testing.T) {
 
 	mockHTTPAPIProvider.EXPECT().
 		Authenticate(gomock.Any(), u.Username, "bad-pass").
-		Return(&core.AuthResult{Username: u.Username, ExternalID: u.ExternalID, Success: false}, nil).
+		Return(nil, errors.New("invalid credentials")).
 		Times(1)
 
-	// No cache.Delete call expected: sync only runs when Success=true.
+	// No cache.Delete call expected: sync only runs on success.
 	svc := newUserServiceForAuth(db, nil, mockHTTPAPIProvider, AuthModeHTTPAPI, mockCache)
 	_, err := svc.Authenticate(context.Background(), u.Username, "bad-pass")
 	assert.ErrorIs(t, err, ErrInvalidCredentials)
@@ -326,7 +324,6 @@ func TestAuthenticate_HTTPAPINewUser_Success(t *testing.T) {
 			Username:   newUsername,
 			ExternalID: newExtID,
 			Email:      newUsername + "@example.com",
-			Success:    true,
 		}, nil).
 		Times(1)
 
@@ -343,9 +340,9 @@ func TestAuthenticate_HTTPAPINewUser_Success(t *testing.T) {
 	assert.Equal(t, newExtID, result.ExternalID)
 }
 
-// TestAuthenticate_HTTPAPINewUser_SuccessFalse covers authenticateAndCreateExternalUser when
-// the user does not exist and the HTTP API provider returns Success=false with a nil error.
-func TestAuthenticate_HTTPAPINewUser_SuccessFalse(t *testing.T) {
+// TestAuthenticate_HTTPAPINewUser_AuthFailed covers authenticateAndCreateExternalUser when
+// the user does not exist and the HTTP API provider returns an error.
+func TestAuthenticate_HTTPAPINewUser_AuthFailed(t *testing.T) {
 	db := setupTestStore(t)
 	ctrl := gomock.NewController(t)
 	mockCache := mocks.NewMockCache[models.User](ctrl)
@@ -353,7 +350,7 @@ func TestAuthenticate_HTTPAPINewUser_SuccessFalse(t *testing.T) {
 
 	mockHTTPAPIProvider.EXPECT().
 		Authenticate(gomock.Any(), "ghost-user", "bad-pass").
-		Return(&core.AuthResult{Username: "ghost-user", Success: false}, nil).
+		Return(nil, errors.New("invalid credentials")).
 		Times(1)
 
 	svc := newUserServiceForAuth(db, nil, mockHTTPAPIProvider, AuthModeHTTPAPI, mockCache)

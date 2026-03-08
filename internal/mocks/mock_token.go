@@ -140,18 +140,18 @@ func (mr *MockTokenProviderMockRecorder) Name() *gomock.Call {
 }
 
 // RefreshAccessToken mocks base method.
-func (m *MockTokenProvider) RefreshAccessToken(ctx context.Context, refreshToken string, enableRotation bool) (*core.TokenRefreshResult, error) {
+func (m *MockTokenProvider) RefreshAccessToken(ctx context.Context, refreshToken string) (*core.TokenRefreshResult, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RefreshAccessToken", ctx, refreshToken, enableRotation)
+	ret := m.ctrl.Call(m, "RefreshAccessToken", ctx, refreshToken)
 	ret0, _ := ret[0].(*core.TokenRefreshResult)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // RefreshAccessToken indicates an expected call of RefreshAccessToken.
-func (mr *MockTokenProviderMockRecorder) RefreshAccessToken(ctx, refreshToken, enableRotation any) *gomock.Call {
+func (mr *MockTokenProviderMockRecorder) RefreshAccessToken(ctx, refreshToken any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RefreshAccessToken", reflect.TypeOf((*MockTokenProvider)(nil).RefreshAccessToken), ctx, refreshToken, enableRotation)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RefreshAccessToken", reflect.TypeOf((*MockTokenProvider)(nil).RefreshAccessToken), ctx, refreshToken)
 }
 
 // ValidateToken mocks base method.

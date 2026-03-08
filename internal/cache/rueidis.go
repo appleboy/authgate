@@ -73,27 +73,6 @@ func (r *RueidisCache[T]) Get(ctx context.Context, key string) (T, error) {
 	return unmarshalValue[T](str)
 }
 
-// MGet retrieves multiple values from Redis.
-func (r *RueidisCache[T]) MGet(ctx context.Context, keys []string) (map[string]T, error) {
-	if len(keys) == 0 {
-		return make(map[string]T), nil
-	}
-
-	cmd := r.client.B().Mget().Key(prefixedKeys(r.keyPrefix, keys)...).Build()
-	resp := r.client.Do(ctx, cmd)
-
-	if err := resp.Error(); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrCacheUnavailable, err)
-	}
-
-	values, err := resp.ToArray()
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidValue, err)
-	}
-
-	return parseMultiGetResponse[T](keys, values), nil
-}
-
 // GetWithFetch retrieves a value using the cache-aside pattern.
 // On cache miss, fetchFunc is called and the result is stored in cache.
 // No stampede protection is provided.

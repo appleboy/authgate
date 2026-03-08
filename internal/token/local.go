@@ -52,7 +52,6 @@ func (p *LocalTokenProvider) generateJWT(
 		TokenType:   TokenTypeBearer,
 		ExpiresAt:   expiresAt,
 		Claims:      claims,
-		Success:     true,
 	}, nil
 }
 
@@ -195,8 +194,8 @@ func (p *LocalTokenProvider) ValidateRefreshToken(
 func (p *LocalTokenProvider) RefreshAccessToken(
 	ctx context.Context,
 	refreshToken string,
-	enableRotation bool,
 ) (*RefreshResult, error) {
+	enableRotation := p.config.EnableTokenRotation
 	// Validate the refresh token
 	validationResult, err := p.ValidateRefreshToken(ctx, refreshToken)
 	if err != nil {
@@ -218,7 +217,6 @@ func (p *LocalTokenProvider) RefreshAccessToken(
 
 	result := &RefreshResult{
 		AccessToken: accessResult,
-		Success:     true,
 	}
 
 	// Generate new refresh token only in rotation mode

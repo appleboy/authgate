@@ -15,13 +15,6 @@ type Cache[T any] interface {
 	// Set stores a single value in cache with TTL
 	Set(ctx context.Context, key string, value T, ttl time.Duration) error
 
-	// MGet retrieves multiple values from cache.
-	// Returns a map of key->value for keys that exist and have not expired.
-	MGet(ctx context.Context, keys []string) (map[string]T, error)
-
-	// MSet stores multiple values in cache with TTL
-	MSet(ctx context.Context, values map[string]T, ttl time.Duration) error
-
 	// Delete removes a key from cache
 	Delete(ctx context.Context, key string) error
 

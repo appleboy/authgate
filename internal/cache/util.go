@@ -5,22 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
-
-	"github.com/redis/rueidis"
 )
 
 // prefixedKey prepends prefix to key.
 func prefixedKey(prefix, key string) string {
 	return prefix + key
-}
-
-// prefixedKeys returns a new slice with prefix prepended to each key.
-func prefixedKeys(prefix string, keys []string) []string {
-	full := make([]string, len(keys))
-	for i, k := range keys {
-		full[i] = prefix + k
-	}
-	return full
 }
 
 // marshalValue encodes a value to its JSON string representation.
@@ -62,30 +51,4 @@ func fetchThrough[T any](
 	}
 	_ = set(ctx, key, value, ttl)
 	return value, nil
-}
-
-// parseMultiGetResponse maps Redis MGET results back to their original keys,
-// skipping nil or unparseable entries.
-//
-// Note: rueidis.RedisMessage has unexported fields and cannot be constructed
-// outside the rueidis package, so this function is not directly unit-testable.
-// The decode path (unmarshalValue) is covered by TestMarshalValue/TestUnmarshalValue,
-// and the full MGet behaviour is exercised by Redis integration tests.
-func parseMultiGetResponse[T any](keys []string, values []rueidis.RedisMessage) map[string]T {
-	result := make(map[string]T, len(keys))
-	for i, val := range values {
-		if val.IsNil() {
-			continue
-		}
-		str, err := val.ToString()
-		if err != nil {
-			continue
-		}
-		item, err := unmarshalValue[T](str)
-		if err != nil {
-			continue
-		}
-		result[keys[i]] = item
-	}
-	return result
 }

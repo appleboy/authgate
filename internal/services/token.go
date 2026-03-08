@@ -136,10 +136,6 @@ func (s *TokenService) ExchangeDeviceCode(
 		return nil, nil, fmt.Errorf("token generation failed: %w", providerErr)
 	}
 
-	if !accessTokenResult.Success {
-		return nil, nil, errors.New("token generation unsuccessful")
-	}
-
 	// Generate refresh token using provider
 	refreshTokenResult, providerErr := s.tokenProvider.GenerateRefreshToken(
 		ctx,
@@ -154,10 +150,6 @@ func (s *TokenService) ExchangeDeviceCode(
 			providerErr,
 		)
 		return nil, nil, fmt.Errorf("refresh token generation failed: %w", providerErr)
-	}
-
-	if !refreshTokenResult.Success {
-		return nil, nil, errors.New("refresh token generation unsuccessful")
 	}
 
 	// Create access token record
@@ -469,23 +461,15 @@ func (s *TokenService) RefreshAccessToken(
 		return nil, nil, token.ErrInvalidScope
 	}
 
-	// 6. Use provider to generate new tokens (pass rotation config)
-	enableRotation := s.config.EnableTokenRotation
-
+	// 6. Use provider to generate new tokens
 	refreshResult, providerErr := s.tokenProvider.RefreshAccessToken(
 		ctx,
 		refreshTokenString,
-		enableRotation,
 	)
 	if providerErr != nil {
 		log.Printf("[Token] Refresh failed provider=%s: %v", s.tokenProvider.Name(), providerErr)
 		s.metrics.RecordTokenRefresh(false)
 		return nil, nil, providerErr
-	}
-
-	if !refreshResult.Success {
-		s.metrics.RecordTokenRefresh(false)
-		return nil, nil, errors.New("token refresh unsuccessful")
 	}
 
 	// 7. Save new tokens in transaction
@@ -519,7 +503,7 @@ func (s *TokenService) RefreshAccessToken(
 	// 7.2 Handle refresh token based on mode
 	var newRefreshToken *models.AccessToken
 
-	if enableRotation && refreshResult.RefreshToken != nil {
+	if s.config.EnableTokenRotation && refreshResult.RefreshToken != nil {
 		// Rotation mode: create new refresh token, revoke old one
 		newRefreshToken = &models.AccessToken{
 			ID:            uuid.New().String(),
@@ -571,15 +555,16 @@ func (s *TokenService) RefreshAccessToken(
 	// Log token refresh
 	if s.auditService != nil {
 		providerName := s.tokenProvider.Name()
+		rotated := s.config.EnableTokenRotation && refreshResult.RefreshToken != nil
 		details := models.AuditDetails{
 			"client_id":           newAccessToken.ClientID,
 			"scopes":              newAccessToken.Scopes,
 			"token_provider":      providerName,
-			"rotation_enabled":    enableRotation,
+			"rotation_enabled":    rotated,
 			"new_access_token_id": newAccessToken.ID,
 		}
 
-		if enableRotation && newRefreshToken.ID != refreshToken.ID {
+		if rotated && newRefreshToken.ID != refreshToken.ID {
 			details["new_refresh_token_id"] = newRefreshToken.ID
 			details["old_refresh_token_id"] = refreshToken.ID
 		}
@@ -666,10 +651,6 @@ func (s *TokenService) IssueClientCredentialsToken(
 		)
 		return nil, fmt.Errorf("token generation failed: %w", providerErr)
 	}
-	if !accessTokenResult.Success {
-		return nil, errors.New("token generation unsuccessful")
-	}
-
 	// 7. Persist the token record (no AuthorizationID — no user consent)
 	accessToken := &models.AccessToken{
 		ID:            uuid.New().String(),
@@ -878,10 +859,6 @@ func (s *TokenService) ExchangeAuthorizationCode(
 		)
 		return nil, nil, "", fmt.Errorf("token generation failed: %w", providerErr)
 	}
-	if !accessTokenResult.Success {
-		return nil, nil, "", errors.New("token generation unsuccessful")
-	}
-
 	// Generate refresh token
 	refreshTokenResult, providerErr := s.tokenProvider.GenerateRefreshToken(
 		ctx,
@@ -897,10 +874,6 @@ func (s *TokenService) ExchangeAuthorizationCode(
 		)
 		return nil, nil, "", fmt.Errorf("refresh token generation failed: %w", providerErr)
 	}
-	if !refreshTokenResult.Success {
-		return nil, nil, "", errors.New("refresh token generation unsuccessful")
-	}
-
 	// Build token records — link to UserAuthorization for cascade-revoke support
 	accessToken := &models.AccessToken{
 		ID:              uuid.New().String(),

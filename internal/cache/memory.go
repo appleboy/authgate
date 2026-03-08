@@ -58,39 +58,6 @@ func (m *MemoryCache[T]) Set(ctx context.Context, key string, value T, ttl time.
 	return nil
 }
 
-// MGet retrieves multiple values from cache.
-func (m *MemoryCache[T]) MGet(ctx context.Context, keys []string) (map[string]T, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	result := make(map[string]T)
-	now := time.Now()
-
-	for _, key := range keys {
-		if item, exists := m.items[key]; exists && now.Before(item.expiresAt) {
-			result[key] = item.value
-		}
-	}
-
-	return result, nil
-}
-
-// MSet stores multiple values in cache with TTL.
-func (m *MemoryCache[T]) MSet(ctx context.Context, values map[string]T, ttl time.Duration) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	expiresAt := time.Now().Add(ttl)
-	for key, value := range values {
-		m.items[key] = cacheItem[T]{
-			value:     value,
-			expiresAt: expiresAt,
-		}
-	}
-
-	return nil
-}
-
 // Delete removes a key from cache.
 func (m *MemoryCache[T]) Delete(ctx context.Context, key string) error {
 	m.mu.Lock()

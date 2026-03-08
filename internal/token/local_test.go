@@ -28,7 +28,6 @@ func TestLocalTokenProvider_GenerateToken(t *testing.T) {
 	)
 
 	require.NoError(t, err)
-	assert.True(t, result.Success)
 	assert.NotEmpty(t, result.TokenString)
 	assert.Equal(t, "Bearer", result.TokenType)
 	assert.WithinDuration(t, time.Now().Add(1*time.Hour), result.ExpiresAt, 5*time.Second)
