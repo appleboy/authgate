@@ -140,8 +140,9 @@ func (s *Store) seedData(ctx context.Context, cfg *config.Config) error {
 	// Create default user if not exists
 	var userCount int64
 	s.db.WithContext(ctx).Model(&models.User{}).Count(&userCount)
-	userID := uuid.New().String()
+	var userID string
 	if userCount == 0 {
+		userID = uuid.New().String()
 		var password string
 		var err error
 
@@ -183,6 +184,17 @@ func (s *Store) seedData(ctx context.Context, cfg *config.Config) error {
 	var clientCount int64
 	s.db.WithContext(ctx).Model(&models.OAuthApplication{}).Count(&clientCount)
 	if clientCount == 0 {
+		// If admin user was not just created, look up the existing admin user ID
+		if userID == "" {
+			var adminUser models.User
+			if err := s.db.WithContext(ctx).
+				Where("username = ?", "admin").
+				First(&adminUser).
+				Error; err != nil {
+				return fmt.Errorf("failed to find admin user for default client: %w", err)
+			}
+			userID = adminUser.ID
+		}
 		clientID := uuid.New().String()
 		client := &models.OAuthApplication{
 			UserID:             userID,
@@ -323,14 +335,6 @@ func (s *Store) GetClient(clientID string) (*models.OAuthApplication, error) {
 		return nil, err
 	}
 	return &client, nil
-}
-
-func (s *Store) ListClients() ([]models.OAuthApplication, error) {
-	var clients []models.OAuthApplication
-	if err := s.db.Order("created_at DESC").Find(&clients).Error; err != nil {
-		return nil, err
-	}
-	return clients, nil
 }
 
 // ListClientsPaginated returns paginated OAuth clients with search and optional status filter support
@@ -804,22 +808,25 @@ func (s *Store) GetAuditLogStats(startTime, endTime time.Time) (AuditLogStats, e
 		EventsBySeverity: make(map[models.EventSeverity]int64),
 	}
 
-	// Build base query
-	query := s.db.Model(&models.AuditLog{})
-	if !startTime.IsZero() {
-		query = query.Where("event_time >= ?", startTime)
-	}
-	if !endTime.IsZero() {
-		query = query.Where("event_time <= ?", endTime)
+	// Build base query as a function to avoid GORM query state mutation
+	baseQuery := func() *gorm.DB {
+		q := s.db.Model(&models.AuditLog{})
+		if !startTime.IsZero() {
+			q = q.Where("event_time >= ?", startTime)
+		}
+		if !endTime.IsZero() {
+			q = q.Where("event_time <= ?", endTime)
+		}
+		return q
 	}
 
 	// Total events
-	if err := query.Count(&stats.TotalEvents).Error; err != nil {
+	if err := baseQuery().Count(&stats.TotalEvents).Error; err != nil {
 		return stats, err
 	}
 
 	// Success/Failure counts
-	if err := query.Where("success = ?", true).Count(&stats.SuccessCount).Error; err != nil {
+	if err := baseQuery().Where("success = ?", true).Count(&stats.SuccessCount).Error; err != nil {
 		return stats, err
 	}
 	stats.FailureCount = stats.TotalEvents - stats.SuccessCount
@@ -829,7 +836,7 @@ func (s *Store) GetAuditLogStats(startTime, endTime time.Time) (AuditLogStats, e
 		EventType models.EventType
 		Count     int64
 	}
-	if err := query.Select("event_type, COUNT(*) as count").
+	if err := baseQuery().Select("event_type, COUNT(*) as count").
 		Group("event_type").
 		Find(&typeResults).Error; err != nil {
 		return stats, err
@@ -843,7 +850,7 @@ func (s *Store) GetAuditLogStats(startTime, endTime time.Time) (AuditLogStats, e
 		Severity models.EventSeverity
 		Count    int64
 	}
-	if err := query.Select("severity, COUNT(*) as count").
+	if err := baseQuery().Select("severity, COUNT(*) as count").
 		Group("severity").
 		Find(&severityResults).Error; err != nil {
 		return stats, err
