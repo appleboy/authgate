@@ -64,18 +64,6 @@ func (mr *MockRecorderMockRecorder) RecordDatabaseQueryError(operation any) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordDatabaseQueryError", reflect.TypeOf((*MockRecorder)(nil).RecordDatabaseQueryError), operation)
 }
 
-// RecordExternalAPICall mocks base method.
-func (m *MockRecorder) RecordExternalAPICall(provider string, duration time.Duration) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "RecordExternalAPICall", provider, duration)
-}
-
-// RecordExternalAPICall indicates an expected call of RecordExternalAPICall.
-func (mr *MockRecorderMockRecorder) RecordExternalAPICall(provider, duration any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordExternalAPICall", reflect.TypeOf((*MockRecorder)(nil).RecordExternalAPICall), provider, duration)
-}
-
 // RecordLogin mocks base method.
 func (m *MockRecorder) RecordLogin(authSource string, success bool) {
 	m.ctrl.T.Helper()
@@ -148,30 +136,6 @@ func (mr *MockRecorderMockRecorder) RecordOAuthDeviceCodeValidation(result any) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordOAuthDeviceCodeValidation", reflect.TypeOf((*MockRecorder)(nil).RecordOAuthDeviceCodeValidation), result)
 }
 
-// RecordSessionExpired mocks base method.
-func (m *MockRecorder) RecordSessionExpired(reason string, duration time.Duration) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "RecordSessionExpired", reason, duration)
-}
-
-// RecordSessionExpired indicates an expected call of RecordSessionExpired.
-func (mr *MockRecorderMockRecorder) RecordSessionExpired(reason, duration any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordSessionExpired", reflect.TypeOf((*MockRecorder)(nil).RecordSessionExpired), reason, duration)
-}
-
-// RecordSessionInvalidated mocks base method.
-func (m *MockRecorder) RecordSessionInvalidated(reason string) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "RecordSessionInvalidated", reason)
-}
-
-// RecordSessionInvalidated indicates an expected call of RecordSessionInvalidated.
-func (mr *MockRecorderMockRecorder) RecordSessionInvalidated(reason any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordSessionInvalidated", reflect.TypeOf((*MockRecorder)(nil).RecordSessionInvalidated), reason)
-}
-
 // RecordTokenIssued mocks base method.
 func (m *MockRecorder) RecordTokenIssued(tokenType, grantType string, generationTime time.Duration, provider string) {
 	m.ctrl.T.Helper()
@@ -230,18 +194,6 @@ func (m *MockRecorder) SetActiveDeviceCodesCount(total, pending int) {
 func (mr *MockRecorderMockRecorder) SetActiveDeviceCodesCount(total, pending any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetActiveDeviceCodesCount", reflect.TypeOf((*MockRecorder)(nil).SetActiveDeviceCodesCount), total, pending)
-}
-
-// SetActiveSessionsCount mocks base method.
-func (m *MockRecorder) SetActiveSessionsCount(count int) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetActiveSessionsCount", count)
-}
-
-// SetActiveSessionsCount indicates an expected call of SetActiveSessionsCount.
-func (mr *MockRecorderMockRecorder) SetActiveSessionsCount(count any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetActiveSessionsCount", reflect.TypeOf((*MockRecorder)(nil).SetActiveSessionsCount), count)
 }
 
 // SetActiveTokensCount mocks base method.

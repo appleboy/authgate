@@ -36,15 +36,13 @@ type Metrics struct {
 	AuthLoginTotal          *prometheus.CounterVec
 	AuthLogoutTotal         prometheus.Counter
 	AuthOAuthCallbackTotal  *prometheus.CounterVec
-	AuthLoginDuration       *prometheus.HistogramVec
-	AuthExternalAPIDuration *prometheus.HistogramVec
+	AuthLoginDuration *prometheus.HistogramVec
 
 	// Session Metrics
-	SessionsActive           prometheus.Gauge
-	SessionsCreatedTotal     prometheus.Counter
-	SessionsExpiredTotal     *prometheus.CounterVec
-	SessionsInvalidatedTotal *prometheus.CounterVec
-	SessionDuration          prometheus.Histogram
+	SessionsActive       prometheus.Gauge
+	SessionsCreatedTotal prometheus.Counter
+	SessionsExpiredTotal *prometheus.CounterVec
+	SessionDuration      prometheus.Histogram
 
 	// HTTP Request Metrics
 	HTTPRequestsTotal    *prometheus.CounterVec
@@ -220,15 +218,6 @@ func initMetrics() *Metrics {
 			},
 			[]string{"method"}, // local, http_api, oauth
 		),
-		AuthExternalAPIDuration: promauto.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Name:    "auth_external_api_duration_seconds",
-				Help:    "Time taken for external API authentication calls",
-				Buckets: prometheus.DefBuckets,
-			},
-			[]string{"provider"}, // http_api
-		),
-
 		// Session Metrics
 		SessionsActive: promauto.NewGauge(
 			prometheus.GaugeOpts{
@@ -248,13 +237,6 @@ func initMetrics() *Metrics {
 				Help: "Total number of sessions expired",
 			},
 			[]string{"reason"}, // timeout, idle_timeout, logout, fingerprint_mismatch
-		),
-		SessionsInvalidatedTotal: promauto.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "sessions_invalidated_total",
-				Help: "Total number of sessions invalidated",
-			},
-			[]string{"reason"}, // security, admin
 		),
 		SessionDuration: promauto.NewHistogram(
 			prometheus.HistogramOpts{

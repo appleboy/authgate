@@ -113,35 +113,6 @@ func (mr *MockCacheMockRecorder[T]) Health(ctx any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Health", reflect.TypeOf((*MockCache[T])(nil).Health), ctx)
 }
 
-// MGet mocks base method.
-func (m *MockCache[T]) MGet(ctx context.Context, keys []string) (map[string]T, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MGet", ctx, keys)
-	ret0, _ := ret[0].(map[string]T)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// MGet indicates an expected call of MGet.
-func (mr *MockCacheMockRecorder[T]) MGet(ctx, keys any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MGet", reflect.TypeOf((*MockCache[T])(nil).MGet), ctx, keys)
-}
-
-// MSet mocks base method.
-func (m *MockCache[T]) MSet(ctx context.Context, values map[string]T, ttl time.Duration) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MSet", ctx, values, ttl)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// MSet indicates an expected call of MSet.
-func (mr *MockCacheMockRecorder[T]) MSet(ctx, values, ttl any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MSet", reflect.TypeOf((*MockCache[T])(nil).MSet), ctx, values, ttl)
-}
-
 // Set mocks base method.
 func (m *MockCache[T]) Set(ctx context.Context, key string, value T, ttl time.Duration) error {
 	m.ctrl.T.Helper()

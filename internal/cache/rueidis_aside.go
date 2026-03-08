@@ -125,24 +125,3 @@ func (r *RueidisAsideCache[T]) GetWithFetch(
 	return unmarshalValue[T](val)
 }
 
-// MGet retrieves multiple values from Redis with client-side caching.
-func (r *RueidisAsideCache[T]) MGet(ctx context.Context, keys []string) (map[string]T, error) {
-	if len(keys) == 0 {
-		return make(map[string]T), nil
-	}
-
-	// Use DoCache for client-side caching with MGET
-	cmd := r.client.B().Mget().Key(prefixedKeys(r.keyPrefix, keys)...).Cache()
-	resp := r.client.DoCache(ctx, cmd, r.clientTTL)
-
-	if err := resp.Error(); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrCacheUnavailable, err)
-	}
-
-	values, err := resp.ToArray()
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidValue, err)
-	}
-
-	return parseMultiGetResponse[T](keys, values), nil
-}

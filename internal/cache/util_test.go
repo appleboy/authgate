@@ -72,21 +72,3 @@ func TestPrefixedKey(t *testing.T) {
 	}
 }
 
-func TestPrefixedKeys(t *testing.T) {
-	got := prefixedKeys("m:", []string{"a", "b", "c"})
-	want := []string{"m:a", "m:b", "m:c"}
-	if len(got) != len(want) {
-		t.Fatalf("len mismatch: got %d, want %d", len(got), len(want))
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Errorf("[%d] got %q, want %q", i, got[i], want[i])
-		}
-	}
-}
-
-func TestPrefixedKeys_Empty(t *testing.T) {
-	if got := prefixedKeys("m:", nil); len(got) != 0 {
-		t.Errorf("expected empty slice for nil input, got %v", got)
-	}
-}

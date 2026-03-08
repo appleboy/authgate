@@ -109,7 +109,6 @@ func parseGenerateResponse(body []byte) (*Result, error) {
 		TokenType:   tokenType,
 		ExpiresAt:   expiresAt,
 		Claims:      apiResp.Claims,
-		Success:     true,
 	}, nil
 }
 
@@ -304,8 +303,8 @@ func (p *HTTPTokenProvider) ValidateRefreshToken(
 func (p *HTTPTokenProvider) RefreshAccessToken(
 	ctx context.Context,
 	refreshToken string,
-	enableRotation bool,
 ) (*RefreshResult, error) {
+	enableRotation := p.config.EnableTokenRotation
 	// First validate to get user/client info
 	validationResult, err := p.ValidateRefreshToken(ctx, refreshToken)
 	if err != nil {
@@ -368,9 +367,7 @@ func (p *HTTPTokenProvider) RefreshAccessToken(
 			TokenType:   tokenType,
 			ExpiresAt:   accessExpiresAt,
 			Claims:      apiResp.Claims,
-			Success:     true,
 		},
-		Success: true,
 	}
 
 	// If rotation is enabled and new refresh token is provided
@@ -381,7 +378,6 @@ func (p *HTTPTokenProvider) RefreshAccessToken(
 			TokenType:   tokenType,
 			ExpiresAt:   refreshExpiresAt,
 			Claims:      apiResp.Claims,
-			Success:     true,
 		}
 	}
 

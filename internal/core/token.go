@@ -38,7 +38,6 @@ type TokenResult struct {
 	TokenType   string
 	ExpiresAt   time.Time
 	Claims      map[string]any
-	Success     bool
 }
 
 // TokenValidationResult is the outcome of a token validation call.
@@ -55,7 +54,6 @@ type TokenValidationResult struct {
 type TokenRefreshResult struct {
 	AccessToken  *TokenResult // required
 	RefreshToken *TokenResult // non-nil only in rotation mode
-	Success      bool
 }
 
 // TokenProvider is the interface that token-generation backends must implement.
@@ -74,7 +72,6 @@ type TokenProvider interface {
 	RefreshAccessToken(
 		ctx context.Context,
 		refreshToken string,
-		enableRotation bool,
 	) (*TokenRefreshResult, error)
 	Name() string
 }

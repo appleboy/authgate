@@ -8,7 +8,6 @@ type AuthResult struct {
 	ExternalID string // External user ID (e.g., LDAP DN, API user ID)
 	Email      string // Optional
 	FullName   string // Optional
-	Success    bool
 }
 
 // AuthProvider is the interface that password-based authentication

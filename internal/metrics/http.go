@@ -181,24 +181,6 @@ func (m *Metrics) RecordOAuthCallback(provider string, success bool) {
 	m.AuthOAuthCallbackTotal.WithLabelValues(provider, result).Inc()
 }
 
-// RecordExternalAPICall records external API call duration
-func (m *Metrics) RecordExternalAPICall(provider string, duration time.Duration) {
-	m.AuthExternalAPIDuration.WithLabelValues(provider).Observe(duration.Seconds())
-}
-
-// RecordSessionExpired records session expiration
-func (m *Metrics) RecordSessionExpired(reason string, duration time.Duration) {
-	m.SessionsActive.Dec()
-	m.SessionsExpiredTotal.WithLabelValues(reason).Inc()
-	m.SessionDuration.Observe(duration.Seconds())
-}
-
-// RecordSessionInvalidated records session invalidation
-func (m *Metrics) RecordSessionInvalidated(reason string) {
-	m.SessionsActive.Dec()
-	m.SessionsInvalidatedTotal.WithLabelValues(reason).Inc()
-}
-
 // SetActiveTokensCount sets the current count of active tokens (for periodic updates)
 func (m *Metrics) SetActiveTokensCount(tokenType string, count int) {
 	m.TokensActive.WithLabelValues(tokenType).Set(float64(count))
@@ -208,11 +190,6 @@ func (m *Metrics) SetActiveTokensCount(tokenType string, count int) {
 func (m *Metrics) SetActiveDeviceCodesCount(total, pending int) {
 	m.DeviceCodesActive.Set(float64(total))
 	m.DeviceCodesPendingAuthorization.Set(float64(pending))
-}
-
-// SetActiveSessionsCount sets the current count of active sessions (for periodic updates)
-func (m *Metrics) SetActiveSessionsCount(count int) {
-	m.SessionsActive.Set(float64(count))
 }
 
 // RecordDatabaseQueryError records a database query error during metric collection

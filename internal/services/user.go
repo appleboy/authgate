@@ -130,7 +130,7 @@ func (s *UserService) authenticateExistingUser(
 		authResult, err = s.httpAPIProvider.Authenticate(ctx, user.Username, password)
 
 		// Sync user data on successful external auth
-		if err == nil && authResult.Success {
+		if err == nil {
 			updatedUser, syncErr := s.syncExternalUser(authResult, AuthModeHTTPAPI)
 			if syncErr != nil {
 				log.Printf("[Auth] Sync failed for user=%s: %v", user.Username, syncErr)
@@ -152,11 +152,6 @@ func (s *UserService) authenticateExistingUser(
 	// Handle authentication failure
 	if err != nil {
 		log.Printf("[Auth] Failed for user=%s provider=%s: %v", user.Username, providerName, err)
-		s.logAuthFailure(ctx, user, providerName)
-		return nil, ErrInvalidCredentials
-	}
-
-	if !authResult.Success {
 		s.logAuthFailure(ctx, user, providerName)
 		return nil, ErrInvalidCredentials
 	}
@@ -207,25 +202,6 @@ func (s *UserService) authenticateAndCreateExternalUser(
 				},
 				Success:      false,
 				ErrorMessage: err.Error(),
-			})
-		}
-		return nil, ErrInvalidCredentials
-	}
-
-	if !authResult.Success {
-		// Log failed authentication attempt
-		if s.auditService != nil {
-			s.auditService.Log(ctx, AuditLogEntry{
-				EventType:     models.EventAuthenticationFailure,
-				Severity:      models.SeverityWarning,
-				ActorUsername: username,
-				Action:        "External user login attempt failed",
-				Details: models.AuditDetails{
-					"auth_source": AuthModeHTTPAPI,
-					"reason":      "invalid_credentials",
-				},
-				Success:      false,
-				ErrorMessage: "Invalid credentials",
 			})
 		}
 		return nil, ErrInvalidCredentials

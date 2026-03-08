@@ -119,7 +119,6 @@ func (p *HTTPAPIAuthProvider) Authenticate(
 		ExternalID: authResp.UserID,
 		Email:      authResp.Email,
 		FullName:   authResp.FullName,
-		Success:    true,
 	}, nil
 }
 

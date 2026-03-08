@@ -136,35 +136,6 @@ func TestRecordOAuthCallback(t *testing.T) {
 	// No error means success
 }
 
-func TestRecordExternalAPICall(t *testing.T) {
-	m := Init(true)
-
-	m.RecordExternalAPICall("http_api", 300*time.Millisecond)
-	// No error means success
-}
-
-func TestRecordSessionExpired(t *testing.T) {
-	m := Init(true)
-
-	// First create a session
-	m.RecordLogin("local", true)
-
-	// Then expire it
-	m.RecordSessionExpired("timeout", 1800*time.Second)
-	// No error means success
-}
-
-func TestRecordSessionInvalidated(t *testing.T) {
-	m := Init(true)
-
-	// First create a session
-	m.RecordLogin("local", true)
-
-	// Then invalidate it
-	m.RecordSessionInvalidated("security")
-	// No error means success
-}
-
 func TestSetActiveTokensCount(t *testing.T) {
 	m := Init(true)
 
@@ -177,13 +148,6 @@ func TestSetActiveDeviceCodesCount(t *testing.T) {
 	m := Init(true)
 
 	m.SetActiveDeviceCodesCount(20, 5)
-	// No error means success
-}
-
-func TestSetActiveSessionsCount(t *testing.T) {
-	m := Init(true)
-
-	m.SetActiveSessionsCount(42)
 	// No error means success
 }
 

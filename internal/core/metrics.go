@@ -21,16 +21,10 @@ type Recorder interface {
 	RecordLogin(authSource string, success bool)
 	RecordLogout(sessionDuration time.Duration)
 	RecordOAuthCallback(provider string, success bool)
-	RecordExternalAPICall(provider string, duration time.Duration)
-
-	// Session Management
-	RecordSessionExpired(reason string, duration time.Duration)
-	RecordSessionInvalidated(reason string)
 
 	// Gauge Setters (for periodic updates)
 	SetActiveTokensCount(tokenType string, count int)
 	SetActiveDeviceCodesCount(total, pending int)
-	SetActiveSessionsCount(count int)
 
 	// Database Operations
 	RecordDatabaseQueryError(operation string)

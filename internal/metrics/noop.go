@@ -52,17 +52,11 @@ func (n *NoopMetrics) RecordTokenValidation(
 func (n *NoopMetrics) RecordAuthAttempt(method string, success bool, duration time.Duration) {}
 func (n *NoopMetrics) RecordLogin(authSource string, success bool)                           {}
 func (n *NoopMetrics) RecordLogout(sessionDuration time.Duration)                            {}
-func (n *NoopMetrics) RecordOAuthCallback(provider string, success bool)                     {}
-func (n *NoopMetrics) RecordExternalAPICall(provider string, duration time.Duration)         {}
-
-// Session Management - noop implementations
-func (n *NoopMetrics) RecordSessionExpired(reason string, duration time.Duration) {}
-func (n *NoopMetrics) RecordSessionInvalidated(reason string)                     {}
+func (n *NoopMetrics) RecordOAuthCallback(provider string, success bool) {}
 
 // Gauge Setters - noop implementations
 func (n *NoopMetrics) SetActiveTokensCount(tokenType string, count int) {}
 func (n *NoopMetrics) SetActiveDeviceCodesCount(total, pending int)     {}
-func (n *NoopMetrics) SetActiveSessionsCount(count int)                 {}
 
 // Database Operations - noop implementations
 func (n *NoopMetrics) RecordDatabaseQueryError(operation string) {}

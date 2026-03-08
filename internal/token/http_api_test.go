@@ -97,7 +97,6 @@ func TestHTTPTokenProvider_GenerateToken_Success(t *testing.T) {
 	)
 
 	require.NoError(t, err)
-	assert.True(t, result.Success)
 	assert.Equal(t, "mock-jwt-token-12345", result.TokenString)
 	assert.Equal(t, "Bearer", result.TokenType)
 	assert.WithinDuration(t, time.Now().Add(3600*time.Second), result.ExpiresAt, 1*time.Second)
@@ -361,7 +360,6 @@ func TestHTTPTokenProvider_SimpleAuth_DefaultHeader(t *testing.T) {
 	result, err := provider.GenerateToken(context.Background(), "user123", "client456", "read")
 
 	require.NoError(t, err)
-	assert.True(t, result.Success)
 	assert.Equal(t, "mock-jwt-token", result.TokenString)
 }
 
@@ -489,7 +487,6 @@ func TestHTTPTokenProvider_HMACAuth_ValidSignature(t *testing.T) {
 	result, err := provider.GenerateToken(context.Background(), "user123", "client456", "read")
 
 	require.NoError(t, err)
-	assert.True(t, result.Success)
 	assert.Equal(t, "hmac-secured-token", result.TokenString)
 }
 
@@ -575,7 +572,6 @@ func TestHTTPTokenProvider_GenerateClientCredentialsToken_UsesCorrectExpiration(
 	)
 
 	require.NoError(t, err)
-	assert.True(t, result.Success)
 	assert.Equal(t, "cc-token-12345", result.TokenString)
 	assert.WithinDuration(t, time.Now().Add(7200*time.Second), result.ExpiresAt, 1*time.Second)
 }
@@ -607,6 +603,5 @@ func TestHTTPTokenProvider_NoAuth_NoHeaders(t *testing.T) {
 	result, err := provider.GenerateToken(context.Background(), "user123", "client456", "read")
 
 	require.NoError(t, err)
-	assert.True(t, result.Success)
 	assert.Equal(t, "no-auth-token", result.TokenString)
 }

@@ -71,7 +71,6 @@ func TestHTTPAPIAuthProvider_Authenticate_Success(t *testing.T) {
 	assert.Equal(t, "testuser", result.Username)
 	assert.Equal(t, "ext-user-123", result.ExternalID)
 	assert.Equal(t, "user@example.com", result.Email)
-	assert.True(t, result.Success)
 }
 
 func TestHTTPAPIAuthProvider_Authenticate_MissingUserID(t *testing.T) {
@@ -215,7 +214,6 @@ func TestHTTPAPIAuthProvider_SimpleAuth_DefaultHeader(t *testing.T) {
 	result, err := provider.Authenticate(context.Background(), "testuser", "password123")
 
 	require.NoError(t, err)
-	assert.True(t, result.Success)
 	assert.Equal(t, "ext-user-123", result.ExternalID)
 }
 
@@ -259,7 +257,6 @@ func TestHTTPAPIAuthProvider_SimpleAuth_CustomHeader(t *testing.T) {
 	result, err := provider.Authenticate(context.Background(), "testuser", "password123")
 
 	require.NoError(t, err)
-	assert.True(t, result.Success)
 	assert.Equal(t, "ext-user-456", result.ExternalID)
 }
 
@@ -352,7 +349,6 @@ func TestHTTPAPIAuthProvider_HMACAuth_ValidSignature(t *testing.T) {
 	result, err := provider.Authenticate(context.Background(), "testuser", "password123")
 
 	require.NoError(t, err)
-	assert.True(t, result.Success)
 	assert.Equal(t, "hmac-user-789", result.ExternalID)
 }
 
@@ -390,7 +386,7 @@ func TestHTTPAPIAuthProvider_HMACAuth_HeadersPresent(t *testing.T) {
 	result, err := provider.Authenticate(context.Background(), "testuser", "password123")
 
 	require.NoError(t, err)
-	assert.True(t, result.Success)
+	assert.NotNil(t, result)
 }
 
 // TestHTTPAPIAuthProvider_NoAuth_NoHeaders tests that no auth headers are added when auth mode is "none"
@@ -423,7 +419,6 @@ func TestHTTPAPIAuthProvider_NoAuth_NoHeaders(t *testing.T) {
 	result, err := provider.Authenticate(context.Background(), "testuser", "password123")
 
 	require.NoError(t, err)
-	assert.True(t, result.Success)
 	assert.Equal(t, "no-auth-user", result.ExternalID)
 }
 
