@@ -113,11 +113,13 @@ func parseGenerateResponse(body []byte) (*Result, error) {
 	}, nil
 }
 
-// callValidateAPI is a helper function to validate tokens via HTTP API
+// callValidateAPI sends a token to the external validation endpoint and returns
+// the result. It always returns base errors (ErrInvalidToken, ErrExpiredToken,
+// ErrHTTPTokenInvalidResp, ErrHTTPTokenConnection); callers that need
+// refresh-specific errors should translate via mapRefreshError.
 func (p *HTTPTokenProvider) callValidateAPI(
 	ctx context.Context,
 	tokenString string,
-	invalidErr, expiredErr error,
 ) (*ValidationResult, error) {
 	reqBody := APITokenValidateRequest{
 		Token: tokenString,
@@ -129,7 +131,7 @@ func (p *HTTPTokenProvider) callValidateAPI(
 		// and the remote API reported a validation/HTTP error (for example, a 4xx status).
 		// In that case, treat it as an "invalid token" condition rather than a transport failure.
 		if body != nil {
-			return nil, fmt.Errorf("%w: %s", invalidErr, err.Error())
+			return nil, fmt.Errorf("%w: %s", ErrInvalidToken, err.Error())
 		}
 		return nil, err
 	}
@@ -140,14 +142,14 @@ func (p *HTTPTokenProvider) callValidateAPI(
 	}
 
 	if !apiResp.Valid {
-		return nil, invalidErr
+		return nil, fmt.Errorf("%w: remote API rejected token", ErrInvalidToken)
 	}
 
 	var expiresAt time.Time
 	if apiResp.ExpiresAt > 0 {
 		expiresAt = time.Unix(apiResp.ExpiresAt, 0)
 		if time.Now().After(expiresAt) {
-			return nil, expiredErr
+			return nil, ErrExpiredToken
 		}
 	}
 
@@ -233,7 +235,7 @@ func (p *HTTPTokenProvider) ValidateToken(
 	ctx context.Context,
 	tokenString string,
 ) (*ValidationResult, error) {
-	return p.callValidateAPI(ctx, tokenString, ErrInvalidToken, ErrExpiredToken)
+	return p.callValidateAPI(ctx, tokenString)
 }
 
 // Name returns provider name for logging
@@ -270,21 +272,32 @@ func (p *HTTPTokenProvider) GenerateRefreshToken(
 	return p.generateTokenInternal(ctx, userID, clientID, scopes, p.config.RefreshTokenExpiration)
 }
 
-// GenerateClientCredentialsToken generates a token for the client_credentials grant.
-// The HTTP API provider delegates to GenerateToken with the standard JWT expiration.
+// GenerateClientCredentialsToken generates a token for the client_credentials grant
+// using the dedicated client-credentials expiration.
 func (p *HTTPTokenProvider) GenerateClientCredentialsToken(
 	ctx context.Context,
 	userID, clientID, scopes string,
 ) (*Result, error) {
-	return p.GenerateToken(ctx, userID, clientID, scopes)
+	return p.generateTokenInternal(
+		ctx,
+		userID,
+		clientID,
+		scopes,
+		p.config.ClientCredentialsTokenExpiration,
+	)
 }
 
-// ValidateRefreshToken requests refresh token validation from external API
+// ValidateRefreshToken requests refresh token validation from external API.
+// Translates base errors to refresh-specific sentinel errors.
 func (p *HTTPTokenProvider) ValidateRefreshToken(
 	ctx context.Context,
 	tokenString string,
 ) (*ValidationResult, error) {
-	return p.callValidateAPI(ctx, tokenString, ErrInvalidRefreshToken, ErrExpiredRefreshToken)
+	result, err := p.callValidateAPI(ctx, tokenString)
+	if err != nil {
+		return nil, mapRefreshError(err)
+	}
+	return result, nil
 }
 
 // RefreshAccessToken requests new access token (and optionally new refresh token) from external API

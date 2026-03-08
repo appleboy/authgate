@@ -2,6 +2,7 @@ package token
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -194,6 +195,193 @@ func TestLocalTokenProvider_GenerateToken_VariousExpirations(t *testing.T) {
 }
 
 // ============================================================
+// ValidateToken — type checking
+// ============================================================
+
+func TestValidateToken_RejectsRefreshToken(t *testing.T) {
+	cfg := &config.Config{
+		JWTSecret:              "test-secret-key-for-jwt-signing",
+		JWTExpiration:          1 * time.Hour,
+		RefreshTokenExpiration: 30 * 24 * time.Hour,
+		BaseURL:                "http://localhost:8080",
+	}
+	provider := NewLocalTokenProvider(cfg)
+
+	// Generate a refresh token
+	refreshResult, err := provider.GenerateRefreshToken(
+		context.Background(), "user1", "client1", "read",
+	)
+	require.NoError(t, err)
+
+	// ValidateToken must reject it with a specific message
+	_, err = provider.ValidateToken(context.Background(), refreshResult.TokenString)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrInvalidToken)
+	assert.Contains(t, err.Error(), `expected access token, got "refresh"`)
+}
+
+func TestValidateToken_RejectsIDToken(t *testing.T) {
+	cfg := &config.Config{
+		JWTSecret:     "test-secret-key-for-jwt-signing",
+		JWTExpiration: 1 * time.Hour,
+		BaseURL:       "http://localhost:8080",
+	}
+	provider := NewLocalTokenProvider(cfg)
+
+	// ID tokens have no "type" claim — ValidateToken must reject them
+	idTokenStr, err := provider.GenerateIDToken(IDTokenParams{
+		Issuer:   "http://localhost:8080",
+		Subject:  "user-abc",
+		Audience: "client-xyz",
+		AuthTime: time.Now(),
+	})
+	require.NoError(t, err)
+
+	_, err = provider.ValidateToken(context.Background(), idTokenStr)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrInvalidToken)
+	assert.Contains(t, err.Error(), `expected access token, got ""`)
+}
+
+// ============================================================
+// ValidateRefreshToken — type checking and error mapping
+// ============================================================
+
+func TestValidateRefreshToken_Success(t *testing.T) {
+	cfg := &config.Config{
+		JWTSecret:              "test-secret-key-for-jwt-signing",
+		JWTExpiration:          1 * time.Hour,
+		RefreshTokenExpiration: 30 * 24 * time.Hour,
+		BaseURL:                "http://localhost:8080",
+	}
+	provider := NewLocalTokenProvider(cfg)
+
+	genResult, err := provider.GenerateRefreshToken(
+		context.Background(), "user1", "client1", "read write",
+	)
+	require.NoError(t, err)
+
+	valResult, err := provider.ValidateRefreshToken(
+		context.Background(), genResult.TokenString,
+	)
+	require.NoError(t, err)
+	assert.True(t, valResult.Valid)
+	assert.Equal(t, "user1", valResult.UserID)
+	assert.Equal(t, "client1", valResult.ClientID)
+	assert.Equal(t, "read write", valResult.Scopes)
+}
+
+func TestValidateRefreshToken_RejectsAccessToken(t *testing.T) {
+	cfg := &config.Config{
+		JWTSecret:              "test-secret-key-for-jwt-signing",
+		JWTExpiration:          1 * time.Hour,
+		RefreshTokenExpiration: 30 * 24 * time.Hour,
+		BaseURL:                "http://localhost:8080",
+	}
+	provider := NewLocalTokenProvider(cfg)
+
+	// Generate an access token
+	accessResult, err := provider.GenerateToken(
+		context.Background(), "user1", "client1", "read",
+	)
+	require.NoError(t, err)
+
+	// ValidateRefreshToken must reject it with a specific message
+	_, err = provider.ValidateRefreshToken(
+		context.Background(), accessResult.TokenString,
+	)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrInvalidRefreshToken)
+	assert.Contains(t, err.Error(), `expected refresh token, got "access"`)
+}
+
+func TestValidateRefreshToken_ExpiredReturnsRefreshError(t *testing.T) {
+	cfg := &config.Config{
+		JWTSecret:              "test-secret-key-for-jwt-signing",
+		JWTExpiration:          1 * time.Hour,
+		RefreshTokenExpiration: 1 * time.Millisecond, // Very short
+		BaseURL:                "http://localhost:8080",
+	}
+	provider := NewLocalTokenProvider(cfg)
+
+	genResult, err := provider.GenerateRefreshToken(
+		context.Background(), "user1", "client1", "read",
+	)
+	require.NoError(t, err)
+
+	time.Sleep(10 * time.Millisecond)
+
+	// Must return ErrExpiredRefreshToken, not ErrExpiredToken
+	_, err = provider.ValidateRefreshToken(
+		context.Background(), genResult.TokenString,
+	)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrExpiredRefreshToken)
+}
+
+func TestValidateRefreshToken_InvalidReturnsRefreshError(t *testing.T) {
+	cfg := &config.Config{
+		JWTSecret:              "test-secret-key-for-jwt-signing",
+		JWTExpiration:          1 * time.Hour,
+		RefreshTokenExpiration: 30 * 24 * time.Hour,
+		BaseURL:                "http://localhost:8080",
+	}
+	provider := NewLocalTokenProvider(cfg)
+
+	// Must return ErrInvalidRefreshToken, not ErrInvalidToken
+	_, err := provider.ValidateRefreshToken(
+		context.Background(), "garbage-token",
+	)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrInvalidRefreshToken)
+}
+
+// ============================================================
+// mapRefreshError
+// ============================================================
+
+func TestMapRefreshError(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    error
+		expected error
+	}{
+		{
+			"expired token maps to expired refresh token",
+			ErrExpiredToken,
+			ErrExpiredRefreshToken,
+		},
+		{
+			"invalid token maps to invalid refresh token",
+			ErrInvalidToken,
+			ErrInvalidRefreshToken,
+		},
+		{
+			"wrapped expired token maps correctly",
+			fmt.Errorf("something: %w", ErrExpiredToken),
+			ErrExpiredRefreshToken,
+		},
+		{
+			"wrapped invalid token maps correctly",
+			fmt.Errorf("something: %w", ErrInvalidToken),
+			ErrInvalidRefreshToken,
+		},
+		{
+			"unrelated error passes through",
+			ErrTokenGeneration,
+			ErrTokenGeneration,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := mapRefreshError(tt.input)
+			assert.ErrorIs(t, result, tt.expected)
+		})
+	}
+}
+
+// ============================================================
 // GenerateIDToken
 // ============================================================
 
@@ -204,6 +392,19 @@ func testIDTokenProvider() (*LocalTokenProvider, *config.Config) {
 		BaseURL:       "http://localhost:8080",
 	}
 	return NewLocalTokenProvider(cfg), cfg
+}
+
+// parseIDTokenClaims is a test helper that parses an ID token JWT and returns its claims.
+// ID tokens don't have a "type" claim, so we use ParseJWT directly (no type check).
+func parseIDTokenClaims(
+	t *testing.T,
+	provider *LocalTokenProvider,
+	tokenStr string,
+) map[string]any {
+	t.Helper()
+	result, err := provider.ParseJWT(tokenStr)
+	require.NoError(t, err)
+	return result.Claims
 }
 
 func TestGenerateIDToken_RequiredClaims(t *testing.T) {
@@ -221,15 +422,14 @@ func TestGenerateIDToken_RequiredClaims(t *testing.T) {
 	require.NotEmpty(t, idTokenStr)
 
 	// Parse and verify
-	result, err := provider.ValidateToken(context.Background(), idTokenStr)
-	require.NoError(t, err)
-	assert.Equal(t, "http://localhost:8080", result.Claims["iss"])
-	assert.Equal(t, "user-abc", result.Claims["sub"])
-	assert.Equal(t, "client-xyz", result.Claims["aud"])
-	assert.NotNil(t, result.Claims["exp"])
-	assert.NotNil(t, result.Claims["iat"])
-	assert.InDelta(t, float64(authTime.Unix()), result.Claims["auth_time"].(float64), 1)
-	assert.NotEmpty(t, result.Claims["jti"])
+	claims := parseIDTokenClaims(t, provider, idTokenStr)
+	assert.Equal(t, "http://localhost:8080", claims["iss"])
+	assert.Equal(t, "user-abc", claims["sub"])
+	assert.Equal(t, "client-xyz", claims["aud"])
+	assert.NotNil(t, claims["exp"])
+	assert.NotNil(t, claims["iat"])
+	assert.InDelta(t, float64(authTime.Unix()), claims["auth_time"].(float64), 1)
+	assert.NotEmpty(t, claims["jti"])
 }
 
 func TestGenerateIDToken_WithNonce(t *testing.T) {
@@ -245,9 +445,8 @@ func TestGenerateIDToken_WithNonce(t *testing.T) {
 
 	require.NoError(t, err)
 
-	result, err := provider.ValidateToken(context.Background(), idTokenStr)
-	require.NoError(t, err)
-	assert.Equal(t, "random-nonce-value-12345", result.Claims["nonce"])
+	claims := parseIDTokenClaims(t, provider, idTokenStr)
+	assert.Equal(t, "random-nonce-value-12345", claims["nonce"])
 }
 
 func TestGenerateIDToken_WithoutNonce_NoClaim(t *testing.T) {
@@ -263,9 +462,8 @@ func TestGenerateIDToken_WithoutNonce_NoClaim(t *testing.T) {
 
 	require.NoError(t, err)
 
-	result, err := provider.ValidateToken(context.Background(), idTokenStr)
-	require.NoError(t, err)
-	_, hasNonce := result.Claims["nonce"]
+	claims := parseIDTokenClaims(t, provider, idTokenStr)
+	_, hasNonce := claims["nonce"]
 	assert.False(t, hasNonce, "nonce claim must be absent when not provided")
 }
 
@@ -284,9 +482,8 @@ func TestGenerateIDToken_WithAtHash(t *testing.T) {
 
 	require.NoError(t, err)
 
-	result, err := provider.ValidateToken(context.Background(), idTokenStr)
-	require.NoError(t, err)
-	assert.Equal(t, expectedAtHash, result.Claims["at_hash"])
+	claims := parseIDTokenClaims(t, provider, idTokenStr)
+	assert.Equal(t, expectedAtHash, claims["at_hash"])
 }
 
 func TestGenerateIDToken_ProfileClaims(t *testing.T) {
@@ -306,12 +503,11 @@ func TestGenerateIDToken_ProfileClaims(t *testing.T) {
 
 	require.NoError(t, err)
 
-	result, err := provider.ValidateToken(context.Background(), idTokenStr)
-	require.NoError(t, err)
-	assert.Equal(t, "Jane Doe", result.Claims["name"])
-	assert.Equal(t, "janedoe", result.Claims["preferred_username"])
-	assert.Equal(t, "https://example.com/avatar.jpg", result.Claims["picture"])
-	assert.InDelta(t, float64(updatedAt.Unix()), result.Claims["updated_at"].(float64), 1)
+	claims := parseIDTokenClaims(t, provider, idTokenStr)
+	assert.Equal(t, "Jane Doe", claims["name"])
+	assert.Equal(t, "janedoe", claims["preferred_username"])
+	assert.Equal(t, "https://example.com/avatar.jpg", claims["picture"])
+	assert.InDelta(t, float64(updatedAt.Unix()), claims["updated_at"].(float64), 1)
 }
 
 func TestGenerateIDToken_EmailClaims(t *testing.T) {
@@ -328,10 +524,9 @@ func TestGenerateIDToken_EmailClaims(t *testing.T) {
 
 	require.NoError(t, err)
 
-	result, err := provider.ValidateToken(context.Background(), idTokenStr)
-	require.NoError(t, err)
-	assert.Equal(t, "jane@example.com", result.Claims["email"])
-	assert.Equal(t, false, result.Claims["email_verified"])
+	claims := parseIDTokenClaims(t, provider, idTokenStr)
+	assert.Equal(t, "jane@example.com", claims["email"])
+	assert.Equal(t, false, claims["email_verified"])
 }
 
 func TestGenerateIDToken_NoProfileClaims_WhenEmpty(t *testing.T) {
@@ -347,11 +542,10 @@ func TestGenerateIDToken_NoProfileClaims_WhenEmpty(t *testing.T) {
 
 	require.NoError(t, err)
 
-	result, err := provider.ValidateToken(context.Background(), idTokenStr)
-	require.NoError(t, err)
-	_, hasName := result.Claims["name"]
-	_, hasEmail := result.Claims["email"]
-	_, hasPicture := result.Claims["picture"]
+	claims := parseIDTokenClaims(t, provider, idTokenStr)
+	_, hasName := claims["name"]
+	_, hasEmail := claims["email"]
+	_, hasPicture := claims["picture"]
 	assert.False(t, hasName)
 	assert.False(t, hasEmail)
 	assert.False(t, hasPicture)
@@ -379,21 +573,4 @@ func TestComputeAtHash_Length(t *testing.T) {
 	// base64url of 16 bytes = 22 chars (no padding)
 	hash := ComputeAtHash("any-access-token")
 	assert.Len(t, hash, 22)
-}
-
-// ============================================================
-// ScopeSet
-// ============================================================
-
-func TestScopeSet_ParsesCorrectly(t *testing.T) {
-	set := ScopeSet("openid profile email")
-	assert.True(t, set["openid"])
-	assert.True(t, set["profile"])
-	assert.True(t, set["email"])
-	assert.False(t, set["read"])
-}
-
-func TestScopeSet_Empty(t *testing.T) {
-	set := ScopeSet("")
-	assert.Empty(t, set)
 }

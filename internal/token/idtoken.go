@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/go-authgate/authgate/internal/core"
@@ -82,13 +81,4 @@ func (p *LocalTokenProvider) GenerateIDToken(params IDTokenParams) (string, erro
 func ComputeAtHash(accessToken string) string {
 	sum := sha256.Sum256([]byte(accessToken))
 	return base64.RawURLEncoding.EncodeToString(sum[:16])
-}
-
-// ScopeSet parses a space-separated scope string into a boolean lookup map.
-func ScopeSet(scopes string) map[string]bool {
-	set := make(map[string]bool)
-	for s := range strings.FieldsSeq(scopes) {
-		set[s] = true
-	}
-	return set
 }

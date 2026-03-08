@@ -7,6 +7,51 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestScopeSet(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		has      []string
+		notHas   []string
+		wantSize int
+	}{
+		{
+			"multiple scopes",
+			"openid profile email",
+			[]string{"openid", "profile", "email"},
+			[]string{"read"},
+			3,
+		},
+		{"empty string", "", nil, nil, 0},
+		{
+			"single scope",
+			"openid",
+			[]string{"openid"},
+			[]string{"profile"},
+			1,
+		},
+		{
+			"extra whitespace",
+			"  read   write  ",
+			[]string{"read", "write"},
+			nil,
+			2,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			set := ScopeSet(tt.input)
+			assert.Len(t, set, tt.wantSize)
+			for _, s := range tt.has {
+				assert.True(t, set[s], "expected %q in set", s)
+			}
+			for _, s := range tt.notHas {
+				assert.False(t, set[s], "unexpected %q in set", s)
+			}
+		})
+	}
+}
+
 func TestTruncateString(t *testing.T) {
 	tests := []struct {
 		name   string

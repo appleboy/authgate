@@ -956,7 +956,7 @@ func (s *TokenService) ExchangeAuthorizationCode(
 	// (i.e. LocalTokenProvider). HTTP API providers cannot produce OIDC ID tokens.
 	var idToken string
 	if idp, ok := s.tokenProvider.(core.IDTokenProvider); ok {
-		scopeSet := token.ScopeSet(authCode.Scopes)
+		scopeSet := util.ScopeSet(authCode.Scopes)
 		if scopeSet["openid"] {
 			params := token.IDTokenParams{
 				Issuer:   strings.TrimRight(s.config.BaseURL, "/"),

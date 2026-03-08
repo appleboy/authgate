@@ -6,9 +6,6 @@ var (
 	// ErrTokenGeneration indicates token generation failed
 	ErrTokenGeneration = errors.New("failed to generate token")
 
-	// ErrTokenValidation indicates token validation failed
-	ErrTokenValidation = errors.New("failed to validate token")
-
 	// ErrInvalidToken indicates the token is invalid
 	ErrInvalidToken = errors.New("invalid token")
 
@@ -22,9 +19,6 @@ var (
 
 	// ErrExpiredRefreshToken indicates the refresh token has expired
 	ErrExpiredRefreshToken = errors.New("refresh token expired")
-
-	// ErrTokenReused indicates a refresh token was reused (security alert)
-	ErrTokenReused = errors.New("token reuse detected")
 
 	// ErrInvalidScope indicates scope validation failed
 	ErrInvalidScope = errors.New("invalid scope")

@@ -7,6 +7,7 @@ import (
 	"github.com/go-authgate/authgate/internal/config"
 	"github.com/go-authgate/authgate/internal/models"
 	"github.com/go-authgate/authgate/internal/services"
+	"github.com/go-authgate/authgate/internal/util"
 
 	"github.com/gin-gonic/gin"
 )
@@ -153,7 +154,7 @@ func (h *OIDCHandler) UserInfo(c *gin.Context) {
 // buildUserInfoClaims constructs UserInfo response claims based on the granted scopes.
 // sub and iss are always included. profile and email scopes gate their respective claims.
 func buildUserInfoClaims(userID, issuer, scopes string, user *models.User) map[string]any {
-	scopeSet := parseScopeSet(scopes)
+	scopeSet := util.ScopeSet(scopes)
 
 	claims := map[string]any{
 		"sub": userID,
@@ -175,13 +176,4 @@ func buildUserInfoClaims(userID, issuer, scopes string, user *models.User) map[s
 	}
 
 	return claims
-}
-
-// parseScopeSet converts a space-separated scope string into a boolean set.
-func parseScopeSet(scopes string) map[string]bool {
-	set := make(map[string]bool)
-	for s := range strings.FieldsSeq(scopes) {
-		set[s] = true
-	}
-	return set
 }

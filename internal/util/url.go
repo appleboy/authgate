@@ -46,6 +46,11 @@ func IsRedirectSafe(redirectURL, baseURL string) bool {
 		return false
 	}
 
+	// Absolute URLs with a scheme must have a host
+	if parsedRedirect.Scheme != "" && parsedRedirect.Host == "" {
+		return false
+	}
+
 	// If there's a host specified, it must match baseURL
 	if parsedRedirect.Host != "" {
 		parsedBase, err := url.Parse(baseURL)
