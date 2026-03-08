@@ -146,7 +146,7 @@ func (s *UserService) authenticateExistingUser(
 			return nil, fmt.Errorf("%w: local provider not configured", ErrAuthProviderFailed)
 		}
 		providerName = AuthModeLocal
-		authResult, err = s.localProvider.Authenticate(ctx, user.Username, password)
+		_, err = s.localProvider.Authenticate(ctx, user.Username, password)
 	}
 
 	// Handle authentication failure

@@ -52,4 +52,3 @@ func fetchThrough[T any](
 	_ = set(ctx, key, value, ttl)
 	return value, nil
 }
-

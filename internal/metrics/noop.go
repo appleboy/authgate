@@ -52,7 +52,7 @@ func (n *NoopMetrics) RecordTokenValidation(
 func (n *NoopMetrics) RecordAuthAttempt(method string, success bool, duration time.Duration) {}
 func (n *NoopMetrics) RecordLogin(authSource string, success bool)                           {}
 func (n *NoopMetrics) RecordLogout(sessionDuration time.Duration)                            {}
-func (n *NoopMetrics) RecordOAuthCallback(provider string, success bool) {}
+func (n *NoopMetrics) RecordOAuthCallback(provider string, success bool)                     {}
 
 // Gauge Setters - noop implementations
 func (n *NoopMetrics) SetActiveTokensCount(tokenType string, count int) {}

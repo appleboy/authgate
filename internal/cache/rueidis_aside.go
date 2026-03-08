@@ -124,4 +124,3 @@ func (r *RueidisAsideCache[T]) GetWithFetch(
 
 	return unmarshalValue[T](val)
 }
-

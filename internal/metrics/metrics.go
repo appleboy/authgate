@@ -32,11 +32,11 @@ type Metrics struct {
 	TokenValidationDuration *prometheus.HistogramVec
 
 	// Authentication Metrics
-	AuthAttemptsTotal       *prometheus.CounterVec
-	AuthLoginTotal          *prometheus.CounterVec
-	AuthLogoutTotal         prometheus.Counter
-	AuthOAuthCallbackTotal  *prometheus.CounterVec
-	AuthLoginDuration *prometheus.HistogramVec
+	AuthAttemptsTotal      *prometheus.CounterVec
+	AuthLoginTotal         *prometheus.CounterVec
+	AuthLogoutTotal        prometheus.Counter
+	AuthOAuthCallbackTotal *prometheus.CounterVec
+	AuthLoginDuration      *prometheus.HistogramVec
 
 	// Session Metrics
 	SessionsActive       prometheus.Gauge
