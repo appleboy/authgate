@@ -555,7 +555,7 @@ func (s *TokenService) RefreshAccessToken(
 	// Log token refresh
 	if s.auditService != nil {
 		providerName := s.tokenProvider.Name()
-		rotated := refreshResult.RefreshToken != nil
+		rotated := s.config.EnableTokenRotation && refreshResult.RefreshToken != nil
 		details := models.AuditDetails{
 			"client_id":           newAccessToken.ClientID,
 			"scopes":              newAccessToken.Scopes,
