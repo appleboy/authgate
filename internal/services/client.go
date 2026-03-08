@@ -404,10 +404,6 @@ func (s *ClientService) DeleteClient(ctx context.Context, clientID, actorUserID 
 	return nil
 }
 
-func (s *ClientService) ListClients() ([]models.OAuthApplication, error) {
-	return s.store.ListClients()
-}
-
 // ListClientsPaginated returns paginated OAuth clients with search support
 func (s *ClientService) ListClientsPaginated(
 	params store.PaginationParams,

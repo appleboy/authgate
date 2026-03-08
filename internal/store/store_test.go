@@ -280,6 +280,63 @@ func testBasicOperations(t *testing.T, driver string, pgContainer *postgres.Post
 		err := store.Health()
 		assert.NoError(t, err)
 	})
+
+	t.Run("GetAuditLogStats", func(t *testing.T) {
+		store := createFreshStore(t, driver, pgContainer)
+
+		now := time.Now()
+
+		// Create audit logs: 2 successful, 1 failed, mixed types and severities
+		logs := []models.AuditLog{
+			{
+				ID:        uuid.New().String(),
+				EventType: models.EventAuthenticationSuccess,
+				EventTime: now.Add(-time.Hour),
+				Severity:  models.SeverityInfo,
+				Action:    "login",
+				Success:   true,
+				CreatedAt: now,
+			},
+			{
+				ID:        uuid.New().String(),
+				EventType: models.EventAuthenticationFailure,
+				EventTime: now.Add(-30 * time.Minute),
+				Severity:  models.SeverityWarning,
+				Action:    "login_fail",
+				Success:   false,
+				CreatedAt: now,
+			},
+			{
+				ID:        uuid.New().String(),
+				EventType: models.EventAuthenticationSuccess,
+				EventTime: now.Add(-10 * time.Minute),
+				Severity:  models.SeverityInfo,
+				Action:    "login",
+				Success:   true,
+				CreatedAt: now,
+			},
+		}
+		for i := range logs {
+			err := store.db.Create(&logs[i]).Error
+			require.NoError(t, err)
+		}
+
+		stats, err := store.GetAuditLogStats(time.Time{}, time.Time{})
+		require.NoError(t, err)
+
+		// Verify total counts
+		assert.Equal(t, int64(3), stats.TotalEvents)
+		assert.Equal(t, int64(2), stats.SuccessCount)
+		assert.Equal(t, int64(1), stats.FailureCount)
+
+		// Verify events by type counts ALL events (not just successful)
+		assert.Equal(t, int64(2), stats.EventsByType[models.EventAuthenticationSuccess])
+		assert.Equal(t, int64(1), stats.EventsByType[models.EventAuthenticationFailure])
+
+		// Verify events by severity counts ALL events (not just successful)
+		assert.Equal(t, int64(2), stats.EventsBySeverity[models.SeverityInfo])
+		assert.Equal(t, int64(1), stats.EventsBySeverity[models.SeverityWarning])
+	})
 }
 
 // TestDriverFactory tests the driver factory pattern
