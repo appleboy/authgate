@@ -153,7 +153,7 @@ func TestHashToken(t *testing.T) {
 	t.Run("Output contains only hex characters", func(t *testing.T) {
 		hash := HashToken("test-token", "test-salt")
 		for _, c := range hash {
-			assert.True(t, (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'),
+			assert.Truef(t, (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'),
 				"Character '%c' is not a valid hex digit", c)
 		}
 	})
