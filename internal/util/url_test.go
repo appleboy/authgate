@@ -193,10 +193,10 @@ func TestIsRedirectSafe(t *testing.T) {
 			want:        true,
 		},
 		{
-			name:        "absolute URL without host matches any baseURL",
+			name:        "scheme-only URL without host is unsafe",
 			redirectURL: "http:",
 			baseURL:     baseURL,
-			want:        true,
+			want:        false,
 		},
 	}
 
