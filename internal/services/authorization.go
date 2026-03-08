@@ -518,10 +518,7 @@ func (s *AuthorizationService) isValidRedirectURI(
 }
 
 func (s *AuthorizationService) isValidScope(clientScopes, requestedScopes string) bool {
-	allowed := make(map[string]bool)
-	for sc := range strings.FieldsSeq(clientScopes) {
-		allowed[sc] = true
-	}
+	allowed := util.ScopeSet(clientScopes)
 	for sc := range strings.FieldsSeq(requestedScopes) {
 		if !allowed[sc] {
 			return false

@@ -823,9 +823,9 @@ func TestExchangeAuthorizationCode_IDToken_ContainsNonce(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, idToken)
 
-	// Parse the ID token claims
+	// Parse the ID token claims (ID tokens have no "type" claim, use ParseJWT)
 	localProvider := token.NewLocalTokenProvider(cfg)
-	result, err := localProvider.ValidateToken(context.Background(), idToken)
+	result, err := localProvider.ParseJWT(idToken)
 	require.NoError(t, err)
 	assert.Equal(t, "my-unique-nonce", result.Claims["nonce"])
 }
@@ -870,7 +870,7 @@ func TestExchangeAuthorizationCode_IDToken_ContainsAtHash(t *testing.T) {
 	expectedAtHash := token.ComputeAtHash(accessToken.RawToken)
 
 	localProvider := token.NewLocalTokenProvider(cfg)
-	result, err := localProvider.ValidateToken(context.Background(), idToken)
+	result, err := localProvider.ParseJWT(idToken)
 	require.NoError(t, err)
 	assert.Equal(t, expectedAtHash, result.Claims["at_hash"],
 		"at_hash in ID token must be the base64url-encoded left-half SHA-256 of the access token")
@@ -1167,9 +1167,10 @@ func TestValidateToken_RefreshTokenRejected(t *testing.T) {
 	require.NotNil(t, refreshToken)
 
 	// Passing a refresh token to ValidateToken must be rejected
+	// The JWT-level type check now rejects refresh tokens before the DB check.
 	claims, err := tokenService.ValidateToken(context.Background(), refreshToken.RawToken)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not an access token")
+	require.ErrorIs(t, err, token.ErrInvalidToken)
 	assert.Nil(t, claims)
 }
 

@@ -16,29 +16,6 @@ import (
 )
 
 // ============================================================
-// parseScopeSet
-// ============================================================
-
-func TestParseScopeSet_MultipleScopes(t *testing.T) {
-	set := parseScopeSet("openid profile email")
-	assert.True(t, set["openid"])
-	assert.True(t, set["profile"])
-	assert.True(t, set["email"])
-	assert.False(t, set["read"])
-}
-
-func TestParseScopeSet_Empty(t *testing.T) {
-	set := parseScopeSet("")
-	assert.Empty(t, set)
-}
-
-func TestParseScopeSet_SingleScope(t *testing.T) {
-	set := parseScopeSet("openid")
-	assert.True(t, set["openid"])
-	assert.False(t, set["profile"])
-}
-
-// ============================================================
 // buildUserInfoClaims
 // ============================================================
 

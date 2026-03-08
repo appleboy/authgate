@@ -56,62 +56,92 @@ func (p *LocalTokenProvider) generateJWT(
 	}, nil
 }
 
-// GenerateToken creates a JWT token using local signing
-func (p *LocalTokenProvider) GenerateToken(
-	ctx context.Context,
-	userID, clientID, scopes string,
-) (*Result, error) {
-	expiresAt := time.Now().Add(p.config.JWTExpiration)
-	return p.generateJWT(userID, clientID, scopes, "access", expiresAt)
-}
-
-// ValidateToken verifies a JWT token using local verification
-func (p *LocalTokenProvider) ValidateToken(
-	ctx context.Context,
-	tokenString string,
-) (*ValidationResult, error) {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return []byte(p.config.JWTSecret), nil
-	})
+// ParseJWT parses a JWT token, verifies its signature, and extracts standard claims.
+// It does not check the "type" claim — callers (ValidateToken, ValidateRefreshToken)
+// add their own type-specific checks on top.
+func (p *LocalTokenProvider) ParseJWT(tokenString string) (*ValidationResult, error) {
+	tok, err := jwt.Parse(tokenString, p.keyFunc)
 	if err != nil {
-		// Check if it's an expiration error
 		if errors.Is(err, jwt.ErrTokenExpired) {
 			return nil, ErrExpiredToken
 		}
 		return nil, fmt.Errorf("%w: %v", ErrInvalidToken, err)
 	}
 
-	if !token.Valid {
+	if !tok.Valid {
 		return nil, ErrInvalidToken
 	}
 
-	claims, ok := token.Claims.(jwt.MapClaims)
+	claims, ok := tok.Claims.(jwt.MapClaims)
 	if !ok {
 		return nil, ErrInvalidToken
 	}
 
-	// Extract and validate claims
 	userID, _ := claims["user_id"].(string)
 	clientID, _ := claims["client_id"].(string)
 	scopes, _ := claims["scope"].(string)
 
 	exp, ok := claims["exp"].(float64)
 	if !ok {
-		return nil, ErrInvalidToken
+		return nil, fmt.Errorf("%w: missing exp claim", ErrInvalidToken)
 	}
-	expiresAt := time.Unix(int64(exp), 0)
 
 	return &ValidationResult{
 		Valid:     true,
 		UserID:    userID,
 		ClientID:  clientID,
 		Scopes:    scopes,
-		ExpiresAt: expiresAt,
+		ExpiresAt: time.Unix(int64(exp), 0),
 		Claims:    claims,
 	}, nil
+}
+
+// mapRefreshError translates base token errors to refresh-specific sentinel errors.
+func mapRefreshError(err error) error {
+	switch {
+	case errors.Is(err, ErrExpiredToken):
+		return ErrExpiredRefreshToken
+	case errors.Is(err, ErrInvalidToken):
+		return ErrInvalidRefreshToken
+	default:
+		return err
+	}
+}
+
+// keyFunc validates the signing method and returns the HMAC secret.
+func (p *LocalTokenProvider) keyFunc(token *jwt.Token) (any, error) {
+	if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+		return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+	}
+	return []byte(p.config.JWTSecret), nil
+}
+
+// GenerateToken creates a JWT token using local signing
+func (p *LocalTokenProvider) GenerateToken(
+	ctx context.Context,
+	userID, clientID, scopes string,
+) (*Result, error) {
+	expiresAt := time.Now().Add(p.config.JWTExpiration)
+	return p.generateJWT(userID, clientID, scopes, TokenCategoryAccess, expiresAt)
+}
+
+// ValidateToken verifies a JWT access token using local verification.
+// It rejects refresh tokens (type=="refresh") at the JWT level.
+func (p *LocalTokenProvider) ValidateToken(
+	ctx context.Context,
+	tokenString string,
+) (*ValidationResult, error) {
+	result, err := p.ParseJWT(tokenString)
+	if err != nil {
+		return nil, err
+	}
+
+	tokenType, _ := result.Claims["type"].(string)
+	if tokenType != TokenCategoryAccess {
+		return nil, fmt.Errorf("%w: expected access token, got %q", ErrInvalidToken, tokenType)
+	}
+
+	return result, nil
 }
 
 // Name returns provider name for logging
@@ -127,7 +157,7 @@ func (p *LocalTokenProvider) GenerateClientCredentialsToken(
 	userID, clientID, scopes string,
 ) (*Result, error) {
 	expiresAt := time.Now().Add(p.config.ClientCredentialsTokenExpiration)
-	return p.generateJWT(userID, clientID, scopes, "access", expiresAt)
+	return p.generateJWT(userID, clientID, scopes, TokenCategoryAccess, expiresAt)
 }
 
 // GenerateRefreshToken creates a refresh token JWT with longer expiration
@@ -136,7 +166,7 @@ func (p *LocalTokenProvider) GenerateRefreshToken(
 	userID, clientID, scopes string,
 ) (*Result, error) {
 	expiresAt := time.Now().Add(p.config.RefreshTokenExpiration)
-	return p.generateJWT(userID, clientID, scopes, "refresh", expiresAt)
+	return p.generateJWT(userID, clientID, scopes, TokenCategoryRefresh, expiresAt)
 }
 
 // ValidateRefreshToken verifies a refresh token JWT
@@ -144,54 +174,21 @@ func (p *LocalTokenProvider) ValidateRefreshToken(
 	ctx context.Context,
 	tokenString string,
 ) (*ValidationResult, error) {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return []byte(p.config.JWTSecret), nil
-	})
+	result, err := p.ParseJWT(tokenString)
 	if err != nil {
-		// Check if it's an expiration error
-		if errors.Is(err, jwt.ErrTokenExpired) {
-			return nil, ErrExpiredRefreshToken
-		}
-		return nil, fmt.Errorf("%w: %v", ErrInvalidRefreshToken, err)
+		return nil, mapRefreshError(err)
 	}
 
-	if !token.Valid {
-		return nil, ErrInvalidRefreshToken
+	tokenType, _ := result.Claims["type"].(string)
+	if tokenType != TokenCategoryRefresh {
+		return nil, fmt.Errorf(
+			"%w: expected refresh token, got %q",
+			ErrInvalidRefreshToken,
+			tokenType,
+		)
 	}
 
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		return nil, ErrInvalidRefreshToken
-	}
-
-	// Verify this is a refresh token
-	tokenType, _ := claims["type"].(string)
-	if tokenType != "refresh" {
-		return nil, ErrInvalidRefreshToken
-	}
-
-	// Extract and validate claims
-	userID, _ := claims["user_id"].(string)
-	clientID, _ := claims["client_id"].(string)
-	scopes, _ := claims["scope"].(string)
-
-	exp, ok := claims["exp"].(float64)
-	if !ok {
-		return nil, ErrInvalidRefreshToken
-	}
-	expiresAt := time.Unix(int64(exp), 0)
-
-	return &ValidationResult{
-		Valid:     true,
-		UserID:    userID,
-		ClientID:  clientID,
-		Scopes:    scopes,
-		ExpiresAt: expiresAt,
-		Claims:    claims,
-	}, nil
+	return result, nil
 }
 
 // RefreshAccessToken generates new access token (and optionally new refresh token in rotation mode)
