@@ -10,20 +10,12 @@ import (
 
 	"github.com/go-authgate/authgate/internal/auth"
 	"github.com/go-authgate/authgate/internal/core"
-	"github.com/go-authgate/authgate/internal/middleware"
 	"github.com/go-authgate/authgate/internal/services"
 	"github.com/go-authgate/authgate/internal/util"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/oauth2"
-)
-
-// OAuth-specific session keys.
-const (
-	sessionOAuthState    = "oauth_state"
-	sessionOAuthProvider = "oauth_provider"
-	sessionOAuthRedirect = "oauth_redirect"
 )
 
 // OAuthHandler handles OAuth authentication
@@ -87,12 +79,12 @@ func (h *OAuthHandler) LoginWithProvider(c *gin.Context) {
 
 	// Save state and redirect URL in session
 	session := sessions.Default(c)
-	session.Set(sessionOAuthState, state)
-	session.Set(sessionOAuthProvider, provider)
+	session.Set("oauth_state", state)
+	session.Set("oauth_provider", provider)
 
 	// Save original redirect URL if present, validating it is safe first
 	if redirect := c.Query("redirect"); redirect != "" && util.IsRedirectSafe(redirect, h.baseURL) {
-		session.Set(sessionOAuthRedirect, redirect)
+		session.Set("oauth_redirect", redirect)
 	}
 
 	if err := session.Save(); err != nil {
@@ -134,8 +126,8 @@ func (h *OAuthHandler) OAuthCallback(c *gin.Context) {
 
 	// Verify state (CSRF protection)
 	session := sessions.Default(c)
-	savedState := session.Get(sessionOAuthState)
-	savedProvider := session.Get(sessionOAuthProvider)
+	savedState := session.Get("oauth_state")
+	savedProvider := session.Get("oauth_provider")
 
 	if savedState == nil || savedProvider == nil {
 		renderErrorPage(
@@ -218,31 +210,27 @@ func (h *OAuthHandler) OAuthCallback(c *gin.Context) {
 	h.metrics.RecordOAuthCallback(provider, true)
 
 	// Clear OAuth session data
-	session.Delete(sessionOAuthState)
-	session.Delete(sessionOAuthProvider)
+	session.Delete("oauth_state")
+	session.Delete("oauth_provider")
 
 	// Save user ID and username in session
-	session.Set(middleware.SessionUserID, user.ID)
-	session.Set(middleware.SessionUsername, user.Username)
-	session.Set(middleware.SessionLastActivity, time.Now().Unix()) // Set initial last activity time
+	session.Set("user_id", user.ID)
+	session.Set("username", user.Username)
+	session.Set("last_activity", time.Now().Unix()) // Set initial last activity time
 
 	// Set session fingerprint if enabled
 	if h.sessionFingerprintEnabled {
 		clientIP := c.GetString("client_ip") // Set by IPMiddleware
 		userAgent := c.Request.UserAgent()
-		fingerprint := middleware.GenerateFingerprint(
-			clientIP,
-			userAgent,
-			h.sessionFingerprintIncludeIP,
-		)
-		session.Set(middleware.SessionFingerprint, fingerprint)
+		fingerprint := generateFingerprint(clientIP, userAgent, h.sessionFingerprintIncludeIP)
+		session.Set("session_fingerprint", fingerprint)
 	}
 
 	// Get redirect URL
 	redirectURL := "/account/sessions"
-	if savedRedirect := session.Get(sessionOAuthRedirect); savedRedirect != nil {
+	if savedRedirect := session.Get("oauth_redirect"); savedRedirect != nil {
 		redirectURL = savedRedirect.(string)
-		session.Delete(sessionOAuthRedirect)
+		session.Delete("oauth_redirect")
 	}
 
 	if err := session.Save(); err != nil {

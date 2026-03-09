@@ -17,25 +17,21 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Session constant aliases for convenience (canonical definitions in middleware package).
-const (
-	SessionUserID       = middleware.SessionUserID
-	SessionUsername     = middleware.SessionUsername
-	SessionLastActivity = middleware.SessionLastActivity
-	SessionFingerprint  = middleware.SessionFingerprint
-)
-
-// buildOAuthProviderList converts the OAuth providers map into template-friendly display objects.
-func buildOAuthProviderList(providers map[string]*auth.OAuthProvider) []templates.OAuthProvider {
-	result := make([]templates.OAuthProvider, 0, len(providers))
-	for _, p := range providers {
-		result = append(result, templates.OAuthProvider{
-			Name:        p.GetProvider(),
-			DisplayName: p.GetDisplayName(),
-		})
+// generateFingerprint creates a SHA256 hash from IP (optional) and User-Agent
+func generateFingerprint(ip, userAgent string, includeIP bool) string {
+	data := userAgent
+	if includeIP {
+		data = ip + "|" + userAgent
 	}
-	return result
+	return util.SHA256Hex(data)
 }
+
+const (
+	SessionUserID       = "user_id"
+	SessionUsername     = "username"
+	SessionLastActivity = "last_activity"
+	SessionFingerprint  = "session_fingerprint"
+)
 
 type AuthHandler struct {
 	userService                 *services.UserService
@@ -97,11 +93,25 @@ func (h *AuthHandler) LoginPageWithOAuth(
 		}
 	}
 
+	// Prepare OAuth provider data for template
+	providers := []templates.OAuthProvider{}
+	for _, provider := range oauthProviders {
+		providers = append(providers, templates.OAuthProvider{
+			Name:        provider.GetProvider(),
+			DisplayName: provider.GetDisplayName(),
+		})
+	}
+
 	templates.RenderTempl(c, http.StatusOK, templates.LoginPage(templates.LoginPageProps{
-		BaseProps:      templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
+		BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
+		NavbarProps: templates.NavbarProps{
+			Username:   "",
+			IsAdmin:    false,
+			ActiveLink: "",
+		},
 		Redirect:       redirectTo,
 		Error:          errorMsg,
-		OAuthProviders: buildOAuthProviderList(oauthProviders),
+		OAuthProviders: providers,
 	}))
 }
 
@@ -135,14 +145,28 @@ func (h *AuthHandler) Login(c *gin.Context,
 			errorMsg = "Invalid username or password"
 		}
 
+		// Prepare OAuth provider data for template
+		providers := []templates.OAuthProvider{}
+		for _, provider := range oauthProviders {
+			providers = append(providers, templates.OAuthProvider{
+				Name:        provider.GetProvider(),
+				DisplayName: provider.GetDisplayName(),
+			})
+		}
+
 		templates.RenderTempl(
 			c,
 			http.StatusUnauthorized,
 			templates.LoginPage(templates.LoginPageProps{
-				BaseProps:      templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
+				BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
+				NavbarProps: templates.NavbarProps{
+					Username:   "",
+					IsAdmin:    false,
+					ActiveLink: "",
+				},
 				Error:          errorMsg,
 				Redirect:       redirectTo,
-				OAuthProviders: buildOAuthProviderList(oauthProviders),
+				OAuthProviders: providers,
 			}),
 		)
 		return
@@ -167,11 +191,7 @@ func (h *AuthHandler) Login(c *gin.Context,
 	if h.sessionFingerprintEnabled {
 		clientIP := c.GetString("client_ip") // Set by IPMiddleware
 		userAgent := c.Request.UserAgent()
-		fingerprint := middleware.GenerateFingerprint(
-			clientIP,
-			userAgent,
-			h.sessionFingerprintIncludeIP,
-		)
+		fingerprint := generateFingerprint(clientIP, userAgent, h.sessionFingerprintIncludeIP)
 		session.Set(SessionFingerprint, fingerprint)
 	}
 
@@ -181,7 +201,12 @@ func (h *AuthHandler) Login(c *gin.Context,
 			http.StatusInternalServerError,
 			templates.LoginPage(templates.LoginPageProps{
 				BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
-				Error:     "Failed to create session",
+				NavbarProps: templates.NavbarProps{
+					Username:   "",
+					IsAdmin:    false,
+					ActiveLink: "",
+				},
+				Error: "Failed to create session",
 			}),
 		)
 		return

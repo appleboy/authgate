@@ -77,10 +77,7 @@ func (s *AuthorizationService) ValidateAuthorizationRequest(
 
 	// 2. Client must exist and be active
 	client, err := s.store.GetClient(clientID)
-	if err != nil {
-		return nil, ErrUnauthorizedClient
-	}
-	if !client.IsActive() {
+	if err != nil || !client.IsActive() {
 		return nil, ErrUnauthorizedClient
 	}
 
@@ -214,10 +211,7 @@ func (s *AuthorizationService) ExchangeCode(
 
 	// Client authentication
 	client, err := s.store.GetClient(clientID)
-	if err != nil {
-		return nil, ErrUnauthorizedClient
-	}
-	if !client.IsActive() {
+	if err != nil || !client.IsActive() {
 		return nil, ErrUnauthorizedClient
 	}
 

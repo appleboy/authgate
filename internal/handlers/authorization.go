@@ -11,7 +11,6 @@ import (
 	"github.com/go-authgate/authgate/internal/models"
 	"github.com/go-authgate/authgate/internal/services"
 	"github.com/go-authgate/authgate/internal/templates"
-	"github.com/go-authgate/authgate/internal/util"
 
 	"github.com/gin-gonic/gin"
 )
@@ -314,23 +313,30 @@ func (h *AuthorizationHandler) ListAuthorizations(c *gin.Context) {
 		})
 	}
 
-	var userModel *models.User
+	isAdmin := false
+	username := ""
+	fullName := ""
 	if um, ok := user.(*models.User); ok {
-		userModel = um
-	} else {
-		userModel, _ = h.userService.GetUserByID(userIDStr)
-	}
-	if userModel == nil {
-		renderErrorPage(c, http.StatusInternalServerError, "Failed to load user")
-		return
+		isAdmin = um.IsAdmin()
+		username = um.Username
+		fullName = um.FullName
+	} else if u, err := h.userService.GetUserByID(userIDStr); err == nil {
+		isAdmin = u.IsAdmin()
+		username = u.Username
+		fullName = u.FullName
 	}
 
 	templates.RenderTempl(
 		c,
 		http.StatusOK,
 		templates.AccountAuthorizations(templates.AuthorizationsPageProps{
-			BaseProps:      templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
-			NavbarProps:    buildNavbarProps(c, userModel, "authorizations"),
+			BaseProps: templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
+			NavbarProps: templates.NavbarProps{
+				Username:   username,
+				FullName:   fullName,
+				IsAdmin:    isAdmin,
+				ActiveLink: "authorizations",
+			},
 			Authorizations: displayAuths,
 			Success:        c.Query("success"),
 			Error:          c.Query("error"),
@@ -386,7 +392,10 @@ func oauthErrorCode(err error) string {
 
 // scopesAreCovered returns true when all scopes in requested are present in granted.
 func scopesAreCovered(grantedScopes, requestedScopes string) bool {
-	granted := util.ScopeSet(grantedScopes)
+	granted := make(map[string]bool)
+	for s := range strings.FieldsSeq(grantedScopes) {
+		granted[s] = true
+	}
 	for s := range strings.FieldsSeq(requestedScopes) {
 		if !granted[s] {
 			return false
