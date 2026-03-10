@@ -144,7 +144,25 @@ func TestWriteCredentialsFile(t *testing.T) {
 	t.Run("Returns error for invalid directory", func(t *testing.T) {
 		_, err := WriteCredentialsFile("/nonexistent/path/that/does/not/exist", "data")
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to write credentials file")
+		assert.Contains(t, err.Error(), "failed to create credentials file")
+	})
+
+	t.Run("Refuses to overwrite existing file", func(t *testing.T) {
+		dir := t.TempDir()
+
+		// First write should succeed
+		_, err := WriteCredentialsFile(dir, "first")
+		require.NoError(t, err)
+
+		// Second write should fail (O_EXCL)
+		_, err = WriteCredentialsFile(dir, "second")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to create credentials file")
+
+		// Verify original content is preserved
+		data, err := os.ReadFile(filepath.Join(dir, "authgate-credentials.txt"))
+		require.NoError(t, err)
+		assert.Equal(t, "first", string(data))
 	})
 }
 

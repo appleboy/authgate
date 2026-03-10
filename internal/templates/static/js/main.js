@@ -1,5 +1,5 @@
 import { toggleMenu, toggleDropdown } from './navbar.js';
-import { copySecret, toggleDescription, confirmDelete, confirmRegenerateSecret, postRegenerateSecret } from './admin.js';
+import { copySecret, toggleDescription, confirmDelete, confirmRegenerateSecret } from './admin.js';
 import { formatRelativeTime, copyToClipboard, showNotification, confirmAction, toggleDetails } from './utils.js';
 import './code-formatter.js';
 
@@ -10,7 +10,6 @@ window.copySecret = copySecret;
 window.toggleDescription = toggleDescription;
 window.confirmDelete = confirmDelete;
 window.confirmRegenerateSecret = confirmRegenerateSecret;
-window.postRegenerateSecret = postRegenerateSecret;
 window.formatRelativeTime = formatRelativeTime;
 window.copyToClipboard = copyToClipboard;
 window.showNotification = showNotification;

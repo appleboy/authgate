@@ -34,14 +34,33 @@ func HashToken(token, salt string) string {
 	return hex.EncodeToString(hash)
 }
 
-// WriteCredentialsFile writes initial credentials to a file with 0600 permissions.
-// Returns the file path on success.
+// WriteCredentialsFile writes initial credentials to a new file with 0600 permissions.
+// Uses O_CREATE|O_EXCL to fail if the file already exists (prevents overwriting
+// existing credentials and symlink attacks). Returns the file path on success.
 func WriteCredentialsFile(dir, content string) (string, error) {
 	filePath := filepath.Join(dir, "authgate-credentials.txt")
-	err := os.WriteFile(filePath, []byte(content), 0o600)
+
+	// O_EXCL ensures we never overwrite an existing file or follow a symlink
+	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600)
 	if err != nil {
-		return "", fmt.Errorf("failed to write credentials file: %w", err)
+		return "", fmt.Errorf("failed to create credentials file: %w", err)
 	}
+
+	_, writeErr := f.WriteString(content)
+	closeErr := f.Close()
+
+	if writeErr != nil {
+		return "", fmt.Errorf("failed to write credentials file: %w", writeErr)
+	}
+	if closeErr != nil {
+		return "", fmt.Errorf("failed to close credentials file: %w", closeErr)
+	}
+
+	// Explicitly enforce 0600 even if umask was permissive
+	if err := os.Chmod(filePath, 0o600); err != nil {
+		return "", fmt.Errorf("failed to set credentials file permissions: %w", err)
+	}
+
 	return filePath, nil
 }
 
