@@ -209,7 +209,7 @@ func setupAllRoutes(
 		apps.GET("/:id/edit", h.userClient.ShowEditAppPage)
 		apps.POST("/:id", h.userClient.UpdateApp)
 		apps.POST("/:id/delete", h.userClient.DeleteApp)
-		apps.GET("/:id/regenerate-secret", h.userClient.RegenerateAppSecret)
+		apps.POST("/:id/regenerate-secret", h.userClient.RegenerateAppSecret)
 	}
 
 	// Admin routes (require admin role)
@@ -228,7 +228,7 @@ func setupAllRoutes(
 		admin.GET("/clients/:id/edit", h.client.ShowEditClientPage)
 		admin.POST("/clients/:id", h.client.UpdateClient)
 		admin.POST("/clients/:id/delete", h.client.DeleteClient)
-		admin.GET("/clients/:id/regenerate-secret", h.client.RegenerateSecret)
+		admin.POST("/clients/:id/regenerate-secret", h.client.RegenerateSecret)
 		admin.POST("/clients/:id/revoke-all", h.client.RevokeAllTokens)
 		admin.GET("/clients/:id/authorizations", h.client.ListClientAuthorizations)
 		admin.POST("/clients/:id/approve", h.client.ApproveClient)
@@ -335,6 +335,6 @@ func logServerStartup(cfg *config.Config) {
 	log.Printf("OAuth Device Flow server starting on %s", cfg.ServerAddr)
 	log.Printf("Verification URL: %s/device", cfg.BaseURL)
 	log.Printf("  (Tip: Add ?user_code=XXXX-XXXX to pre-fill the code)")
-	log.Printf("Default user: admin (check logs for password if first run)")
-	log.Printf("Default client: AuthGate CLI (check logs for client_id)")
+	log.Printf("Default user: admin (check authgate-credentials.txt for password if first run)")
+	log.Printf("Default client: AuthGate CLI (check authgate-credentials.txt for client_id)")
 }

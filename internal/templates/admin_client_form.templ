@@ -36,12 +36,15 @@ templ AdminClientForm(props ClientFormPageProps) {
 								<div class="admin-secret-info-box">
 									<p>
 										The client secret is encrypted and cannot be displayed.
-										<a
-											href={ templ.URL("/admin/clients/" + props.Client.ClientID + "/regenerate-secret") }
+										<button
+											type="submit"
+											formmethod="POST"
+											formaction={ "/admin/clients/" + props.Client.ClientID + "/regenerate-secret" }
 											onclick="return confirm('Are you sure? This will invalidate the current secret.');"
+											style="background:none;border:none;color:var(--color-primary);cursor:pointer;padding:0;font:inherit;text-decoration:underline;"
 										>
 											Regenerate Secret
-										</a>
+										</button>
 									</p>
 								</div>
 							</div>

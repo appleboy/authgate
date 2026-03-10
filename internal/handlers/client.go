@@ -336,7 +336,7 @@ func (h *ClientHandler) DeleteClient(c *gin.Context) {
 	c.Redirect(http.StatusFound, "/admin/clients")
 }
 
-// RegenerateSecret handles regenerating the client secret
+// RegenerateSecret handles POST /admin/clients/:id/regenerate-secret to regenerate the client secret
 func (h *ClientHandler) RegenerateSecret(c *gin.Context) {
 	clientID := c.Param("id")
 

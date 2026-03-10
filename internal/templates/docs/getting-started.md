@@ -18,7 +18,7 @@ AuthGate implements three core OAuth 2.0 flows:
 ./authgate server
 ```
 
-On first run, AuthGate seeds a default `admin` user and an `AuthGate CLI` OAuth client. The randomly generated password and client ID are printed to the server logs.
+On first run, AuthGate seeds a default `admin` user and an `AuthGate CLI` OAuth client. The randomly generated password and client ID are written to `authgate-credentials.txt` (mode 0600). Delete this file after retrieving the credentials.
 
 ### 2. Configure Your Client
 

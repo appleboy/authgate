@@ -195,7 +195,7 @@ docker run -d \
 
 Server starts on `http://localhost:8080`
 
-**Important:** Note the `client_id` printed in startup logs - you'll need this for the CLI example.
+**Important:** On first run, credentials are written to `authgate-credentials.txt` (mode 0600). Note the `client_id` from this file - you'll need it for the CLI example. Delete the file after retrieving the credentials.
 
 ### Test with Example CLI
 
@@ -209,7 +209,7 @@ cd device-cli
 
 # Configure client
 cp .env.example .env
-nano .env  # Add CLIENT_ID from server logs
+nano .env  # Add CLIENT_ID from authgate-credentials.txt
 
 # Run the CLI
 go run main.go

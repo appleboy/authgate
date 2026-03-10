@@ -4,6 +4,9 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
+	"os"
+	"path/filepath"
 
 	"golang.org/x/crypto/pbkdf2"
 )
@@ -29,6 +32,36 @@ func CryptoRandomString(length int) (string, error) {
 func HashToken(token, salt string) string {
 	hash := pbkdf2.Key([]byte(token), []byte(salt), 10000, 50, sha256.New)
 	return hex.EncodeToString(hash)
+}
+
+// WriteCredentialsFile writes initial credentials to a new file with 0600 permissions.
+// Uses O_CREATE|O_EXCL to fail if the file already exists (prevents overwriting
+// existing credentials and symlink attacks). Returns the file path on success.
+func WriteCredentialsFile(dir, content string) (string, error) {
+	filePath := filepath.Join(dir, "authgate-credentials.txt")
+
+	// O_EXCL ensures we never overwrite an existing file or follow a symlink
+	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600)
+	if err != nil {
+		return "", fmt.Errorf("failed to create credentials file: %w", err)
+	}
+
+	_, writeErr := f.WriteString(content)
+	closeErr := f.Close()
+
+	if writeErr != nil {
+		return "", fmt.Errorf("failed to write credentials file: %w", writeErr)
+	}
+	if closeErr != nil {
+		return "", fmt.Errorf("failed to close credentials file: %w", closeErr)
+	}
+
+	// Explicitly enforce 0600 even if umask was permissive
+	if err := os.Chmod(filePath, 0o600); err != nil {
+		return "", fmt.Errorf("failed to set credentials file permissions: %w", err)
+	}
+
+	return filePath, nil
 }
 
 // SHA256Hex returns the SHA-256 hash of s as a lowercase hex string.

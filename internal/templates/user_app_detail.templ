@@ -89,13 +89,12 @@ templ UserAppDetail(props UserClientDetailPageProps) {
 							✏️ Edit App
 						</a>
 						if props.Client.ClientType == "confidential" {
-							<a
-								href={ templ.URL("/apps/" + props.Client.ClientID + "/regenerate-secret") }
-								class="admin-action-btn secondary"
-								onclick="return confirm('Are you sure? This will invalidate the current secret.');"
-							>
-								🔄 Regenerate Secret
-							</a>
+							<form method="POST" action={ templ.URL("/apps/" + props.Client.ClientID + "/regenerate-secret") } style="display:inline; margin:0;">
+								<input type="hidden" name="csrf_token" value={ props.CSRFToken }/>
+								<button type="submit" class="admin-action-btn secondary" onclick="return confirm('Are you sure? This will invalidate the current secret.');">
+									🔄 Regenerate Secret
+								</button>
+							</form>
 						}
 						<a href="/apps" class="admin-action-btn secondary">← Back to My Apps</a>
 					</div>
