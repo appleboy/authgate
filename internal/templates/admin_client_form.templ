@@ -37,8 +37,10 @@ templ AdminClientForm(props ClientFormPageProps) {
 									<p>
 										The client secret is encrypted and cannot be displayed.
 										<a
-											href={ templ.URL("/admin/clients/" + props.Client.ClientID + "/regenerate-secret") }
-											onclick="return confirm('Are you sure? This will invalidate the current secret.');"
+											href="#"
+											onclick="postRegenerateSecret(this.getAttribute('data-url'), this.getAttribute('data-csrf')); return false;"
+											data-url={ "/admin/clients/" + props.Client.ClientID + "/regenerate-secret" }
+											data-csrf={ props.CSRFToken }
 										>
 											Regenerate Secret
 										</a>

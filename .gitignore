@@ -35,6 +35,9 @@ coverage.txt
 *.authgate-tokens.json
 .authgate-tokens.json
 
+# Credentials file (generated on first run)
+authgate-credentials.txt
+
 # templ generated files
 *_templ.go
 api/*

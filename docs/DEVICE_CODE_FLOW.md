@@ -255,7 +255,7 @@ If `grant_type=refresh_token` returns `invalid_grant`, the refresh token has exp
 ```bash
 git clone https://github.com/go-authgate/device-cli
 cd device-cli
-cp .env.example .env   # Add CLIENT_ID from server logs
+cp .env.example .env   # Add CLIENT_ID from authgate-credentials.txt
 go run main.go
 ```
 

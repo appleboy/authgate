@@ -1,6 +1,8 @@
 package util
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -101,6 +103,48 @@ func TestSHA256Hex(t *testing.T) {
 			"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 			SHA256Hex(""),
 		)
+	})
+}
+
+func TestWriteCredentialsFile(t *testing.T) {
+	t.Run("Writes file successfully with correct content", func(t *testing.T) {
+		dir := t.TempDir()
+		content := "Admin Username: admin\nAdmin Password: secret123\n"
+
+		path, err := WriteCredentialsFile(dir, content)
+		require.NoError(t, err)
+
+		assert.Equal(t, filepath.Join(dir, "authgate-credentials.txt"), path)
+
+		data, err := os.ReadFile(path)
+		require.NoError(t, err)
+		assert.Equal(t, content, string(data))
+	})
+
+	t.Run("File has 0600 permissions", func(t *testing.T) {
+		dir := t.TempDir()
+		content := "test credentials"
+
+		path, err := WriteCredentialsFile(dir, content)
+		require.NoError(t, err)
+
+		info, err := os.Stat(path)
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	})
+
+	t.Run("Returns correct path", func(t *testing.T) {
+		dir := t.TempDir()
+
+		path, err := WriteCredentialsFile(dir, "data")
+		require.NoError(t, err)
+		assert.Equal(t, filepath.Join(dir, "authgate-credentials.txt"), path)
+	})
+
+	t.Run("Returns error for invalid directory", func(t *testing.T) {
+		_, err := WriteCredentialsFile("/nonexistent/path/that/does/not/exist", "data")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to write credentials file")
 	})
 }
 

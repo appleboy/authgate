@@ -40,7 +40,7 @@ DATABASE_DSN=oauth.db            # Connection string (file path for SQLite, DSN 
 
 # Default Admin User
 # Set a custom password for the default admin user created on first startup
-# If not set, a random 16-character password will be generated and logged
+# If not set, a random 16-character password will be generated and written to authgate-credentials.txt
 # DEFAULT_ADMIN_PASSWORD=your-secure-admin-password
 
 # Authentication Mode
@@ -235,14 +235,14 @@ The server initializes with default test accounts:
 ### User Account
 
 - Username: `admin`
-- Password: Set via `DEFAULT_ADMIN_PASSWORD` environment variable, or auto-generated 16-character random password (shown in server logs on first run)
+- Password: Set via `DEFAULT_ADMIN_PASSWORD` environment variable, or auto-generated 16-character random password (written to `authgate-credentials.txt` on first run)
 
 ### OAuth Client
 
 - Name: `AuthGate CLI`
-- Client ID: Auto-generated UUID (shown in server logs)
+- Client ID: Auto-generated UUID (written to `authgate-credentials.txt`)
 
-**⚠️ Security Warning:** Set a secure admin password via `DEFAULT_ADMIN_PASSWORD` environment variable. If not set, a random password will be generated and logged on first run.
+**⚠️ Security Warning:** Set a secure admin password via `DEFAULT_ADMIN_PASSWORD` environment variable. If not set, a random password will be generated and written to `authgate-credentials.txt` (mode 0600) on first run. Delete this file after retrieving the credentials.
 
 ---
 

@@ -129,7 +129,26 @@ function confirmRegenerateSecret() {
   );
 }
 
-export { copySecret, toggleDescription, confirmDelete, confirmRegenerateSecret };
+/**
+ * Submit a POST request to regenerate client secret (used inside nested forms)
+ */
+function postRegenerateSecret(url, csrfToken) {
+  if (!confirm('Are you sure you want to regenerate the client secret?\n\nThis will invalidate the current secret and any applications using it will stop working until updated with the new secret.')) {
+    return;
+  }
+  var form = document.createElement('form');
+  form.method = 'POST';
+  form.action = url;
+  var input = document.createElement('input');
+  input.type = 'hidden';
+  input.name = 'csrf_token';
+  input.value = csrfToken;
+  form.appendChild(input);
+  document.body.appendChild(form);
+  form.submit();
+}
+
+export { copySecret, toggleDescription, confirmDelete, confirmRegenerateSecret, postRegenerateSecret };
 
 /**
  * Initialize admin page interactions

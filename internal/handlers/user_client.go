@@ -271,7 +271,7 @@ func (h *UserClientHandler) DeleteApp(c *gin.Context) {
 	c.Redirect(http.StatusFound, "/apps")
 }
 
-// RegenerateAppSecret handles GET /apps/:id/regenerate-secret.
+// RegenerateAppSecret handles POST /apps/:id/regenerate-secret.
 func (h *UserClientHandler) RegenerateAppSecret(c *gin.Context) {
 	clientID := c.Param("id")
 	userID, _ := c.Get("user_id")

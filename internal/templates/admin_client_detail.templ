@@ -123,13 +123,12 @@ templ AdminClientDetail(props ClientDetailPageProps) {
 						<a href={ templ.URL("/admin/clients/" + props.Client.ClientID + "/edit") } class="admin-action-btn primary">
 							✏️ Edit Client
 						</a>
-						<a
-							href={ templ.URL("/admin/clients/" + props.Client.ClientID + "/regenerate-secret") }
-							class="admin-action-btn secondary"
-							onclick="return confirm('Are you sure? This will invalidate the current secret.');"
-						>
-							🔄 Regenerate Secret
-						</a>
+						<form method="POST" action={ templ.URL("/admin/clients/" + props.Client.ClientID + "/regenerate-secret") } style="display:inline; margin:0;">
+							<input type="hidden" name="csrf_token" value={ props.CSRFToken }/>
+							<button type="submit" class="admin-action-btn secondary" onclick="return confirm('Are you sure? This will invalidate the current secret.');">
+								🔄 Regenerate Secret
+							</button>
+						</form>
 						<a href={ templ.URL("/admin/clients/" + props.Client.ClientID + "/authorizations") } class="admin-action-btn secondary">
 							👥 Authorized Users
 						</a>

@@ -276,8 +276,8 @@ Key configuration categories (see `.env.example` and `docs/CONFIGURATION.md` for
 
 Seeded automatically on first run (store/sqlite.go:seedData):
 
-- User: `admin` / `<random_password>` (16-character random password, logged at startup, bcrypt hashed)
-- Client: `AuthGate CLI` (client_id is auto-generated UUID, logged at startup)
+- User: `admin` / `<random_password>` (16-character random password, written to `authgate-credentials.txt` on first run, bcrypt hashed)
+- Client: `AuthGate CLI` (client_id is auto-generated UUID, written to `authgate-credentials.txt` on first run)
 
 ## Example CLI Clients
 
@@ -286,7 +286,7 @@ Seeded automatically on first run (store/sqlite.go:seedData):
 ```bash
 git clone https://github.com/go-authgate/device-cli
 cd device-cli
-cp .env.example .env      # Add CLIENT_ID from server logs
+cp .env.example .env      # Add CLIENT_ID from authgate-credentials.txt
 go run main.go
 ```
 

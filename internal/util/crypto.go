@@ -4,6 +4,9 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
+	"os"
+	"path/filepath"
 
 	"golang.org/x/crypto/pbkdf2"
 )
@@ -29,6 +32,17 @@ func CryptoRandomString(length int) (string, error) {
 func HashToken(token, salt string) string {
 	hash := pbkdf2.Key([]byte(token), []byte(salt), 10000, 50, sha256.New)
 	return hex.EncodeToString(hash)
+}
+
+// WriteCredentialsFile writes initial credentials to a file with 0600 permissions.
+// Returns the file path on success.
+func WriteCredentialsFile(dir, content string) (string, error) {
+	filePath := filepath.Join(dir, "authgate-credentials.txt")
+	err := os.WriteFile(filePath, []byte(content), 0o600)
+	if err != nil {
+		return "", fmt.Errorf("failed to write credentials file: %w", err)
+	}
+	return filePath, nil
 }
 
 // SHA256Hex returns the SHA-256 hash of s as a lowercase hex string.
