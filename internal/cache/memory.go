@@ -45,7 +45,12 @@ func (m *MemoryCache[T]) Get(ctx context.Context, key string) (T, error) {
 	if time.Now().After(item.expiresAt) {
 		// Lazily remove expired entry
 		m.mu.Lock()
-		delete(m.items, key)
+		// Re-check under write lock to avoid deleting a freshly-updated entry.
+		if current, ok := m.items[key]; ok {
+			if time.Now().After(current.expiresAt) {
+				delete(m.items, key)
+			}
+		}
 		m.mu.Unlock()
 		var zero T
 		return zero, ErrCacheMiss
