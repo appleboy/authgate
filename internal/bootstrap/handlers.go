@@ -23,6 +23,7 @@ type handlerSet struct {
 	audit         *handlers.AuditHandler
 	authorization *handlers.AuthorizationHandler
 	oidc          *handlers.OIDCHandler
+	registration  *handlers.RegistrationHandler
 	docs          *handlers.DocsHandler
 	userService   *services.UserService
 }
@@ -78,8 +79,9 @@ func initializeHandlers(deps handlerDeps) handlerSet {
 			deps.services.user,
 			deps.cfg,
 		),
-		oidc:        handlers.NewOIDCHandler(deps.services.token, deps.services.user, deps.cfg),
-		docs:        handlers.NewDocsHandler(deps.templatesFS),
-		userService: deps.services.user,
+		oidc:         handlers.NewOIDCHandler(deps.services.token, deps.services.user, deps.cfg),
+		registration: handlers.NewRegistrationHandler(deps.services.client, deps.cfg),
+		docs:         handlers.NewDocsHandler(deps.templatesFS),
+		userService:  deps.services.user,
 	}
 }

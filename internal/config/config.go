@@ -190,6 +190,10 @@ type Config struct {
 	ClientCountCacheClientTTL   time.Duration // CLIENT_COUNT_CACHE_CLIENT_TTL for redis-aside (default: 10m)
 	ClientCountCacheSizePerConn int           // CLIENT_COUNT_CACHE_SIZE_PER_CONN for redis-aside in MB (default: 32MB)
 
+	// Dynamic Client Registration (RFC 7591)
+	EnableDynamicClientRegistration    bool // Enable POST /oauth/register endpoint (default: false)
+	DynamicClientRegistrationRateLimit int  // Requests per minute for /oauth/register (default: 5)
+
 	// Authorization Code Flow settings (RFC 6749)
 	AuthCodeExpiration time.Duration // Authorization code lifetime (default: 10 minutes)
 	PKCERequired       bool          // Force PKCE for all public clients (default: false)
@@ -377,6 +381,10 @@ func Load() *Config {
 			"CLIENT_COUNT_CACHE_SIZE_PER_CONN",
 			32,
 		), // 32MB default
+
+		// Dynamic Client Registration (RFC 7591)
+		EnableDynamicClientRegistration:    getEnvBool("ENABLE_DYNAMIC_CLIENT_REGISTRATION", false),
+		DynamicClientRegistrationRateLimit: getEnvInt("DYNAMIC_CLIENT_REGISTRATION_RATE_LIMIT", 5),
 
 		// Authorization Code Flow settings
 		AuthCodeExpiration: getEnvDuration("AUTH_CODE_EXPIRATION", 10*time.Minute),

@@ -159,6 +159,7 @@ func setupAllRoutes(
 		oauth.POST("/token", rateLimiters.token, h.token.Token)
 		oauth.GET("/tokeninfo", h.token.TokenInfo)
 		oauth.POST("/revoke", h.token.Revoke)
+		oauth.POST("/register", rateLimiters.register, h.registration.Register)
 		// OIDC UserInfo Endpoint (GET and POST per OIDC Core 1.0 §5.3)
 		oauth.GET("/userinfo", h.oidc.UserInfo)
 		oauth.POST("/userinfo", h.oidc.UserInfo)
