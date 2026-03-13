@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -468,4 +469,76 @@ func TestSessionFingerprintMiddleware_RedirectURLEncoded(t *testing.T) {
 
 	// Verify error parameter is present
 	assert.Equal(t, "session_invalid", parsedURL.Query().Get("error"))
+}
+
+func setupTestRouterWithTemplates() *gin.Engine {
+	r := setupTestRouter()
+
+	// Load a minimal HTML template so c.HTML() calls don't panic
+	r.SetHTMLTemplate(template.Must(template.New("error.html").Parse(
+		`<html><body>{{.error}}</body></html>`,
+	)))
+
+	return r
+}
+
+func TestRequireAdmin_UserIsAdmin(t *testing.T) {
+	r := setupTestRouterWithTemplates()
+
+	r.Use(func(c *gin.Context) {
+		user := &models.User{Username: "admin", Role: "admin"}
+		c.Set("user", user)
+		c.Next()
+	})
+	r.Use(RequireAdmin())
+
+	handlerCalled := false
+	r.GET("/admin", func(c *gin.Context) {
+		handlerCalled = true
+		c.String(http.StatusOK, "OK")
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/admin", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.True(t, handlerCalled)
+}
+
+func TestRequireAdmin_UserIsNotAdmin(t *testing.T) {
+	r := setupTestRouterWithTemplates()
+
+	r.Use(func(c *gin.Context) {
+		user := &models.User{Username: "regular", Role: "user"}
+		c.Set("user", user)
+		c.Next()
+	})
+	r.Use(RequireAdmin())
+
+	r.GET("/admin", func(c *gin.Context) {
+		c.String(http.StatusOK, "Should not reach here")
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/admin", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestRequireAdmin_NoUserInContext(t *testing.T) {
+	r := setupTestRouterWithTemplates()
+
+	r.Use(RequireAdmin())
+
+	r.GET("/admin", func(c *gin.Context) {
+		c.String(http.StatusOK, "Should not reach here")
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/admin", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
 }
