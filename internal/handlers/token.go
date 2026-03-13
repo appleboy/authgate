@@ -172,9 +172,11 @@ func (h *TokenHandler) handleRefreshTokenGrant(c *gin.Context) {
 				"Refresh token is invalid or expired",
 			)
 		case errors.Is(err, services.ErrAccessDenied):
+			// Per RFC 6749 §5.2, invalid_client should use 401 and include WWW-Authenticate
+			c.Header("WWW-Authenticate", `Basic realm="token"`)
 			respondOAuthError(
 				c,
-				http.StatusBadRequest,
+				http.StatusUnauthorized,
 				"invalid_client",
 				"Client authentication failed",
 			)

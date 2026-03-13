@@ -170,7 +170,7 @@ func SessionIdleTimeout(idleTimeoutSeconds int) gin.HandlerFunc {
 // RequireAdmin is a middleware that requires the user to have admin role.
 // This middleware should be used after RequireAuth, which already fetches
 // and caches the user in the gin context via loadUserFromSession.
-func RequireAdmin(_ *services.UserService) gin.HandlerFunc {
+func RequireAdmin() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		u, exists := c.Get("user")
 		if !exists {

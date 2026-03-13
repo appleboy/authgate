@@ -216,7 +216,7 @@ func setupAllRoutes(
 	admin := r.Group("/admin")
 	admin.Use(
 		middleware.RequireAuth(h.userService),
-		middleware.RequireAdmin(h.userService),
+		middleware.RequireAdmin(),
 		middleware.CSRFMiddleware(),
 		injectPending,
 	)
