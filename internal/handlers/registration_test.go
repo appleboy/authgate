@@ -36,7 +36,7 @@ func setupRegistrationTestEnv(t *testing.T, enableRegistration bool) *gin.Engine
 
 	auditSvc := services.NewAuditService(s, false, 0)
 	clientSvc := services.NewClientService(s, auditSvc, nil, 0)
-	handler := NewRegistrationHandler(clientSvc, cfg)
+	handler := NewRegistrationHandler(clientSvc, auditSvc, cfg)
 
 	r := gin.New()
 	r.POST("/oauth/register", handler.Register)
