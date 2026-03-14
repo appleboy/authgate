@@ -52,6 +52,9 @@ const (
 	EventClientApproved EventType = "CLIENT_APPROVED"
 	EventClientRejected EventType = "CLIENT_REJECTED"
 
+	// Dynamic Client Registration events (RFC 7591)
+	EventClientRegistered EventType = "CLIENT_REGISTERED"
+
 	// Client Credentials Flow events (RFC 6749 §4.4)
 	EventClientCredentialsTokenIssued EventType = "CLIENT_CREDENTIALS_TOKEN_ISSUED" //nolint:gosec // G101: false positive
 
