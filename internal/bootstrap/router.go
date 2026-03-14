@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/go-authgate/authgate/internal/auth"
 	"github.com/go-authgate/authgate/internal/config"
@@ -43,6 +44,7 @@ func setupRouter(
 	r.Use(metrics.HTTPMetricsMiddleware(prometheusMetrics))
 	r.Use(gin.Logger(), gin.Recovery())
 	r.Use(middleware.IPMiddleware())
+	r.Use(middleware.SecurityHeaders(strings.HasPrefix(cfg.BaseURL, "https://")))
 
 	// Setup session middleware
 	setupSessionMiddleware(r, cfg)
