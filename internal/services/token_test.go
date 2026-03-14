@@ -1371,8 +1371,9 @@ func TestRefreshAccessToken_RotationMode_DisabledToken_RevokesFamily(t *testing.
 	client := createTestClient(t, s, true)
 	userID := uuid.New().String()
 	rawRefreshToken := uuid.New().String()
+	familyID := uuid.New().String()
 
-	// Create a disabled refresh token
+	// Create a disabled refresh token with TokenFamilyID
 	parentRefreshToken := &models.AccessToken{
 		ID:            uuid.New().String(),
 		TokenHash:     util.SHA256Hex(rawRefreshToken),
@@ -1382,6 +1383,7 @@ func TestRefreshAccessToken_RotationMode_DisabledToken_RevokesFamily(t *testing.
 		ClientID:      client.ClientID,
 		Scopes:        "read write",
 		ExpiresAt:     time.Now().Add(720 * time.Hour),
+		TokenFamilyID: familyID,
 	}
 	require.NoError(t, s.DB().Create(parentRefreshToken).Error)
 
@@ -1396,6 +1398,7 @@ func TestRefreshAccessToken_RotationMode_DisabledToken_RevokesFamily(t *testing.
 		Scopes:        "read write",
 		ExpiresAt:     time.Now().Add(1 * time.Hour),
 		ParentTokenID: parentRefreshToken.ID,
+		TokenFamilyID: familyID,
 	}
 	require.NoError(t, s.DB().Create(childAccess).Error)
 
@@ -1409,6 +1412,7 @@ func TestRefreshAccessToken_RotationMode_DisabledToken_RevokesFamily(t *testing.
 		Scopes:        "read write",
 		ExpiresAt:     time.Now().Add(720 * time.Hour),
 		ParentTokenID: parentRefreshToken.ID,
+		TokenFamilyID: familyID,
 	}
 	require.NoError(t, s.DB().Create(childRefresh).Error)
 
@@ -1430,4 +1434,76 @@ func TestRefreshAccessToken_RotationMode_DisabledToken_RevokesFamily(t *testing.
 	refresh, err := s.GetAccessTokenByHash(childRefresh.TokenHash)
 	require.NoError(t, err)
 	assert.Equal(t, models.TokenStatusRevoked, refresh.Status)
+}
+
+func TestRefreshAccessToken_RotationMode_MultiRotation_ReplayDetection(t *testing.T) {
+	s := setupTestStore(t)
+	cfg := &config.Config{
+		DeviceCodeExpiration:   30 * time.Minute,
+		PollingInterval:        5,
+		JWTExpiration:          1 * time.Hour,
+		JWTSecret:              "test-secret",
+		BaseURL:                "http://localhost:8080",
+		EnableRefreshTokens:    true,
+		EnableTokenRotation:    true,
+		RefreshTokenExpiration: 720 * time.Hour,
+	}
+	tokenService := createTestTokenService(s, cfg)
+
+	// Create client and get initial tokens
+	client := createTestClient(t, s, true)
+	dc := createAuthorizedDeviceCode(t, s, client.ClientID)
+	_, refresh0, err := tokenService.ExchangeDeviceCode(
+		context.Background(),
+		dc.DeviceCode,
+		client.ClientID,
+	)
+	require.NoError(t, err)
+	require.NotNil(t, refresh0)
+
+	// Rotation 1: refresh0 → refresh1
+	_, refresh1, err := tokenService.RefreshAccessToken(
+		context.Background(),
+		refresh0.RawToken,
+		client.ClientID,
+		"read write",
+	)
+	require.NoError(t, err)
+	require.NotNil(t, refresh1)
+
+	// Rotation 2: refresh1 → refresh2
+	_, refresh2, err := tokenService.RefreshAccessToken(
+		context.Background(),
+		refresh1.RawToken,
+		client.ClientID,
+		"read write",
+	)
+	require.NoError(t, err)
+	require.NotNil(t, refresh2)
+
+	// Rotation 3: refresh2 → refresh3
+	_, refresh3, err := tokenService.RefreshAccessToken(
+		context.Background(),
+		refresh2.RawToken,
+		client.ClientID,
+		"read write",
+	)
+	require.NoError(t, err)
+	require.NotNil(t, refresh3)
+
+	// Replay attack: reuse refresh0 (3 rotations ago)
+	_, _, err = tokenService.RefreshAccessToken(
+		context.Background(),
+		refresh0.RawToken,
+		client.ClientID,
+		"read write",
+	)
+	require.Error(t, err)
+	assert.Equal(t, token.ErrInvalidRefreshToken, err)
+
+	// Verify the latest refresh token (refresh3) was also revoked
+	latestToken, err := s.GetAccessTokenByHash(util.SHA256Hex(refresh3.RawToken))
+	require.NoError(t, err)
+	assert.Equal(t, models.TokenStatusRevoked, latestToken.Status,
+		"latest refresh token should be revoked when an old token from the same family is replayed")
 }

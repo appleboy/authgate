@@ -667,12 +667,12 @@ func (s *Store) UpdateTokenStatus(tokenID, status string) error {
 		Update("status", status).Error
 }
 
-// RevokeTokenFamily revokes all tokens that share the same ParentTokenID (token family).
+// RevokeTokenFamily revokes all active tokens that share the same TokenFamilyID.
 // This is used for refresh token rotation replay detection: when a revoked refresh token
 // is reused, all tokens in the family must be invalidated to prevent stolen token abuse.
-func (s *Store) RevokeTokenFamily(parentTokenID string) (int64, error) {
+func (s *Store) RevokeTokenFamily(familyID string) (int64, error) {
 	result := s.db.Model(&models.AccessToken{}).
-		Where("(parent_token_id = ? OR id = ?) AND status = ?", parentTokenID, parentTokenID, models.TokenStatusActive).
+		Where("token_family_id = ? AND status = ?", familyID, models.TokenStatusActive).
 		Update("status", models.TokenStatusRevoked)
 	return result.RowsAffected, result.Error
 }

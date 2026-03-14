@@ -277,24 +277,25 @@ func testBasicOperations(t *testing.T, driver string, pgContainer *postgres.Post
 	t.Run("RevokeTokenFamily", func(t *testing.T) {
 		store := createFreshStore(t, driver, pgContainer)
 
-		parentID := uuid.New().String()
+		familyID := uuid.New().String()
 		clientID := uuid.New().String()
 		userID := uuid.New().String()
 
-		// Create the parent refresh token (the family root)
+		// Create the root refresh token (the family root, already revoked after first rotation)
 		parentToken := &models.AccessToken{
-			ID:            parentID,
+			ID:            familyID,
 			TokenHash:     util.SHA256Hex(uuid.New().String()),
 			TokenCategory: models.TokenCategoryRefresh,
-			Status:        models.TokenStatusRevoked, // already used/revoked
+			Status:        models.TokenStatusRevoked,
 			UserID:        userID,
 			ClientID:      clientID,
 			Scopes:        "read write",
 			ExpiresAt:     time.Now().Add(24 * time.Hour),
+			TokenFamilyID: familyID,
 		}
 		require.NoError(t, store.CreateAccessToken(parentToken))
 
-		// Create child tokens in the same family (ParentTokenID = parentID)
+		// Create child tokens in the same family (all share TokenFamilyID)
 		childActive1 := &models.AccessToken{
 			ID:            uuid.New().String(),
 			TokenHash:     util.SHA256Hex(uuid.New().String()),
@@ -304,12 +305,15 @@ func testBasicOperations(t *testing.T, driver string, pgContainer *postgres.Post
 			ClientID:      clientID,
 			Scopes:        "read write",
 			ExpiresAt:     time.Now().Add(1 * time.Hour),
-			ParentTokenID: parentID,
+			ParentTokenID: familyID,
+			TokenFamilyID: familyID,
 		}
 		require.NoError(t, store.CreateAccessToken(childActive1))
 
+		// Grandchild — different ParentTokenID but same TokenFamilyID
+		grandchildID := uuid.New().String()
 		childActive2 := &models.AccessToken{
-			ID:            uuid.New().String(),
+			ID:            grandchildID,
 			TokenHash:     util.SHA256Hex(uuid.New().String()),
 			TokenCategory: models.TokenCategoryRefresh,
 			Status:        models.TokenStatusActive,
@@ -317,7 +321,8 @@ func testBasicOperations(t *testing.T, driver string, pgContainer *postgres.Post
 			ClientID:      clientID,
 			Scopes:        "read write",
 			ExpiresAt:     time.Now().Add(24 * time.Hour),
-			ParentTokenID: parentID,
+			ParentTokenID: childActive1.ID,
+			TokenFamilyID: familyID,
 		}
 		require.NoError(t, store.CreateAccessToken(childActive2))
 
@@ -331,7 +336,7 @@ func testBasicOperations(t *testing.T, driver string, pgContainer *postgres.Post
 			ClientID:      clientID,
 			Scopes:        "read write",
 			ExpiresAt:     time.Now().Add(24 * time.Hour),
-			ParentTokenID: parentID,
+			TokenFamilyID: familyID,
 		}
 		require.NoError(t, store.CreateAccessToken(childRevoked))
 
@@ -345,17 +350,17 @@ func testBasicOperations(t *testing.T, driver string, pgContainer *postgres.Post
 			ClientID:      clientID,
 			Scopes:        "read",
 			ExpiresAt:     time.Now().Add(1 * time.Hour),
-			ParentTokenID: uuid.New().String(), // different family
+			TokenFamilyID: uuid.New().String(), // different family
 		}
 		require.NoError(t, store.CreateAccessToken(unrelatedToken))
 
 		// Revoke the token family
-		revokedCount, err := store.RevokeTokenFamily(parentID)
+		revokedCount, err := store.RevokeTokenFamily(familyID)
 		require.NoError(t, err)
-		// Should revoke the 2 active children (parent is already revoked, childRevoked already revoked)
+		// Should revoke the 2 active children (parent already revoked, childRevoked already revoked)
 		assert.Equal(t, int64(2), revokedCount)
 
-		// Verify family tokens are revoked
+		// Verify family tokens are revoked (including grandchild)
 		retrieved1, err := store.GetAccessTokenByHash(childActive1.TokenHash)
 		require.NoError(t, err)
 		assert.Equal(t, models.TokenStatusRevoked, retrieved1.Status)
