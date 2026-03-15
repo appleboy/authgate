@@ -48,7 +48,7 @@ var (
 )
 
 type TokenService struct {
-	store         *store.Store
+	store         core.Store
 	config        *config.Config
 	deviceService *DeviceService
 	tokenProvider core.TokenProvider
@@ -57,7 +57,7 @@ type TokenService struct {
 }
 
 func NewTokenService(
-	s *store.Store,
+	s core.Store,
 	cfg *config.Config,
 	ds *DeviceService,
 	provider core.TokenProvider,
@@ -188,25 +188,16 @@ func (s *TokenService) ExchangeDeviceCode(
 	}
 
 	// Save both tokens in transaction
-	tx := s.store.DB().Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
+	if err := s.store.RunInTransaction(func(tx core.Store) error {
+		if err := tx.CreateAccessToken(accessToken); err != nil {
+			return fmt.Errorf("failed to save access token: %w", err)
 		}
-	}()
-
-	if err := tx.Create(accessToken).Error; err != nil {
-		tx.Rollback()
-		return nil, nil, fmt.Errorf("failed to save access token: %w", err)
-	}
-
-	if err := tx.Create(refreshToken).Error; err != nil {
-		tx.Rollback()
-		return nil, nil, fmt.Errorf("failed to save refresh token: %w", err)
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		return nil, nil, fmt.Errorf("failed to commit transaction: %w", err)
+		if err := tx.CreateAccessToken(refreshToken); err != nil {
+			return fmt.Errorf("failed to save refresh token: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return nil, nil, err
 	}
 
 	// Record token issuance metrics
@@ -571,13 +562,6 @@ func (s *TokenService) RefreshAccessToken(
 	}
 
 	// 7. Save new tokens in transaction
-	tx := s.store.DB().Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
 	// 7.1 Create new access token
 	newAccessToken := &models.AccessToken{
 		ID:            uuid.New().String(),
@@ -592,11 +576,6 @@ func (s *TokenService) RefreshAccessToken(
 		ExpiresAt:     refreshResult.AccessToken.ExpiresAt,
 		ParentTokenID: refreshToken.ID,
 		TokenFamilyID: refreshToken.TokenFamilyID, // Inherit family ID
-	}
-
-	if err := tx.Create(newAccessToken).Error; err != nil {
-		tx.Rollback()
-		return nil, nil, fmt.Errorf("failed to save new access token: %w", err)
 	}
 
 	// 7.2 Handle refresh token based on mode
@@ -618,35 +597,37 @@ func (s *TokenService) RefreshAccessToken(
 			ParentTokenID: refreshToken.ID,
 			TokenFamilyID: refreshToken.TokenFamilyID, // Inherit family ID
 		}
-
-		if err := tx.Create(newRefreshToken).Error; err != nil {
-			tx.Rollback()
-			return nil, nil, fmt.Errorf("failed to save new refresh token: %w", err)
-		}
-
-		// Revoke old refresh token (soft delete)
-		if err := tx.Model(refreshToken).
-			Update("status", models.TokenStatusRevoked).
-			Error; err != nil {
-			tx.Rollback()
-			return nil, nil, fmt.Errorf("failed to revoke old refresh token: %w", err)
-		}
-	} else {
-		// Fixed mode: update refresh token's last_used_at
-		now := time.Now()
-		if err := tx.Model(refreshToken).Update("last_used_at", &now).Error; err != nil {
-			tx.Rollback()
-			return nil, nil, fmt.Errorf("failed to update refresh token last_used_at: %w", err)
-		}
-		// Return original refresh token, restoring RawToken so the handler can
-		// echo it back to the client (RawToken is gorm:"-" and was not loaded from DB).
-		refreshToken.RawToken = refreshTokenString
-		newRefreshToken = refreshToken
 	}
 
-	if err := tx.Commit().Error; err != nil {
+	if err := s.store.RunInTransaction(func(tx core.Store) error {
+		if err := tx.CreateAccessToken(newAccessToken); err != nil {
+			return fmt.Errorf("failed to save new access token: %w", err)
+		}
+
+		if s.config.EnableTokenRotation && newRefreshToken != nil {
+			if err := tx.CreateAccessToken(newRefreshToken); err != nil {
+				return fmt.Errorf("failed to save new refresh token: %w", err)
+			}
+			// Revoke old refresh token
+			if err := tx.UpdateTokenStatus(refreshToken.ID, models.TokenStatusRevoked); err != nil {
+				return fmt.Errorf("failed to revoke old refresh token: %w", err)
+			}
+		} else {
+			// Fixed mode: update refresh token's last_used_at
+			if err := tx.UpdateTokenLastUsedAt(refreshToken.ID, time.Now()); err != nil {
+				return fmt.Errorf("failed to update refresh token last_used_at: %w", err)
+			}
+		}
+		return nil
+	}); err != nil {
 		s.metrics.RecordTokenRefresh(false)
-		return nil, nil, fmt.Errorf("failed to commit transaction: %w", err)
+		return nil, nil, err
+	}
+
+	// Fixed mode: return original refresh token with RawToken restored
+	if newRefreshToken == nil {
+		refreshToken.RawToken = refreshTokenString
+		newRefreshToken = refreshToken
 	}
 
 	// Record successful refresh
@@ -765,7 +746,7 @@ func (s *TokenService) IssueClientCredentialsToken(
 		ExpiresAt:     accessTokenResult.ExpiresAt,
 	}
 
-	if err := s.store.DB().Create(accessToken).Error; err != nil {
+	if err := s.store.CreateAccessToken(accessToken); err != nil {
 		return nil, fmt.Errorf("failed to save access token: %w", err)
 	}
 
@@ -1029,23 +1010,16 @@ func (s *TokenService) ExchangeAuthorizationCode(
 	}
 
 	// Persist both tokens in a single transaction
-	tx := s.store.DB().Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
+	if err := s.store.RunInTransaction(func(tx core.Store) error {
+		if err := tx.CreateAccessToken(accessToken); err != nil {
+			return fmt.Errorf("failed to save access token: %w", err)
 		}
-	}()
-
-	if err := tx.Create(accessToken).Error; err != nil {
-		tx.Rollback()
-		return nil, nil, "", fmt.Errorf("failed to save access token: %w", err)
-	}
-	if err := tx.Create(refreshToken).Error; err != nil {
-		tx.Rollback()
-		return nil, nil, "", fmt.Errorf("failed to save refresh token: %w", err)
-	}
-	if err := tx.Commit().Error; err != nil {
-		return nil, nil, "", fmt.Errorf("failed to commit transaction: %w", err)
+		if err := tx.CreateAccessToken(refreshToken); err != nil {
+			return fmt.Errorf("failed to save refresh token: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return nil, nil, "", err
 	}
 
 	// Generate OIDC ID Token when openid scope was granted (OIDC Core 1.0 §3.1.3.3).

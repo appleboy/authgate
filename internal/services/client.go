@@ -89,14 +89,14 @@ func validateRedirectURIs(uris []string) error {
 }
 
 type ClientService struct {
-	store         *store.Store
+	store         core.Store
 	auditService  *AuditService
 	countCache    core.Cache[int64]
 	countCacheTTL time.Duration
 }
 
 func NewClientService(
-	s *store.Store,
+	s core.Store,
 	auditService *AuditService,
 	countCache core.Cache[int64],
 	countCacheTTL time.Duration,

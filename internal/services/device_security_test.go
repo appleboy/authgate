@@ -51,9 +51,10 @@ func TestDeviceCodeHashing(t *testing.T) {
 		assert.Len(t, dc.DeviceCode, 40, "DeviceCode should be 40 hex chars")
 
 		// Query database directly - should not find plaintext
-		var dbRecord models.DeviceCode
-		err = service.store.DB().Where("device_code_id = ?", dc.DeviceCodeID).First(&dbRecord).Error
+		dbRecords, err := service.store.GetDeviceCodesByID(dc.DeviceCodeID)
 		require.NoError(t, err)
+		require.Len(t, dbRecords, 1)
+		dbRecord := dbRecords[0]
 		assert.Empty(t, dbRecord.DeviceCode, "DeviceCode should not exist in database")
 		assert.NotEmpty(t, dbRecord.DeviceCodeHash, "Hash should exist")
 		assert.NotEmpty(t, dbRecord.DeviceCodeSalt, "Salt should exist")

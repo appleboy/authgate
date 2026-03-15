@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-authgate/authgate/internal/config"
+	"github.com/go-authgate/authgate/internal/core"
 	"github.com/go-authgate/authgate/internal/models"
 	"github.com/go-authgate/authgate/internal/util"
 
@@ -20,6 +21,9 @@ import (
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
 )
+
+// Compile-time check: *Store must satisfy core.Store.
+var _ core.Store = (*Store)(nil)
 
 type Store struct {
 	db *gorm.DB
@@ -656,8 +660,18 @@ func (s *Store) Health() error {
 }
 
 // DB returns the underlying GORM database connection (for transactions)
+//
+// Deprecated: use RunInTransaction instead of accessing the raw DB handle.
 func (s *Store) DB() *gorm.DB {
 	return s.db
+}
+
+// RunInTransaction executes fn inside a database transaction.
+// The Store passed to fn operates within the transaction scope.
+func (s *Store) RunInTransaction(fn func(tx core.Store) error) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		return fn(&Store{db: tx})
+	})
 }
 
 // UpdateTokenStatus updates the status of a token
@@ -665,6 +679,13 @@ func (s *Store) UpdateTokenStatus(tokenID, status string) error {
 	return s.db.Model(&models.AccessToken{}).
 		Where("id = ?", tokenID).
 		Update("status", status).Error
+}
+
+// UpdateTokenLastUsedAt updates the last_used_at timestamp of a token
+func (s *Store) UpdateTokenLastUsedAt(tokenID string, t time.Time) error {
+	return s.db.Model(&models.AccessToken{}).
+		Where("id = ?", tokenID).
+		Update("last_used_at", &t).Error
 }
 
 // RevokeTokenFamily revokes all active tokens that share the same TokenFamilyID.

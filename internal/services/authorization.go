@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-authgate/authgate/internal/config"
+	"github.com/go-authgate/authgate/internal/core"
 	"github.com/go-authgate/authgate/internal/models"
 	"github.com/go-authgate/authgate/internal/store"
 	"github.com/go-authgate/authgate/internal/util"
@@ -48,13 +49,13 @@ type AuthorizationRequest struct {
 
 // AuthorizationService manages the OAuth 2.0 Authorization Code Flow (RFC 6749)
 type AuthorizationService struct {
-	store        *store.Store
+	store        core.Store
 	config       *config.Config
 	auditService *AuditService
 }
 
 func NewAuthorizationService(
-	s *store.Store,
+	s core.Store,
 	cfg *config.Config,
 	auditService *AuditService,
 ) *AuthorizationService {
