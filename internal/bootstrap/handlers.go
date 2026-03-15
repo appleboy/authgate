@@ -25,6 +25,7 @@ type handlerSet struct {
 	oidc          *handlers.OIDCHandler
 	registration  *handlers.RegistrationHandler
 	docs          *handlers.DocsHandler
+	jwks          *handlers.JWKSHandler
 	userService   *services.UserService
 }
 
@@ -37,10 +38,14 @@ type handlerDeps struct {
 	oauthClient    *http.Client
 	metrics        core.Recorder
 	templatesFS    embed.FS
+	tokenProvider  core.TokenProvider
 }
 
 // initializeHandlers creates all HTTP handlers
 func initializeHandlers(deps handlerDeps) handlerSet {
+	// Build JWKS handler from the token provider's public key info
+	jwksHandler := buildJWKSHandler(deps.tokenProvider, deps.cfg)
+
 	return handlerSet{
 		auth: handlers.NewAuthHandler(
 			deps.services.user,
@@ -79,13 +84,35 @@ func initializeHandlers(deps handlerDeps) handlerSet {
 			deps.services.user,
 			deps.cfg,
 		),
-		oidc: handlers.NewOIDCHandler(deps.services.token, deps.services.user, deps.cfg),
+		oidc: handlers.NewOIDCHandler(
+			deps.services.token, deps.services.user,
+			deps.cfg, len(jwksHandler.Keys()) > 0,
+		),
 		registration: handlers.NewRegistrationHandler(
 			deps.services.client,
 			deps.auditService,
 			deps.cfg,
 		),
 		docs:        handlers.NewDocsHandler(deps.templatesFS),
+		jwks:        jwksHandler,
 		userService: deps.services.user,
 	}
+}
+
+// jwksInfoProvider is implemented by LocalTokenProvider to expose public key metadata.
+type jwksInfoProvider interface {
+	PublicKey() any
+	KeyID() string
+	Algorithm() string
+}
+
+// buildJWKSHandler creates a JWKS handler from the token provider.
+// For LocalTokenProvider with asymmetric keys, it exposes the public key.
+// For HS256 or HTTP API providers, it returns an empty key set.
+func buildJWKSHandler(tp core.TokenProvider, cfg *config.Config) *handlers.JWKSHandler {
+	if info, ok := tp.(jwksInfoProvider); ok {
+		return handlers.NewJWKSHandler(info.Algorithm(), info.KeyID(), info.PublicKey())
+	}
+	// Fallback: empty JWKS
+	return handlers.NewJWKSHandler(cfg.JWTSigningAlgorithm, "", nil)
 }

@@ -43,8 +43,11 @@ type Config struct {
 	IsProduction bool
 
 	// JWT settings
-	JWTSecret     string
-	JWTExpiration time.Duration
+	JWTSecret           string
+	JWTExpiration       time.Duration
+	JWTSigningAlgorithm string // "HS256" (default), "RS256", or "ES256"
+	JWTPrivateKeyPath   string // PEM file path (required for RS256/ES256)
+	JWTKeyID            string // "kid" header for JWKS key rotation (auto-generated if empty)
 
 	// Session settings
 	SessionSecret        string
@@ -237,12 +240,15 @@ func Load() *Config {
 		BaseURL:    getEnv("BASE_URL", "http://localhost:8080"),
 		IsProduction: getEnvBool("ENVIRONMENT", false) ||
 			getEnv("ENVIRONMENT", "") == "production",
-		JWTSecret:          getEnv("JWT_SECRET", "your-256-bit-secret-change-in-production"),
-		JWTExpiration:      time.Hour,
-		SessionSecret:      getEnv("SESSION_SECRET", "session-secret-change-in-production"),
-		SessionMaxAge:      getEnvInt("SESSION_MAX_AGE", 3600),      // 1 hour default
-		SessionIdleTimeout: getEnvInt("SESSION_IDLE_TIMEOUT", 1800), // 30 minutes default
-		SessionFingerprint: getEnvBool("SESSION_FINGERPRINT", true), // Enabled by default
+		JWTSecret:           getEnv("JWT_SECRET", "your-256-bit-secret-change-in-production"),
+		JWTExpiration:       time.Hour,
+		JWTSigningAlgorithm: getEnv("JWT_SIGNING_ALGORITHM", "HS256"),
+		JWTPrivateKeyPath:   getEnv("JWT_PRIVATE_KEY_PATH", ""),
+		JWTKeyID:            getEnv("JWT_KEY_ID", ""),
+		SessionSecret:       getEnv("SESSION_SECRET", "session-secret-change-in-production"),
+		SessionMaxAge:       getEnvInt("SESSION_MAX_AGE", 3600),      // 1 hour default
+		SessionIdleTimeout:  getEnvInt("SESSION_IDLE_TIMEOUT", 1800), // 30 minutes default
+		SessionFingerprint:  getEnvBool("SESSION_FINGERPRINT", true), // Enabled by default
 		SessionFingerprintIP: getEnvBool(
 			"SESSION_FINGERPRINT_IP",
 			false,
@@ -503,6 +509,24 @@ func validateCacheType(name, value, redisAddr string) error {
 
 // Validate checks the configuration for invalid values
 func (c *Config) Validate() error {
+	// Validate JWT signing algorithm
+	switch c.JWTSigningAlgorithm {
+	case "", "HS256":
+		// default, no key file required
+	case "RS256", "ES256":
+		if c.JWTPrivateKeyPath == "" {
+			return fmt.Errorf(
+				"JWT_PRIVATE_KEY_PATH is required when JWT_SIGNING_ALGORITHM=%s",
+				c.JWTSigningAlgorithm,
+			)
+		}
+	default:
+		return fmt.Errorf(
+			"invalid JWT_SIGNING_ALGORITHM value: %q (must be \"HS256\", \"RS256\", or \"ES256\")",
+			c.JWTSigningAlgorithm,
+		)
+	}
+
 	// Validate rate limit store type
 	if c.RateLimitStore != RateLimitStoreMemory && c.RateLimitStore != RateLimitStoreRedis {
 		return fmt.Errorf(

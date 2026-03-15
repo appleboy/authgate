@@ -58,6 +58,37 @@ func initializeTokenProvider(cfg *config.Config) core.TokenProvider {
 		log.Printf("HTTP API token provider enabled: %s", cfg.TokenAPIURL)
 		return token.NewHTTPTokenProvider(cfg, tokenRetryClient)
 	default:
+		return newLocalTokenProvider(cfg)
+	}
+}
+
+// newLocalTokenProvider creates a LocalTokenProvider with key loading for asymmetric algorithms.
+func newLocalTokenProvider(cfg *config.Config) *token.LocalTokenProvider {
+	if cfg.JWTSigningAlgorithm == "HS256" || cfg.JWTSigningAlgorithm == "" {
+		log.Printf("Token signing: HS256 (symmetric)")
 		return token.NewLocalTokenProvider(cfg)
 	}
+
+	// Load asymmetric key
+	privateKey, err := token.LoadSigningKey(cfg.JWTPrivateKeyPath)
+	if err != nil {
+		log.Fatalf("Failed to load JWT private key from %s: %v", cfg.JWTPrivateKeyPath, err)
+	}
+
+	// Validate key matches algorithm
+	if err := token.ValidateKeyAlgorithm(privateKey, cfg.JWTSigningAlgorithm); err != nil {
+		log.Fatalf("JWT key validation failed: %v", err)
+	}
+
+	// Derive kid if not explicitly set
+	kid := cfg.JWTKeyID
+	if kid == "" {
+		kid = token.DeriveKeyID(privateKey.Public())
+	}
+
+	log.Printf("Token signing: %s (kid=%s)", cfg.JWTSigningAlgorithm, kid)
+	return token.NewLocalTokenProvider(cfg,
+		token.WithSigningKey(privateKey, privateKey.Public()),
+		token.WithKeyID(kid),
+	)
 }
