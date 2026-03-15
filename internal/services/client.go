@@ -13,6 +13,7 @@ import (
 	"github.com/go-authgate/authgate/internal/core"
 	"github.com/go-authgate/authgate/internal/models"
 	"github.com/go-authgate/authgate/internal/store"
+	"github.com/go-authgate/authgate/internal/util"
 
 	"github.com/google/uuid"
 )
@@ -426,21 +427,8 @@ func (s *ClientService) ListClientsPaginatedWithCreator(
 		return []ClientWithCreator{}, pagination, nil
 	}
 
-	// Step 2: Collect unique user IDs
-	userIDSet := make(map[string]bool)
-	for _, client := range clients {
-		if client.UserID != "" {
-			userIDSet[client.UserID] = true
-		}
-	}
-
-	// Step 3: Convert set to slice
-	userIDs := make([]string, 0, len(userIDSet))
-	for userID := range userIDSet {
-		userIDs = append(userIDs, userID)
-	}
-
-	// Step 4: Batch query all users using WHERE IN
+	// Batch query all users using WHERE IN
+	userIDs := util.UniqueKeys(clients, func(c models.OAuthApplication) string { return c.UserID })
 	userMap, err := s.store.GetUsersByIDs(userIDs)
 	if err != nil {
 		return nil, store.PaginationResult{}, err

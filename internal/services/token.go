@@ -415,14 +415,7 @@ func (s *TokenService) IsTokenOwnedByUser(tokenID, userID string) (bool, error) 
 func (s *TokenService) enrichTokensWithClients(
 	tokens []models.AccessToken,
 ) ([]TokenWithClient, error) {
-	clientIDSet := make(map[string]bool, len(tokens))
-	for _, tok := range tokens {
-		clientIDSet[tok.ClientID] = true
-	}
-	clientIDs := make([]string, 0, len(clientIDSet))
-	for clientID := range clientIDSet {
-		clientIDs = append(clientIDs, clientID)
-	}
+	clientIDs := util.UniqueKeys(tokens, func(t models.AccessToken) string { return t.ClientID })
 	clientMap, err := s.store.GetClientsByIDs(clientIDs)
 	if err != nil {
 		return nil, err
@@ -560,7 +553,7 @@ func (s *TokenService) RefreshAccessToken(
 	}
 
 	// 5. Verify scope (cannot upgrade)
-	if !s.validateScopes(refreshToken.Scopes, requestedScopes) {
+	if !util.IsScopeSubset(refreshToken.Scopes, requestedScopes) {
 		s.metrics.RecordTokenRefresh(false)
 		return nil, nil, token.ErrInvalidScope
 	}
@@ -718,13 +711,13 @@ func (s *TokenService) IssueClientCredentialsToken(
 		effectiveScopes = client.Scopes
 	} else {
 		// Reject user-centric OIDC scopes — there is no user in this flow
-		for _, scope := range splitScopes(effectiveScopes) {
+		for scope := range strings.FieldsSeq(effectiveScopes) {
 			if scope == "openid" || scope == "offline_access" {
 				return nil, token.ErrInvalidScope
 			}
 		}
 		// Requested scopes must be a strict subset of the client's registered scopes
-		if !s.validateScopes(client.Scopes, effectiveScopes) {
+		if !util.IsScopeSubset(client.Scopes, effectiveScopes) {
 			return nil, token.ErrInvalidScope
 		}
 	}
@@ -807,35 +800,6 @@ func (s *TokenService) AuthenticateClient(clientID, clientSecret string) error {
 		return ErrInvalidClientCredentials
 	}
 	return nil
-}
-
-// validateScopes checks if requested scopes are subset of original scopes
-func (s *TokenService) validateScopes(originalScopes, requestedScopes string) bool {
-	if requestedScopes == "" {
-		return true // No request = inherit original scope
-	}
-
-	// Check that requested scopes are subset of original scopes
-	originalSet := make(map[string]bool)
-	for _, scope := range splitScopes(originalScopes) {
-		originalSet[scope] = true
-	}
-
-	for _, scope := range splitScopes(requestedScopes) {
-		if !originalSet[scope] {
-			return false // Requested unauthorized scope
-		}
-	}
-
-	return true
-}
-
-// splitScopes splits space-separated scope string
-func splitScopes(scopes string) []string {
-	if scopes == "" {
-		return []string{}
-	}
-	return strings.Fields(scopes)
 }
 
 // updateTokenStatusWithAudit is a helper function to update token status and log audit events
