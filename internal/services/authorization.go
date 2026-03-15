@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-authgate/authgate/internal/config"
+	"github.com/go-authgate/authgate/internal/core"
 	"github.com/go-authgate/authgate/internal/models"
 	"github.com/go-authgate/authgate/internal/store"
 	"github.com/go-authgate/authgate/internal/util"
@@ -48,13 +49,13 @@ type AuthorizationRequest struct {
 
 // AuthorizationService manages the OAuth 2.0 Authorization Code Flow (RFC 6749)
 type AuthorizationService struct {
-	store        *store.Store
+	store        core.Store
 	config       *config.Config
 	auditService *AuditService
 }
 
 func NewAuthorizationService(
-	s *store.Store,
+	s core.Store,
 	cfg *config.Config,
 	auditService *AuditService,
 ) *AuthorizationService {
@@ -95,7 +96,7 @@ func (s *AuthorizationService) ValidateAuthorizationRequest(
 	}
 
 	// 5. Validate scope (must be subset of client's allowed scopes)
-	if scope != "" && !s.isValidScope(client.Scopes, scope) {
+	if scope != "" && !util.IsScopeSubset(client.Scopes, scope) {
 		return nil, ErrInvalidAuthCodeScope
 	}
 	if scope == "" {
@@ -375,14 +376,10 @@ func (s *AuthorizationService) ListUserAuthorizations(
 	}
 
 	// Batch-fetch client names
-	clientIDs := make([]string, 0, len(auths))
-	seen := make(map[string]bool)
-	for _, a := range auths {
-		if !seen[a.ClientID] {
-			clientIDs = append(clientIDs, a.ClientID)
-			seen[a.ClientID] = true
-		}
-	}
+	clientIDs := util.UniqueKeys(
+		auths,
+		func(a models.UserAuthorization) string { return a.ClientID },
+	)
 	clientMap, _ := s.store.GetClientsByIDs(clientIDs)
 
 	result := make([]UserAuthorizationWithClient, 0, len(auths))
@@ -462,14 +459,7 @@ func (s *AuthorizationService) ListClientAuthorizations(
 	}
 
 	// Batch-fetch user display names
-	userIDSet := make(map[string]bool)
-	for _, a := range auths {
-		userIDSet[a.UserID] = true
-	}
-	userIDs := make([]string, 0, len(userIDSet))
-	for id := range userIDSet {
-		userIDs = append(userIDs, id)
-	}
+	userIDs := util.UniqueKeys(auths, func(a models.UserAuthorization) string { return a.UserID })
 	userMap, _ := s.store.GetUsersByIDs(userIDs)
 
 	result := make([]UserAuthorizationWithUser, 0, len(auths))
@@ -521,14 +511,4 @@ func (s *AuthorizationService) isValidRedirectURI(
 		return false
 	}
 	return slices.Contains([]string(client.RedirectURIs), uri)
-}
-
-func (s *AuthorizationService) isValidScope(clientScopes, requestedScopes string) bool {
-	allowed := util.ScopeSet(clientScopes)
-	for sc := range strings.FieldsSeq(requestedScopes) {
-		if !allowed[sc] {
-			return false
-		}
-	}
-	return true
 }

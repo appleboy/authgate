@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-authgate/authgate/internal/core"
 	"github.com/go-authgate/authgate/internal/models"
 	"github.com/go-authgate/authgate/internal/store"
 	"github.com/go-authgate/authgate/internal/util"
@@ -36,7 +37,7 @@ type AuditLogEntry struct {
 
 // AuditService handles audit logging operations
 type AuditService struct {
-	store      *store.Store
+	store      core.Store
 	enabled    bool
 	bufferSize int
 
@@ -54,7 +55,7 @@ type AuditService struct {
 }
 
 // NewAuditService creates a new audit service
-func NewAuditService(s *store.Store, enabled bool, bufferSize int) *AuditService {
+func NewAuditService(s core.Store, enabled bool, bufferSize int) *AuditService {
 	if bufferSize <= 0 {
 		bufferSize = 1000 // Default buffer size
 	}

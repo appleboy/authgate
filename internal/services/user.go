@@ -38,7 +38,7 @@ var (
 )
 
 type UserService struct {
-	store             *store.Store
+	store             core.Store
 	localProvider     core.AuthProvider
 	httpAPIProvider   core.AuthProvider
 	authMode          string
@@ -49,7 +49,7 @@ type UserService struct {
 }
 
 func NewUserService(
-	s *store.Store,
+	s core.Store,
 	localProvider core.AuthProvider,
 	httpAPIProvider core.AuthProvider,
 	authMode string,
@@ -531,15 +531,15 @@ func (s *UserService) createUserWithOAuth(
 	}
 
 	// Use transaction to ensure atomicity
-	err := s.store.DB().Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(user).Error; err != nil {
+	err := s.store.RunInTransaction(func(tx core.Store) error {
+		if err := tx.CreateUser(user); err != nil {
 			if errors.Is(err, gorm.ErrDuplicatedKey) {
 				return fmt.Errorf("email already in use: %s", oauthUserInfo.Email)
 			}
 			return fmt.Errorf("failed to create user: %w", err)
 		}
 
-		if err := tx.Create(connection).Error; err != nil {
+		if err := tx.CreateOAuthConnection(connection); err != nil {
 			return fmt.Errorf("failed to create OAuth connection: %w", err)
 		}
 

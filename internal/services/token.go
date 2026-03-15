@@ -48,7 +48,7 @@ var (
 )
 
 type TokenService struct {
-	store         *store.Store
+	store         core.Store
 	config        *config.Config
 	deviceService *DeviceService
 	tokenProvider core.TokenProvider
@@ -57,7 +57,7 @@ type TokenService struct {
 }
 
 func NewTokenService(
-	s *store.Store,
+	s core.Store,
 	cfg *config.Config,
 	ds *DeviceService,
 	provider core.TokenProvider,
@@ -72,6 +72,92 @@ func NewTokenService(
 		auditService:  auditService,
 		metrics:       m,
 	}
+}
+
+// tokenPairParams holds the inputs for creating an access + refresh token pair.
+type tokenPairParams struct {
+	UserID          string
+	ClientID        string
+	Scopes          string
+	AuthorizationID *uint // nil when not linked to a UserAuthorization (e.g. device flow)
+}
+
+// generateAndPersistTokenPair generates access and refresh tokens via the
+// configured provider, builds database records, and persists them atomically.
+func (s *TokenService) generateAndPersistTokenPair(
+	ctx context.Context,
+	p tokenPairParams,
+) (*models.AccessToken, *models.AccessToken, error) {
+	// Generate tokens via provider
+	accessResult, err := s.tokenProvider.GenerateToken(ctx, p.UserID, p.ClientID, p.Scopes)
+	if err != nil {
+		log.Printf(
+			"[Token] Access token generation failed provider=%s: %v",
+			s.tokenProvider.Name(),
+			err,
+		)
+		return nil, nil, fmt.Errorf("token generation failed: %w", err)
+	}
+	refreshResult, err := s.tokenProvider.GenerateRefreshToken(ctx, p.UserID, p.ClientID, p.Scopes)
+	if err != nil {
+		log.Printf(
+			"[Token] Refresh token generation failed provider=%s: %v",
+			s.tokenProvider.Name(),
+			err,
+		)
+		return nil, nil, fmt.Errorf("refresh token generation failed: %w", err)
+	}
+
+	// Build token records
+	accessToken := &models.AccessToken{
+		ID:              uuid.New().String(),
+		TokenHash:       util.SHA256Hex(accessResult.TokenString),
+		RawToken:        accessResult.TokenString,
+		TokenType:       accessResult.TokenType,
+		TokenCategory:   models.TokenCategoryAccess,
+		Status:          models.TokenStatusActive,
+		UserID:          p.UserID,
+		ClientID:        p.ClientID,
+		Scopes:          p.Scopes,
+		ExpiresAt:       accessResult.ExpiresAt,
+		AuthorizationID: p.AuthorizationID,
+	}
+
+	refreshTokenID := uuid.New().String()
+	refreshToken := &models.AccessToken{
+		ID:              refreshTokenID,
+		TokenHash:       util.SHA256Hex(refreshResult.TokenString),
+		RawToken:        refreshResult.TokenString,
+		TokenType:       refreshResult.TokenType,
+		TokenCategory:   models.TokenCategoryRefresh,
+		Status:          models.TokenStatusActive,
+		UserID:          p.UserID,
+		ClientID:        p.ClientID,
+		Scopes:          p.Scopes,
+		ExpiresAt:       refreshResult.ExpiresAt,
+		AuthorizationID: p.AuthorizationID,
+	}
+
+	// In rotation mode, set TokenFamilyID to the refresh token's own ID (family root)
+	if s.config.EnableTokenRotation {
+		refreshToken.TokenFamilyID = refreshTokenID
+		accessToken.TokenFamilyID = refreshTokenID
+	}
+
+	// Persist both tokens atomically
+	if err := s.store.RunInTransaction(func(tx core.Store) error {
+		if err := tx.CreateAccessToken(accessToken); err != nil {
+			return fmt.Errorf("failed to save access token: %w", err)
+		}
+		if err := tx.CreateAccessToken(refreshToken); err != nil {
+			return fmt.Errorf("failed to save refresh token: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return nil, nil, err
+	}
+
+	return accessToken, refreshToken, nil
 }
 
 // ExchangeDeviceCode exchanges an authorized device code for access and refresh tokens
@@ -118,95 +204,15 @@ func (s *TokenService) ExchangeDeviceCode(
 	// Record successful validation
 	s.metrics.RecordOAuthDeviceCodeValidation("success")
 
-	// Generate access token using provider
+	// Generate and persist token pair
 	start := time.Now()
-
-	accessTokenResult, providerErr := s.tokenProvider.GenerateToken(
-		ctx,
-		dc.UserID,
-		dc.ClientID,
-		dc.Scopes,
-	)
-	if providerErr != nil {
-		log.Printf(
-			"[Token] Access token generation failed provider=%s: %v",
-			s.tokenProvider.Name(),
-			providerErr,
-		)
-		return nil, nil, fmt.Errorf("token generation failed: %w", providerErr)
-	}
-
-	// Generate refresh token using provider
-	refreshTokenResult, providerErr := s.tokenProvider.GenerateRefreshToken(
-		ctx,
-		dc.UserID,
-		dc.ClientID,
-		dc.Scopes,
-	)
-	if providerErr != nil {
-		log.Printf(
-			"[Token] Refresh token generation failed provider=%s: %v",
-			s.tokenProvider.Name(),
-			providerErr,
-		)
-		return nil, nil, fmt.Errorf("refresh token generation failed: %w", providerErr)
-	}
-
-	// Create access token record
-	accessToken := &models.AccessToken{
-		ID:            uuid.New().String(),
-		TokenHash:     util.SHA256Hex(accessTokenResult.TokenString),
-		RawToken:      accessTokenResult.TokenString,
-		TokenType:     accessTokenResult.TokenType,
-		TokenCategory: models.TokenCategoryAccess,
-		Status:        models.TokenStatusActive,
-		UserID:        dc.UserID,
-		ClientID:      dc.ClientID,
-		Scopes:        dc.Scopes,
-		ExpiresAt:     accessTokenResult.ExpiresAt,
-	}
-
-	// Create refresh token record
-	refreshTokenID := uuid.New().String()
-	refreshToken := &models.AccessToken{
-		ID:            refreshTokenID,
-		TokenHash:     util.SHA256Hex(refreshTokenResult.TokenString),
-		RawToken:      refreshTokenResult.TokenString,
-		TokenType:     refreshTokenResult.TokenType,
-		TokenCategory: models.TokenCategoryRefresh,
-		Status:        models.TokenStatusActive,
-		UserID:        dc.UserID,
-		ClientID:      dc.ClientID,
-		Scopes:        dc.Scopes,
-		ExpiresAt:     refreshTokenResult.ExpiresAt,
-	}
-
-	// In rotation mode, set TokenFamilyID to the refresh token's own ID (family root)
-	if s.config.EnableTokenRotation {
-		refreshToken.TokenFamilyID = refreshTokenID
-		accessToken.TokenFamilyID = refreshTokenID
-	}
-
-	// Save both tokens in transaction
-	tx := s.store.DB().Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	if err := tx.Create(accessToken).Error; err != nil {
-		tx.Rollback()
-		return nil, nil, fmt.Errorf("failed to save access token: %w", err)
-	}
-
-	if err := tx.Create(refreshToken).Error; err != nil {
-		tx.Rollback()
-		return nil, nil, fmt.Errorf("failed to save refresh token: %w", err)
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		return nil, nil, fmt.Errorf("failed to commit transaction: %w", err)
+	accessToken, refreshToken, err := s.generateAndPersistTokenPair(ctx, tokenPairParams{
+		UserID:   dc.UserID,
+		ClientID: dc.ClientID,
+		Scopes:   dc.Scopes,
+	})
+	if err != nil {
+		return nil, nil, err
 	}
 
 	// Record token issuance metrics
@@ -409,14 +415,7 @@ func (s *TokenService) IsTokenOwnedByUser(tokenID, userID string) (bool, error) 
 func (s *TokenService) enrichTokensWithClients(
 	tokens []models.AccessToken,
 ) ([]TokenWithClient, error) {
-	clientIDSet := make(map[string]bool, len(tokens))
-	for _, tok := range tokens {
-		clientIDSet[tok.ClientID] = true
-	}
-	clientIDs := make([]string, 0, len(clientIDSet))
-	for clientID := range clientIDSet {
-		clientIDs = append(clientIDs, clientID)
-	}
+	clientIDs := util.UniqueKeys(tokens, func(t models.AccessToken) string { return t.ClientID })
 	clientMap, err := s.store.GetClientsByIDs(clientIDs)
 	if err != nil {
 		return nil, err
@@ -554,7 +553,7 @@ func (s *TokenService) RefreshAccessToken(
 	}
 
 	// 5. Verify scope (cannot upgrade)
-	if !s.validateScopes(refreshToken.Scopes, requestedScopes) {
+	if !util.IsScopeSubset(refreshToken.Scopes, requestedScopes) {
 		s.metrics.RecordTokenRefresh(false)
 		return nil, nil, token.ErrInvalidScope
 	}
@@ -571,13 +570,6 @@ func (s *TokenService) RefreshAccessToken(
 	}
 
 	// 7. Save new tokens in transaction
-	tx := s.store.DB().Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
 	// 7.1 Create new access token
 	newAccessToken := &models.AccessToken{
 		ID:            uuid.New().String(),
@@ -592,11 +584,6 @@ func (s *TokenService) RefreshAccessToken(
 		ExpiresAt:     refreshResult.AccessToken.ExpiresAt,
 		ParentTokenID: refreshToken.ID,
 		TokenFamilyID: refreshToken.TokenFamilyID, // Inherit family ID
-	}
-
-	if err := tx.Create(newAccessToken).Error; err != nil {
-		tx.Rollback()
-		return nil, nil, fmt.Errorf("failed to save new access token: %w", err)
 	}
 
 	// 7.2 Handle refresh token based on mode
@@ -618,35 +605,37 @@ func (s *TokenService) RefreshAccessToken(
 			ParentTokenID: refreshToken.ID,
 			TokenFamilyID: refreshToken.TokenFamilyID, // Inherit family ID
 		}
-
-		if err := tx.Create(newRefreshToken).Error; err != nil {
-			tx.Rollback()
-			return nil, nil, fmt.Errorf("failed to save new refresh token: %w", err)
-		}
-
-		// Revoke old refresh token (soft delete)
-		if err := tx.Model(refreshToken).
-			Update("status", models.TokenStatusRevoked).
-			Error; err != nil {
-			tx.Rollback()
-			return nil, nil, fmt.Errorf("failed to revoke old refresh token: %w", err)
-		}
-	} else {
-		// Fixed mode: update refresh token's last_used_at
-		now := time.Now()
-		if err := tx.Model(refreshToken).Update("last_used_at", &now).Error; err != nil {
-			tx.Rollback()
-			return nil, nil, fmt.Errorf("failed to update refresh token last_used_at: %w", err)
-		}
-		// Return original refresh token, restoring RawToken so the handler can
-		// echo it back to the client (RawToken is gorm:"-" and was not loaded from DB).
-		refreshToken.RawToken = refreshTokenString
-		newRefreshToken = refreshToken
 	}
 
-	if err := tx.Commit().Error; err != nil {
+	if err := s.store.RunInTransaction(func(tx core.Store) error {
+		if err := tx.CreateAccessToken(newAccessToken); err != nil {
+			return fmt.Errorf("failed to save new access token: %w", err)
+		}
+
+		if s.config.EnableTokenRotation && newRefreshToken != nil {
+			if err := tx.CreateAccessToken(newRefreshToken); err != nil {
+				return fmt.Errorf("failed to save new refresh token: %w", err)
+			}
+			// Revoke old refresh token
+			if err := tx.UpdateTokenStatus(refreshToken.ID, models.TokenStatusRevoked); err != nil {
+				return fmt.Errorf("failed to revoke old refresh token: %w", err)
+			}
+		} else {
+			// Fixed mode: update refresh token's last_used_at
+			if err := tx.UpdateTokenLastUsedAt(refreshToken.ID, time.Now()); err != nil {
+				return fmt.Errorf("failed to update refresh token last_used_at: %w", err)
+			}
+		}
+		return nil
+	}); err != nil {
 		s.metrics.RecordTokenRefresh(false)
-		return nil, nil, fmt.Errorf("failed to commit transaction: %w", err)
+		return nil, nil, err
+	}
+
+	// Fixed mode: return original refresh token with RawToken restored
+	if newRefreshToken == nil {
+		refreshToken.RawToken = refreshTokenString
+		newRefreshToken = refreshToken
 	}
 
 	// Record successful refresh
@@ -722,13 +711,13 @@ func (s *TokenService) IssueClientCredentialsToken(
 		effectiveScopes = client.Scopes
 	} else {
 		// Reject user-centric OIDC scopes — there is no user in this flow
-		for _, scope := range splitScopes(effectiveScopes) {
+		for scope := range strings.FieldsSeq(effectiveScopes) {
 			if scope == "openid" || scope == "offline_access" {
 				return nil, token.ErrInvalidScope
 			}
 		}
 		// Requested scopes must be a strict subset of the client's registered scopes
-		if !s.validateScopes(client.Scopes, effectiveScopes) {
+		if !util.IsScopeSubset(client.Scopes, effectiveScopes) {
 			return nil, token.ErrInvalidScope
 		}
 	}
@@ -765,7 +754,7 @@ func (s *TokenService) IssueClientCredentialsToken(
 		ExpiresAt:     accessTokenResult.ExpiresAt,
 	}
 
-	if err := s.store.DB().Create(accessToken).Error; err != nil {
+	if err := s.store.CreateAccessToken(accessToken); err != nil {
 		return nil, fmt.Errorf("failed to save access token: %w", err)
 	}
 
@@ -811,35 +800,6 @@ func (s *TokenService) AuthenticateClient(clientID, clientSecret string) error {
 		return ErrInvalidClientCredentials
 	}
 	return nil
-}
-
-// validateScopes checks if requested scopes are subset of original scopes
-func (s *TokenService) validateScopes(originalScopes, requestedScopes string) bool {
-	if requestedScopes == "" {
-		return true // No request = inherit original scope
-	}
-
-	// Check that requested scopes are subset of original scopes
-	originalSet := make(map[string]bool)
-	for _, scope := range splitScopes(originalScopes) {
-		originalSet[scope] = true
-	}
-
-	for _, scope := range splitScopes(requestedScopes) {
-		if !originalSet[scope] {
-			return false // Requested unauthorized scope
-		}
-	}
-
-	return true
-}
-
-// splitScopes splits space-separated scope string
-func splitScopes(scopes string) []string {
-	if scopes == "" {
-		return []string{}
-	}
-	return strings.Fields(scopes)
 }
 
 // updateTokenStatusWithAudit is a helper function to update token status and log audit events
@@ -962,90 +922,15 @@ func (s *TokenService) ExchangeAuthorizationCode(
 	start := time.Now()
 	providerName := s.tokenProvider.Name()
 
-	// Generate access token via configured provider
-	accessTokenResult, providerErr := s.tokenProvider.GenerateToken(
-		ctx,
-		authCode.UserID,
-		authCode.ClientID,
-		authCode.Scopes,
-	)
-	if providerErr != nil {
-		log.Printf(
-			"[Token] Access token generation failed provider=%s: %v",
-			providerName,
-			providerErr,
-		)
-		return nil, nil, "", fmt.Errorf("token generation failed: %w", providerErr)
-	}
-	// Generate refresh token
-	refreshTokenResult, providerErr := s.tokenProvider.GenerateRefreshToken(
-		ctx,
-		authCode.UserID,
-		authCode.ClientID,
-		authCode.Scopes,
-	)
-	if providerErr != nil {
-		log.Printf(
-			"[Token] Refresh token generation failed provider=%s: %v",
-			providerName,
-			providerErr,
-		)
-		return nil, nil, "", fmt.Errorf("refresh token generation failed: %w", providerErr)
-	}
-	// Build token records — link to UserAuthorization for cascade-revoke support
-	accessToken := &models.AccessToken{
-		ID:              uuid.New().String(),
-		TokenHash:       util.SHA256Hex(accessTokenResult.TokenString),
-		RawToken:        accessTokenResult.TokenString,
-		TokenType:       accessTokenResult.TokenType,
-		TokenCategory:   models.TokenCategoryAccess,
-		Status:          models.TokenStatusActive,
+	// Generate and persist token pair (linked to UserAuthorization for cascade-revoke)
+	accessToken, refreshToken, err := s.generateAndPersistTokenPair(ctx, tokenPairParams{
 		UserID:          authCode.UserID,
 		ClientID:        authCode.ClientID,
 		Scopes:          authCode.Scopes,
-		ExpiresAt:       accessTokenResult.ExpiresAt,
 		AuthorizationID: authorizationID,
-	}
-
-	refreshTokenID := uuid.New().String()
-	refreshToken := &models.AccessToken{
-		ID:              refreshTokenID,
-		TokenHash:       util.SHA256Hex(refreshTokenResult.TokenString),
-		RawToken:        refreshTokenResult.TokenString,
-		TokenType:       refreshTokenResult.TokenType,
-		TokenCategory:   models.TokenCategoryRefresh,
-		Status:          models.TokenStatusActive,
-		UserID:          authCode.UserID,
-		ClientID:        authCode.ClientID,
-		Scopes:          authCode.Scopes,
-		ExpiresAt:       refreshTokenResult.ExpiresAt,
-		AuthorizationID: authorizationID,
-	}
-
-	// In rotation mode, set TokenFamilyID to the refresh token's own ID (family root)
-	if s.config.EnableTokenRotation {
-		refreshToken.TokenFamilyID = refreshTokenID
-		accessToken.TokenFamilyID = refreshTokenID
-	}
-
-	// Persist both tokens in a single transaction
-	tx := s.store.DB().Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	if err := tx.Create(accessToken).Error; err != nil {
-		tx.Rollback()
-		return nil, nil, "", fmt.Errorf("failed to save access token: %w", err)
-	}
-	if err := tx.Create(refreshToken).Error; err != nil {
-		tx.Rollback()
-		return nil, nil, "", fmt.Errorf("failed to save refresh token: %w", err)
-	}
-	if err := tx.Commit().Error; err != nil {
-		return nil, nil, "", fmt.Errorf("failed to commit transaction: %w", err)
+	})
+	if err != nil {
+		return nil, nil, "", err
 	}
 
 	// Generate OIDC ID Token when openid scope was granted (OIDC Core 1.0 §3.1.3.3).
@@ -1062,7 +947,7 @@ func (s *TokenService) ExchangeAuthorizationCode(
 				Audience: authCode.ClientID,
 				AuthTime: authCode.CreatedAt,
 				Nonce:    authCode.Nonce,
-				AtHash:   token.ComputeAtHash(accessTokenResult.TokenString),
+				AtHash:   token.ComputeAtHash(accessToken.RawToken),
 			}
 
 			// Fetch user profile for scope-gated claims
