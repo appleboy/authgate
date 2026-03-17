@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"crypto"
 	"embed"
 	"net/http"
 
@@ -101,7 +102,7 @@ func initializeHandlers(deps handlerDeps) handlerSet {
 
 // jwksInfoProvider is implemented by LocalTokenProvider to expose public key metadata.
 type jwksInfoProvider interface {
-	PublicKey() any
+	PublicKey() crypto.PublicKey
 	KeyID() string
 	Algorithm() string
 }

@@ -288,9 +288,13 @@ For HS256, the JWKS endpoint returns an empty key set (`{"keys":[]}`) since symm
 Use `JWT_KEY_ID` to set an explicit `kid` (Key ID) header in JWTs. This enables key rotation:
 
 1. Generate a new key pair
-2. Add the new key to JWKS while keeping the old one
-3. Update `JWT_PRIVATE_KEY_PATH` and `JWT_KEY_ID`
-4. Resource servers match `kid` to select the correct verification key
+2. Update `JWT_PRIVATE_KEY_PATH` and `JWT_KEY_ID` to point to the new key
+3. Restart the server — it will begin signing new tokens with the new key
+4. Resource servers match the `kid` header to select the correct verification key from JWKS
+
+> **Note**: The JWKS endpoint serves a single active public key at a time. For zero-downtime
+> rotation, pre-cache the new JWKS at resource servers before switching, or accept a brief
+> gap while cached JWKS entries expire. Multi-key JWKS is not currently supported.
 
 If `JWT_KEY_ID` is not set, it is automatically derived from the key's SHA-256 thumbprint.
 
