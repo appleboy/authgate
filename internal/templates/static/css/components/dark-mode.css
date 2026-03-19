@@ -4,6 +4,68 @@
    other elements that don't use CSS variables
    ============================================ */
 
+/* Form focus rings — hardcoded rgba is too faint on dark backgrounds */
+[data-theme="dark"] .form-input:focus,
+[data-theme="dark"] input[type="text"]:focus,
+[data-theme="dark"] input[type="password"]:focus,
+[data-theme="dark"] input[type="email"]:focus,
+[data-theme="dark"] .form-select:focus,
+[data-theme="dark"] select:focus,
+[data-theme="dark"] .form-textarea:focus,
+[data-theme="dark"] textarea:focus,
+[data-theme="dark"] .search-input:focus,
+[data-theme="dark"] .audit-filter-select:focus,
+[data-theme="dark"] .audit-filter-input:focus,
+[data-theme="dark"] .page-size-select:focus {
+  box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.25);
+}
+
+/* Navbar — ensure readable contrast */
+[data-theme="dark"] .navbar {
+  background: rgba(13, 17, 23, 0.95);
+}
+
+/* OAuth buttons — ensure contrast on dark cards */
+[data-theme="dark"] .btn-oauth.btn-github {
+  background-color: #30363d;
+  border: 1px solid var(--color-border);
+}
+
+[data-theme="dark"] .btn-oauth.btn-microsoft {
+  background-color: #21262d;
+  border: 1px solid var(--color-border);
+}
+
+/* Auth divider background must match card */
+[data-theme="dark"] .auth-divider-text {
+  background: var(--color-bg-primary);
+}
+
+/* User info badge */
+[data-theme="dark"] .user-info {
+  background: var(--color-bg-tertiary);
+}
+
+/* Code/pre blocks */
+[data-theme="dark"] .grant-types-code {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+[data-theme="dark"] .client-id-box {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+/* Audit event type badge */
+[data-theme="dark"] .audit-event-type {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
 /* Status badges with inline styles (hardcoded rgba colors) */
 [data-theme="dark"] .status-badge[style*="rgba(245,158,11"] {
   background: rgba(245, 158, 11, 0.2) !important;

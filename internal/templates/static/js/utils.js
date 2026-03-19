@@ -66,13 +66,7 @@ var TOAST_ICONS = {
 function showNotification(message, type) {
   type = type || 'info';
   var container = document.getElementById('toast-container');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'toast-container';
-    container.className = 'toast-container';
-    container.setAttribute('aria-live', 'polite');
-    document.body.appendChild(container);
-  }
+  if (!container) return;
 
   var toast = document.createElement('div');
   toast.className = 'toast toast-' + type;
@@ -112,9 +106,7 @@ function dismissToast(toast) {
 }
 
 function escapeHtml(str) {
-  var div = document.createElement('div');
-  div.appendChild(document.createTextNode(str));
-  return div.innerHTML;
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 // ============================================
@@ -137,7 +129,6 @@ function confirmModal(options) {
   var confirmText = options.confirmText || 'Confirm';
 
   return new Promise(function(resolve) {
-    // Create overlay
     var overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.setAttribute('role', 'dialog');
@@ -163,18 +154,35 @@ function confirmModal(options) {
 
     document.body.appendChild(overlay);
 
-    // Focus trap
     var cancelBtn = overlay.querySelector('.modal-btn-cancel');
     var confirmBtn = overlay.querySelector('.modal-btn-confirm');
     var previousFocus = document.activeElement;
 
-    // Trigger open animation
     requestAnimationFrame(function() {
       overlay.classList.add('modal-open');
       confirmBtn.focus();
     });
 
+    function onKeydown(e) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close(false);
+      }
+      if (e.key === 'Tab') {
+        var focusable = [cancelBtn, confirmBtn];
+        var idx = focusable.indexOf(document.activeElement);
+        if (e.shiftKey) {
+          e.preventDefault();
+          focusable[(idx - 1 + focusable.length) % focusable.length].focus();
+        } else {
+          e.preventDefault();
+          focusable[(idx + 1) % focusable.length].focus();
+        }
+      }
+    }
+
     function close(result) {
+      document.removeEventListener('keydown', onKeydown);
       overlay.classList.remove('modal-open');
       setTimeout(function() {
         if (overlay.parentNode) {
@@ -190,40 +198,12 @@ function confirmModal(options) {
     cancelBtn.addEventListener('click', function() { close(false); });
     confirmBtn.addEventListener('click', function() { close(true); });
 
-    // Close on overlay click (not card)
     overlay.addEventListener('click', function(e) {
       if (e.target === overlay) { close(false); }
     });
 
-    // Close on Escape
-    function onKeydown(e) {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        close(false);
-        document.removeEventListener('keydown', onKeydown);
-      }
-      // Focus trap: Tab cycles between cancel and confirm
-      if (e.key === 'Tab') {
-        var focusable = [cancelBtn, confirmBtn];
-        var idx = focusable.indexOf(document.activeElement);
-        if (e.shiftKey) {
-          e.preventDefault();
-          focusable[(idx - 1 + focusable.length) % focusable.length].focus();
-        } else {
-          e.preventDefault();
-          focusable[(idx + 1) % focusable.length].focus();
-        }
-      }
-    }
     document.addEventListener('keydown', onKeydown);
   });
-}
-
-/**
- * Confirm action before proceeding (legacy compat)
- */
-function confirmAction(message) {
-  return confirm(message);
 }
 
 /**
@@ -245,32 +225,11 @@ function toggleDetails(buttonElement) {
 // ============================================
 
 /**
- * Initialize theme from localStorage or system preference.
- * Called inline in <head> to prevent FOUC.
- */
-function initTheme() {
-  var saved = localStorage.getItem('authgate-theme');
-  if (saved === 'dark' || saved === 'light') {
-    document.documentElement.setAttribute('data-theme', saved);
-  }
-  // If no saved preference, the @media prefers-color-scheme fallback in CSS handles it
-}
-
-/**
  * Toggle between light/dark themes.
  */
 function toggleTheme() {
   var current = document.documentElement.getAttribute('data-theme');
-  var next;
-
-  if (current === 'dark') {
-    next = 'light';
-  } else if (current === 'light') {
-    next = 'dark';
-  } else {
-    // No explicit attribute — detect system preference
-    next = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark';
-  }
+  var next = (current === 'dark') ? 'light' : 'dark';
 
   document.documentElement.setAttribute('data-theme', next);
   localStorage.setItem('authgate-theme', next);
@@ -280,10 +239,8 @@ function toggleTheme() {
 function updateThemeToggleIcon(theme) {
   var btn = document.getElementById('theme-toggle-btn');
   if (!btn) return;
-  var isDark = theme === 'dark' ||
-    (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  var isDark = (theme || document.documentElement.getAttribute('data-theme')) === 'dark';
   btn.setAttribute('aria-label', isDark ? 'Switch to light mode' : 'Switch to dark mode');
-  // Toggle icon visibility
   var sunIcon = btn.querySelector('.theme-icon-sun');
   var moonIcon = btn.querySelector('.theme-icon-moon');
   if (sunIcon && moonIcon) {
@@ -337,7 +294,6 @@ function toggleFilters() {
     icon.style.transform = isHidden ? 'rotate(180deg)' : '';
   }
 
-  // Save preference
   localStorage.setItem('authgate-audit-filters', isHidden ? 'open' : 'closed');
 }
 
@@ -363,10 +319,8 @@ export {
   formatRelativeTime,
   copyToClipboard,
   showNotification,
-  confirmAction,
   confirmModal,
   toggleDetails,
-  initTheme,
   toggleTheme,
   initDebounceSearch,
   toggleFilters,
@@ -378,8 +332,7 @@ export {
  */
 document.addEventListener('DOMContentLoaded', function() {
   // Theme toggle icon
-  var theme = document.documentElement.getAttribute('data-theme');
-  updateThemeToggleIcon(theme);
+  updateThemeToggleIcon();
 
   // Debounced search
   initDebounceSearch();
@@ -389,7 +342,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Keyboard shortcuts
   document.addEventListener('keydown', function(e) {
-    // ESC to close mobile menu
     if (e.key === 'Escape') {
       var navbarMenu = document.getElementById('navbarMenu');
       if (navbarMenu && navbarMenu.classList.contains('active')) {
@@ -401,7 +353,6 @@ document.addEventListener('DOMContentLoaded', function() {
   // Delegated handler for data-confirm-* attributes
   document.addEventListener('submit', function(e) {
     var target = e.target;
-    // Check if the form or submitter has data-confirm-title
     var submitter = e.submitter;
     var el = null;
 
@@ -414,26 +365,29 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!el) return;
 
     e.preventDefault();
-    var confirmTitle = el.getAttribute('data-confirm-title');
+    var savedTitle = el.getAttribute('data-confirm-title');
     var confirmMessage = el.getAttribute('data-confirm-message') || 'Are you sure?';
     var confirmStyle = el.getAttribute('data-confirm-style') || 'danger';
     var confirmLabel = el.getAttribute('data-confirm-label') || 'Confirm';
 
+    // Temporarily remove to prevent re-trigger on programmatic submit
+    el.removeAttribute('data-confirm-title');
+
     confirmModal({
-      title: confirmTitle,
+      title: savedTitle,
       message: confirmMessage,
       style: confirmStyle,
       confirmText: confirmLabel
     }).then(function(confirmed) {
       if (confirmed) {
-        // Remove the data attribute temporarily to avoid re-triggering
-        el.removeAttribute('data-confirm-title');
         if (submitter) {
           submitter.click();
         } else {
           target.submit();
         }
       }
+      // Restore the attribute so it works on subsequent attempts
+      el.setAttribute('data-confirm-title', savedTitle);
     });
   });
 });

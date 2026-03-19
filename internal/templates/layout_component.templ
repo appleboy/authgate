@@ -23,7 +23,7 @@ templ Layout(title string, layoutType LayoutType, navbar *NavbarProps) {
 			<title>{ title } - AuthGate</title>
 			<!-- Prevent FOUC: apply saved theme before paint -->
 			<script>
-				(function(){var t=localStorage.getItem('authgate-theme');if(t==='dark'||t==='light'){document.documentElement.setAttribute('data-theme',t)}})();
+				(function(){var t=localStorage.getItem('authgate-theme');if(t==='dark'||t==='light'){document.documentElement.setAttribute('data-theme',t)}else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches){document.documentElement.setAttribute('data-theme','dark')}else{document.documentElement.setAttribute('data-theme','light')}})();
 			</script>
 			<!-- Preconnect to font CDN -->
 			<link rel="preconnect" href="https://fonts.googleapis.com"/>
