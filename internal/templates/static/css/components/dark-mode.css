@@ -25,6 +25,69 @@
   background: rgba(13, 17, 23, 0.95);
 }
 
+/* Navbar link hover border — hardcoded rgba */
+[data-theme="dark"] .navbar-link:hover {
+  border-color: rgba(88, 166, 255, 0.25);
+}
+
+[data-theme="dark"] .navbar-link.active {
+  border-color: rgba(88, 166, 255, 0.35);
+  box-shadow: 0 2px 8px -2px rgba(88, 166, 255, 0.2);
+}
+
+/* Admin dropdown — amber tones need bright variants on dark */
+[data-theme="dark"] .navbar-dropdown-trigger--admin {
+  color: #FBBF24;
+  background: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.2);
+}
+
+[data-theme="dark"] .navbar-dropdown-trigger--admin:hover,
+[data-theme="dark"] .navbar-dropdown-trigger--admin.active {
+  color: #FCD34D;
+  background: rgba(251, 191, 36, 0.15);
+  border-color: rgba(251, 191, 36, 0.35);
+}
+
+/* ADMIN badge chip */
+[data-theme="dark"] .navbar-admin-badge {
+  color: #FCD34D;
+  background: rgba(251, 191, 36, 0.15);
+  border-color: rgba(251, 191, 36, 0.3);
+}
+
+/* Admin dropdown panel border */
+[data-theme="dark"] .navbar-dropdown-menu--admin {
+  border-top-color: #FBBF24;
+}
+
+/* Admin dropdown items */
+[data-theme="dark"] .navbar-dropdown-item.admin:hover,
+[data-theme="dark"] .navbar-dropdown-item.admin.active {
+  color: #FCD34D;
+  background: rgba(251, 191, 36, 0.12);
+}
+
+/* Admin hover trigger (desktop) */
+@media (hover: hover) {
+  [data-theme="dark"] .navbar-dropdown--admin:hover .navbar-dropdown-trigger--admin {
+    color: #FCD34D;
+    background: rgba(251, 191, 36, 0.15);
+    border-color: rgba(251, 191, 36, 0.35);
+  }
+}
+
+/* Logout button */
+[data-theme="dark"] .navbar-logout {
+  border-color: var(--color-border);
+}
+
+[data-theme="dark"] .navbar-logout:hover {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.4);
+  background: rgba(248, 113, 113, 0.1);
+}
+
 /* OAuth buttons — ensure contrast on dark cards */
 [data-theme="dark"] .btn-oauth.btn-github {
   background-color: #30363d;
