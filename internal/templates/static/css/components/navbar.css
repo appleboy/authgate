@@ -206,7 +206,9 @@
     transform: translateY(-100%);
     opacity: 0;
     visibility: hidden;
-    transition: all var(--transition-base);
+    transition: transform var(--transition-base),
+               opacity var(--transition-base),
+               visibility var(--transition-base);
   }
 
   .navbar-menu.active {
@@ -461,6 +463,11 @@
     width: 100%;
   }
 
+  /* Hide the hover-bridge pseudo-element on mobile (no function when position: static) */
+  .navbar-dropdown-menu::before {
+    display: none;
+  }
+
   .navbar-dropdown-menu {
     position: static;
     box-shadow: none;
@@ -482,13 +489,6 @@
       max-height var(--transition-base);
   }
 
-  .navbar-dropdown-trigger[aria-expanded="true"] + .navbar-dropdown-menu {
-    opacity: 1;
-    visibility: visible;
-    max-height: 300px;
-    pointer-events: auto;
-  }
-
   /* Disable hover-open on mobile */
   .navbar-dropdown:hover .navbar-dropdown-menu {
     opacity: 0;
@@ -496,6 +496,14 @@
     transform: none;
     max-height: 0;
     pointer-events: none;
+  }
+
+  /* JS-driven open state must always win on mobile (specificity 0-4-0 beats hover's 0-3-0) */
+  .navbar-dropdown .navbar-dropdown-trigger[aria-expanded="true"] + .navbar-dropdown-menu {
+    opacity: 1;
+    visibility: visible;
+    max-height: 300px;
+    pointer-events: auto;
   }
 
   .navbar-dropdown-item {
