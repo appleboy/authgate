@@ -9,7 +9,6 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"os"
 )
@@ -33,13 +32,17 @@ func LoadSigningKey(path string) (crypto.Signer, error) {
 		}
 		foundBlocks = true
 
-		// Try PKCS#8 first (works for both RSA and ECDSA)
+		// Try PKCS#8 first (works for both RSA and ECDSA).
+		// Only return supported key types; skip unsupported ones (e.g. Ed25519)
+		// so that later PEM blocks can still be tried.
 		if key, err := x509.ParsePKCS8PrivateKey(block.Bytes); err == nil {
-			signer, ok := key.(crypto.Signer)
-			if !ok {
-				return nil, errors.New("PKCS#8 key is not a crypto.Signer")
+			switch k := key.(type) {
+			case *rsa.PrivateKey:
+				return k, nil
+			case *ecdsa.PrivateKey:
+				return k, nil
 			}
-			return signer, nil
+			// Unsupported key type from PKCS#8 — continue scanning
 		}
 
 		// Try RSA PKCS#1
