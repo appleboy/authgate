@@ -114,13 +114,13 @@ func TestConfig_Validate_JWTSigningAlgorithm(t *testing.T) {
 		errorMsg          string
 	}{
 		{
-			name:      "HS256 default - no key required",
-			algorithm: "HS256",
+			name:        "HS256 default - no key required",
+			algorithm:   "HS256",
 			expectError: false,
 		},
 		{
-			name:      "empty algorithm treated as HS256",
-			algorithm: "",
+			name:        "empty algorithm treated as HS256",
+			algorithm:   "",
 			expectError: false,
 		},
 		{

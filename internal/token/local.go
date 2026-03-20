@@ -58,14 +58,14 @@ func NewLocalTokenProvider(cfg *config.Config, opts ...Option) (*LocalTokenProvi
 	case "RS256":
 		p.method = jwt.SigningMethodRS256
 		if p.signKey == nil || p.verifyKey == nil {
-			return nil, fmt.Errorf(
+			return nil, errors.New(
 				"NewLocalTokenProvider: RS256 requires a signing key; use WithSigningKey",
 			)
 		}
 	case "ES256":
 		p.method = jwt.SigningMethodES256
 		if p.signKey == nil || p.verifyKey == nil {
-			return nil, fmt.Errorf(
+			return nil, errors.New(
 				"NewLocalTokenProvider: ES256 requires a signing key; use WithSigningKey",
 			)
 		}

@@ -140,5 +140,10 @@ func TestJWKS_Keys_ReturnsCopy(t *testing.T) {
 	// A second call must return the original, unmodified data
 	keys2 := handler.Keys()
 	require.Len(t, keys2, 1)
-	assert.Equal(t, "kid1", keys2[0].Kid, "Keys() must return a copy; mutation must not affect internal state")
+	assert.Equal(
+		t,
+		"kid1",
+		keys2[0].Kid,
+		"Keys() must return a copy; mutation must not affect internal state",
+	)
 }
