@@ -31,6 +31,8 @@ type LocalTokenProvider struct {
 type Option func(*LocalTokenProvider)
 
 // WithSigningKey sets the asymmetric signing and verification keys.
+// Only *rsa.PrivateKey/*rsa.PublicKey (RS256) and *ecdsa.PrivateKey/*ecdsa.PublicKey (ES256)
+// are supported; NewLocalTokenProvider validates concrete types and returns an error on mismatch.
 func WithSigningKey(privateKey crypto.Signer, publicKey crypto.PublicKey) Option {
 	return func(p *LocalTokenProvider) {
 		p.signKey = privateKey
