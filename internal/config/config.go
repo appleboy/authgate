@@ -509,16 +509,29 @@ func validateCacheType(name, value, redisAddr string) error {
 
 // Validate checks the configuration for invalid values
 func (c *Config) Validate() error {
+	// Validate token provider mode
+	switch c.TokenProviderMode {
+	case "", TokenProviderModeLocal, TokenProviderModeHTTPAPI:
+		// ok
+	default:
+		return fmt.Errorf(
+			"invalid TOKEN_PROVIDER_MODE value: %q (must be empty, %q, or %q)",
+			c.TokenProviderMode,
+			TokenProviderModeLocal,
+			TokenProviderModeHTTPAPI,
+		)
+	}
+
 	// Validate JWT signing algorithm
 	switch c.JWTSigningAlgorithm {
 	case "", "HS256":
 		// default, no key file required
 	case "RS256", "ES256":
-		if c.JWTPrivateKeyPath == "" &&
-			(c.TokenProviderMode == "" || c.TokenProviderMode == TokenProviderModeLocal) {
+		if c.JWTPrivateKeyPath == "" && c.TokenProviderMode != TokenProviderModeHTTPAPI {
 			return fmt.Errorf(
-				"JWT_PRIVATE_KEY_PATH is required when JWT_SIGNING_ALGORITHM=%s and TOKEN_PROVIDER_MODE is local or empty",
+				"JWT_PRIVATE_KEY_PATH is required when JWT_SIGNING_ALGORITHM=%s and TOKEN_PROVIDER_MODE is not %q",
 				c.JWTSigningAlgorithm,
+				TokenProviderModeHTTPAPI,
 			)
 		}
 	default:
