@@ -62,13 +62,13 @@ func LoadSigningKey(path string) (crypto.Signer, error) {
 // DeriveKeyID computes a kid from the SHA-256 hash of the DER-encoded public key
 // (SPKI format). Returns a base64url-encoded string of the full 32-byte hash.
 // This is a stable, deterministic identifier suitable for JWKS key rotation.
-func DeriveKeyID(pub crypto.PublicKey) string {
+func DeriveKeyID(pub crypto.PublicKey) (string, error) {
 	der, err := x509.MarshalPKIXPublicKey(pub)
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("DeriveKeyID: marshal public key: %w", err)
 	}
 	sum := sha256.Sum256(der)
-	return base64.RawURLEncoding.EncodeToString(sum[:])
+	return base64.RawURLEncoding.EncodeToString(sum[:]), nil
 }
 
 // ValidateKeyAlgorithm checks that the loaded key matches the configured algorithm.

@@ -69,11 +69,16 @@ func NewLocalTokenProvider(cfg *config.Config, opts ...Option) (*LocalTokenProvi
 				"NewLocalTokenProvider: ES256 requires a signing key; use WithSigningKey",
 			)
 		}
-	default:
+	case "HS256", "":
 		// HS256 (default)
 		p.method = jwt.SigningMethodHS256
 		p.signKey = []byte(cfg.JWTSecret)
 		p.verifyKey = []byte(cfg.JWTSecret)
+	default:
+		return nil, fmt.Errorf(
+			"NewLocalTokenProvider: unsupported JWTSigningAlgorithm %q",
+			cfg.JWTSigningAlgorithm,
+		)
 	}
 
 	return p, nil

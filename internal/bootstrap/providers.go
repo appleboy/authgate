@@ -87,7 +87,11 @@ func newLocalTokenProvider(cfg *config.Config) *token.LocalTokenProvider {
 	// Derive kid if not explicitly set
 	kid := cfg.JWTKeyID
 	if kid == "" {
-		kid = token.DeriveKeyID(privateKey.Public())
+		var err error
+		kid, err = token.DeriveKeyID(privateKey.Public())
+		if err != nil {
+			log.Fatalf("Failed to derive JWT key ID: %v", err)
+		}
 	}
 
 	log.Printf("Token signing: %s (kid=%s)", cfg.JWTSigningAlgorithm, kid)

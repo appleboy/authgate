@@ -14,7 +14,7 @@ import (
 type JSONWebKey struct {
 	Kty string `json:"kty"`           // Key type: "RSA" or "EC"
 	Use string `json:"use"`           // Key use: "sig"
-	Kid string `json:"kid"`           // Key ID
+	Kid string `json:"kid,omitempty"` // Key ID
 	Alg string `json:"alg"`           // Algorithm: "RS256" or "ES256"
 	N   string `json:"n,omitempty"`   // RSA modulus (base64url)
 	E   string `json:"e,omitempty"`   // RSA exponent (base64url)

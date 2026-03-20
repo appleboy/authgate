@@ -125,20 +125,26 @@ func TestDeriveKeyID_RSA(t *testing.T) {
 	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
 
-	kid := DeriveKeyID(rsaKey.Public())
+	kid, err := DeriveKeyID(rsaKey.Public())
+	require.NoError(t, err)
 	assert.NotEmpty(t, kid)
 	// Must be deterministic
-	assert.Equal(t, kid, DeriveKeyID(rsaKey.Public()))
+	kid2, err := DeriveKeyID(rsaKey.Public())
+	require.NoError(t, err)
+	assert.Equal(t, kid, kid2)
 }
 
 func TestDeriveKeyID_ECDSA(t *testing.T) {
 	ecKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 
-	kid := DeriveKeyID(ecKey.Public())
+	kid, err := DeriveKeyID(ecKey.Public())
+	require.NoError(t, err)
 	assert.NotEmpty(t, kid)
 	// Must be deterministic
-	assert.Equal(t, kid, DeriveKeyID(ecKey.Public()))
+	kid2, err := DeriveKeyID(ecKey.Public())
+	require.NoError(t, err)
+	assert.Equal(t, kid, kid2)
 }
 
 func TestDeriveKeyID_DifferentKeys(t *testing.T) {
@@ -147,8 +153,10 @@ func TestDeriveKeyID_DifferentKeys(t *testing.T) {
 	key2, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
 
-	kid1 := DeriveKeyID(key1.Public())
-	kid2 := DeriveKeyID(key2.Public())
+	kid1, err := DeriveKeyID(key1.Public())
+	require.NoError(t, err)
+	kid2, err := DeriveKeyID(key2.Public())
+	require.NoError(t, err)
 	assert.NotEqual(t, kid1, kid2)
 }
 
@@ -157,7 +165,8 @@ func TestDeriveKeyID_FullHashLength(t *testing.T) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
 
-	kid := DeriveKeyID(key.Public())
+	kid, err := DeriveKeyID(key.Public())
+	require.NoError(t, err)
 	assert.Len(t, kid, 43, "kid must be base64url-encoded full SHA-256 (43 chars)")
 }
 

@@ -17,12 +17,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func createTestTokenService(s *store.Store, cfg *config.Config) *TokenService {
+func createTestTokenService(t *testing.T, s *store.Store, cfg *config.Config) *TokenService {
+	t.Helper()
 	deviceService := NewDeviceService(s, cfg, nil, metrics.NewNoopMetrics())
 	localProvider, err := token.NewLocalTokenProvider(cfg)
-	if err != nil {
-		panic("createTestTokenService: " + err.Error())
-	}
+	require.NoError(t, err)
 	return NewTokenService(
 		s,
 		cfg,
@@ -62,7 +61,7 @@ func TestExchangeDeviceCode_ActiveClient(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	// Create an active client and authorized device code
 	client := createTestClient(t, s, true)
@@ -104,7 +103,7 @@ func TestExchangeDeviceCode_InactiveClient(t *testing.T) {
 	require.NoError(t, err)
 
 	// Try to exchange device code with inactive client
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 	token, _, err := tokenService.ExchangeDeviceCode(
 		context.Background(),
 		dc.DeviceCode,
@@ -126,7 +125,7 @@ func TestExchangeDeviceCode_ClientMismatch(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	// Create an active client and authorized device code
 	client := createTestClient(t, s, true)
@@ -155,7 +154,7 @@ func TestExchangeDeviceCode_NotAuthorized(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 	deviceService := NewDeviceService(s, cfg, nil, metrics.NewNoopMetrics())
 
 	// Create an active client and device code but don't authorize it
@@ -185,7 +184,7 @@ func TestExchangeDeviceCode_ExpiredCode(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 	deviceService := NewDeviceService(s, cfg, nil, metrics.NewNoopMetrics())
 
 	// Create an active client and device code (it will be expired)
@@ -215,7 +214,7 @@ func TestExchangeDeviceCode_InvalidDeviceCode(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	// Create an active client
 	client := createTestClient(t, s, true)
@@ -242,7 +241,7 @@ func TestValidateToken_Success(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	// Create an active client and get a token
 	client := createTestClient(t, s, true)
@@ -269,7 +268,7 @@ func TestValidateToken_InvalidToken(t *testing.T) {
 	cfg := &config.Config{
 		JWTSecret: "test-secret",
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	// Try to validate an invalid token
 	claims, err := tokenService.ValidateToken(context.Background(), "invalid-token")
@@ -288,7 +287,7 @@ func TestValidateToken_WrongSecret(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	// Create an active client and get a token
 	client := createTestClient(t, s, true)
@@ -304,7 +303,7 @@ func TestValidateToken_WrongSecret(t *testing.T) {
 	differentCfg := &config.Config{
 		JWTSecret: "different-secret",
 	}
-	differentTokenService := createTestTokenService(s, differentCfg)
+	differentTokenService := createTestTokenService(t, s, differentCfg)
 	claims, err := differentTokenService.ValidateToken(context.Background(), token.RawToken)
 
 	// Assert
@@ -321,7 +320,7 @@ func TestRevokeToken_Success(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	// Create an active client and get a token
 	client := createTestClient(t, s, true)
@@ -349,7 +348,7 @@ func TestRevokeToken_InvalidToken(t *testing.T) {
 	cfg := &config.Config{
 		JWTSecret: "test-secret",
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	// Try to revoke a non-existent token
 	err := tokenService.RevokeToken("non-existent-token")
@@ -368,7 +367,7 @@ func TestRevokeTokenByID_Success(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	// Create an active client and get a token
 	client := createTestClient(t, s, true)
@@ -400,7 +399,7 @@ func TestGetUserTokens_Success(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 	deviceService := NewDeviceService(s, cfg, nil, metrics.NewNoopMetrics())
 
 	// Create an active client
@@ -456,7 +455,7 @@ func TestRevokeAllUserTokens_Success(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 	deviceService := NewDeviceService(s, cfg, nil, metrics.NewNoopMetrics())
 
 	// Create an active client
@@ -507,7 +506,7 @@ func TestGetUserTokensWithClient_Success(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 	deviceService := NewDeviceService(s, cfg, nil, metrics.NewNoopMetrics())
 
 	// Create an active client
@@ -552,7 +551,7 @@ func TestGetUserTokensWithClient_MultipleClients(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 	deviceService := NewDeviceService(s, cfg, nil, metrics.NewNoopMetrics())
 
 	// Create two different clients
@@ -614,7 +613,7 @@ func TestGetUserTokensWithClient_EmptyResult(t *testing.T) {
 	cfg := &config.Config{
 		JWTSecret: "test-secret",
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	// Get tokens for non-existent user
 	tokensWithClient, err := tokenService.GetUserTokensWithClient("non-existent-user")
@@ -661,7 +660,7 @@ func TestExchangeAuthorizationCode_IssuesTokens(t *testing.T) {
 		EnableRefreshTokens:    true,
 		RefreshTokenExpiration: 30 * 24 * time.Hour,
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	client := createTestClient(t, s, true)
 	userID := uuid.New().String()
@@ -692,7 +691,7 @@ func TestExchangeAuthorizationCode_WithAuthorizationID(t *testing.T) {
 		EnableRefreshTokens:    true,
 		RefreshTokenExpiration: 30 * 24 * time.Hour,
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	client := createTestClient(t, s, true)
 	userID := uuid.New().String()
@@ -724,7 +723,7 @@ func TestExchangeAuthorizationCode_IDToken_IssuedWhenOpenIDScope(t *testing.T) {
 		EnableRefreshTokens:    true,
 		RefreshTokenExpiration: 30 * 24 * time.Hour,
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	client := createTestClient(t, s, true)
 	userID := uuid.New().String()
@@ -772,7 +771,7 @@ func TestExchangeAuthorizationCode_IDToken_NotIssuedWithoutOpenIDScope(t *testin
 		EnableRefreshTokens:    true,
 		RefreshTokenExpiration: 30 * 24 * time.Hour,
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	client := createTestClient(t, s, true)
 	userID := uuid.New().String()
@@ -797,7 +796,7 @@ func TestExchangeAuthorizationCode_IDToken_ContainsNonce(t *testing.T) {
 		EnableRefreshTokens:    true,
 		RefreshTokenExpiration: 30 * 24 * time.Hour,
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	client := createTestClient(t, s, true)
 	userID := uuid.New().String()
@@ -843,7 +842,7 @@ func TestExchangeAuthorizationCode_IDToken_ContainsAtHash(t *testing.T) {
 		EnableRefreshTokens:    true,
 		RefreshTokenExpiration: 30 * 24 * time.Hour,
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	client := createTestClient(t, s, true)
 	userID := uuid.New().String()
@@ -894,7 +893,7 @@ func TestDisableToken_ActiveToken(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	client := createTestClient(t, s, true)
 	dc := createAuthorizedDeviceCode(t, s, client.ClientID)
@@ -922,7 +921,7 @@ func TestDisableToken_AlreadyDisabled(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	client := createTestClient(t, s, true)
 	dc := createAuthorizedDeviceCode(t, s, client.ClientID)
@@ -949,7 +948,7 @@ func TestDisableToken_RevokedToken(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	client := createTestClient(t, s, true)
 	dc := createAuthorizedDeviceCode(t, s, client.ClientID)
@@ -976,7 +975,7 @@ func TestEnableToken_DisabledToken(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	client := createTestClient(t, s, true)
 	dc := createAuthorizedDeviceCode(t, s, client.ClientID)
@@ -1006,7 +1005,7 @@ func TestEnableToken_ActiveToken(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	client := createTestClient(t, s, true)
 	dc := createAuthorizedDeviceCode(t, s, client.ClientID)
@@ -1031,7 +1030,7 @@ func TestEnableToken_RevokedToken(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	client := createTestClient(t, s, true)
 	dc := createAuthorizedDeviceCode(t, s, client.ClientID)
@@ -1062,7 +1061,7 @@ func TestValidateToken_RevokedToken(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	client := createTestClient(t, s, true)
 	dc := createAuthorizedDeviceCode(t, s, client.ClientID)
@@ -1093,7 +1092,7 @@ func TestValidateToken_DisabledToken(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	client := createTestClient(t, s, true)
 	dc := createAuthorizedDeviceCode(t, s, client.ClientID)
@@ -1124,7 +1123,7 @@ func TestValidateToken_ExpiredDBRecord(t *testing.T) {
 		JWTSecret:            "test-secret",
 		BaseURL:              "http://localhost:8080",
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	client := createTestClient(t, s, true)
 	dc := createAuthorizedDeviceCode(t, s, client.ClientID)
@@ -1159,7 +1158,7 @@ func TestValidateToken_RefreshTokenRejected(t *testing.T) {
 		EnableRefreshTokens:    true,
 		RefreshTokenExpiration: 30 * 24 * time.Hour,
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	client := createTestClient(t, s, true)
 	dc := createAuthorizedDeviceCode(t, s, client.ClientID)
@@ -1186,7 +1185,7 @@ func TestValidateToken_RefreshTokenRejected(t *testing.T) {
 func TestIsTokenOwnedByUser_OwnedToken(t *testing.T) {
 	s := setupTestStore(t)
 	cfg := &config.Config{JWTSecret: "test-secret"}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	userID := uuid.New().String()
 	tok := &models.AccessToken{
@@ -1210,7 +1209,7 @@ func TestIsTokenOwnedByUser_OwnedToken(t *testing.T) {
 func TestIsTokenOwnedByUser_NotOwnedToken(t *testing.T) {
 	s := setupTestStore(t)
 	cfg := &config.Config{JWTSecret: "test-secret"}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	ownerID := uuid.New().String()
 	tok := &models.AccessToken{
@@ -1235,7 +1234,7 @@ func TestIsTokenOwnedByUser_NotOwnedToken(t *testing.T) {
 func TestIsTokenOwnedByUser_NonExistentToken(t *testing.T) {
 	s := setupTestStore(t)
 	cfg := &config.Config{JWTSecret: "test-secret"}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	owned, err := tokenService.IsTokenOwnedByUser(uuid.New().String(), uuid.New().String())
 	require.NoError(t, err) // missing token must not produce an error
@@ -1254,7 +1253,7 @@ func TestRefreshAccessToken_RotationMode_ReplayDetection(t *testing.T) {
 		EnableTokenRotation:    true,
 		RefreshTokenExpiration: 720 * time.Hour,
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	// Create client and get initial tokens via device flow
 	client := createTestClient(t, s, true)
@@ -1310,7 +1309,7 @@ func TestRefreshAccessToken_FixedMode_NoFamilyRevocation(t *testing.T) {
 		EnableTokenRotation:    false, // Fixed mode
 		RefreshTokenExpiration: 720 * time.Hour,
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	// Create a disabled refresh token manually to simulate the scenario
 	client := createTestClient(t, s, true)
@@ -1371,7 +1370,7 @@ func TestRefreshAccessToken_RotationMode_DisabledToken_RevokesFamily(t *testing.
 		EnableTokenRotation:    true, // Rotation mode
 		RefreshTokenExpiration: 720 * time.Hour,
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	client := createTestClient(t, s, true)
 	userID := uuid.New().String()
@@ -1453,7 +1452,7 @@ func TestRefreshAccessToken_RotationMode_MultiRotation_ReplayDetection(t *testin
 		EnableTokenRotation:    true,
 		RefreshTokenExpiration: 720 * time.Hour,
 	}
-	tokenService := createTestTokenService(s, cfg)
+	tokenService := createTestTokenService(t, s, cfg)
 
 	// Create client and get initial tokens
 	client := createTestClient(t, s, true)
