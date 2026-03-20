@@ -17,33 +17,29 @@ import (
 )
 
 var (
-	jwksTestRSAKey  *rsa.PrivateKey
-	jwksTestRSAOnce sync.Once
-	jwksTestECKey   *ecdsa.PrivateKey
-	jwksTestECOnce  sync.Once
+	jwksTestRSAKey    *rsa.PrivateKey
+	jwksTestRSAKeyErr error
+	jwksTestRSAOnce   sync.Once
+	jwksTestECKey     *ecdsa.PrivateKey
+	jwksTestECKeyErr  error
+	jwksTestECOnce    sync.Once
 )
 
 func getJWKSTestRSAKey(t *testing.T) *rsa.PrivateKey {
 	t.Helper()
 	jwksTestRSAOnce.Do(func() {
-		var err error
-		jwksTestRSAKey, err = rsa.GenerateKey(rand.Reader, 2048)
-		if err != nil {
-			panic("failed to generate test RSA key: " + err.Error())
-		}
+		jwksTestRSAKey, jwksTestRSAKeyErr = rsa.GenerateKey(rand.Reader, 2048)
 	})
+	require.NoError(t, jwksTestRSAKeyErr)
 	return jwksTestRSAKey
 }
 
 func getJWKSTestECKey(t *testing.T) *ecdsa.PrivateKey {
 	t.Helper()
 	jwksTestECOnce.Do(func() {
-		var err error
-		jwksTestECKey, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-		if err != nil {
-			panic("failed to generate test EC key: " + err.Error())
-		}
+		jwksTestECKey, jwksTestECKeyErr = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	})
+	require.NoError(t, jwksTestECKeyErr)
 	return jwksTestECKey
 }
 

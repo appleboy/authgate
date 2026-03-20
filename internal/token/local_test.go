@@ -20,33 +20,29 @@ import (
 
 // Shared test keys generated once per package to avoid repeated 2048-bit RSA key generation.
 var (
-	testRSAKey  *rsa.PrivateKey
-	testRSAOnce sync.Once
-	testECKey   *ecdsa.PrivateKey
-	testECOnce  sync.Once
+	testRSAKey    *rsa.PrivateKey
+	testRSAKeyErr error
+	testRSAOnce   sync.Once
+	testECKey     *ecdsa.PrivateKey
+	testECKeyErr  error
+	testECOnce    sync.Once
 )
 
 func getTestRSAKey(t *testing.T) *rsa.PrivateKey {
 	t.Helper()
 	testRSAOnce.Do(func() {
-		var err error
-		testRSAKey, err = rsa.GenerateKey(rand.Reader, 2048)
-		if err != nil {
-			panic("failed to generate test RSA key: " + err.Error())
-		}
+		testRSAKey, testRSAKeyErr = rsa.GenerateKey(rand.Reader, 2048)
 	})
+	require.NoError(t, testRSAKeyErr)
 	return testRSAKey
 }
 
 func getTestECKey(t *testing.T) *ecdsa.PrivateKey {
 	t.Helper()
 	testECOnce.Do(func() {
-		var err error
-		testECKey, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-		if err != nil {
-			panic("failed to generate test EC key: " + err.Error())
-		}
+		testECKey, testECKeyErr = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	})
+	require.NoError(t, testECKeyErr)
 	return testECKey
 }
 
