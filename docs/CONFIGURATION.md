@@ -238,11 +238,11 @@ echo "SESSION_SECRET=$(openssl rand -hex 32)" >> .env
 
 AuthGate supports three JWT signing algorithms:
 
-| Algorithm | Type | Key | Use Case |
-|-----------|------|-----|----------|
-| `HS256` | Symmetric | `JWT_SECRET` (shared secret) | Default, simple deployments |
-| `RS256` | Asymmetric | RSA private key (2048+ bits) | Resource servers verify with public key |
-| `ES256` | Asymmetric | ECDSA P-256 private key | Compact tokens, modern deployments |
+| Algorithm | Type       | Key                          | Use Case                                |
+| --------- | ---------- | ---------------------------- | --------------------------------------- |
+| `HS256`   | Symmetric  | `JWT_SECRET` (shared secret) | Default, simple deployments             |
+| `RS256`   | Asymmetric | RSA private key (2048+ bits) | Resource servers verify with public key |
+| `ES256`   | Asymmetric | ECDSA P-256 private key      | Compact tokens, modern deployments      |
 
 ### Configuration
 
@@ -915,8 +915,8 @@ REDIS_PASSWORD=your-password
 | `POST /oauth/device/code` | 10 req/min | Prevent device code spam             |
 | `POST /oauth/token`       | 20 req/min | Allow polling while preventing abuse |
 | `POST /device/verify`     | 10 req/min | Prevent user code guessing           |
-| `POST /oauth/register`   | 5 req/min  | Prevent registration spam            |
-| `POST /oauth/introspect` | 20 req/min | Prevent client secret brute force    |
+| `POST /oauth/register`    | 5 req/min  | Prevent registration spam            |
+| `POST /oauth/introspect`  | 20 req/min | Prevent client secret brute force    |
 
 ### Configuration Guide
 
@@ -961,13 +961,13 @@ CORS_ALLOWED_ORIGINS=http://localhost:3000,https://app.example.com
 
 ### Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CORS_ENABLED` | `false` | Enable CORS for API endpoints |
-| `CORS_ALLOWED_ORIGINS` | _(none)_ | Comma-separated list of allowed origins |
-| `CORS_ALLOWED_METHODS` | `GET,POST,PUT,DELETE,OPTIONS` | Allowed HTTP methods |
-| `CORS_ALLOWED_HEADERS` | `Origin,Content-Type,Authorization` | Allowed request headers |
-| `CORS_MAX_AGE` | `12h` | How long browsers cache preflight responses |
+| Variable               | Default                             | Description                                 |
+| ---------------------- | ----------------------------------- | ------------------------------------------- |
+| `CORS_ENABLED`         | `false`                             | Enable CORS for API endpoints               |
+| `CORS_ALLOWED_ORIGINS` | _(none)_                            | Comma-separated list of allowed origins     |
+| `CORS_ALLOWED_METHODS` | `GET,POST,PUT,DELETE,OPTIONS`       | Allowed HTTP methods                        |
+| `CORS_ALLOWED_HEADERS` | `Origin,Content-Type,Authorization` | Allowed request headers                     |
+| `CORS_MAX_AGE`         | `12h`                               | How long browsers cache preflight responses |
 
 ### How It Works
 
