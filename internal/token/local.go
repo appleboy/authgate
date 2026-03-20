@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto"
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rsa"
 	"errors"
 	"fmt"
@@ -83,10 +84,17 @@ func NewLocalTokenProvider(cfg *config.Config, opts ...Option) (*LocalTokenProvi
 				"NewLocalTokenProvider: ES256 requires a signing key; use WithSigningKey",
 			)
 		}
-		if _, ok := p.signKey.(*ecdsa.PrivateKey); !ok {
+		ecKey, ok := p.signKey.(*ecdsa.PrivateKey)
+		if !ok {
 			return nil, fmt.Errorf(
 				"NewLocalTokenProvider: ES256 requires *ecdsa.PrivateKey, got %T",
 				p.signKey,
+			)
+		}
+		if ecKey.Curve != elliptic.P256() {
+			return nil, fmt.Errorf(
+				"NewLocalTokenProvider: ES256 requires P-256 curve, got %s",
+				ecKey.Curve.Params().Name,
 			)
 		}
 		if _, ok := p.verifyKey.(*ecdsa.PublicKey); !ok {

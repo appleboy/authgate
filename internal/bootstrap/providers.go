@@ -79,11 +79,6 @@ func newLocalTokenProvider(cfg *config.Config) *token.LocalTokenProvider {
 		log.Fatalf("Failed to load JWT private key from %s: %v", cfg.JWTPrivateKeyPath, err)
 	}
 
-	// Validate key matches algorithm
-	if err := token.ValidateKeyAlgorithm(privateKey, cfg.JWTSigningAlgorithm); err != nil {
-		log.Fatalf("JWT key validation failed: %v", err)
-	}
-
 	// Derive kid if not explicitly set
 	kid := cfg.JWTKeyID
 	if kid == "" {

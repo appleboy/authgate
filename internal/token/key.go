@@ -3,7 +3,6 @@ package token
 import (
 	"crypto"
 	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
@@ -72,34 +71,4 @@ func DeriveKeyID(pub crypto.PublicKey) (string, error) {
 	}
 	sum := sha256.Sum256(der)
 	return base64.RawURLEncoding.EncodeToString(sum[:]), nil
-}
-
-// ValidateKeyAlgorithm checks that the loaded key matches the configured algorithm.
-func ValidateKeyAlgorithm(key crypto.Signer, algorithm string) error {
-	switch algorithm {
-	case "RS256":
-		if _, ok := key.(*rsa.PrivateKey); !ok {
-			return fmt.Errorf(
-				"JWT_SIGNING_ALGORITHM=RS256 requires an RSA private key, got %T",
-				key,
-			)
-		}
-	case "ES256":
-		ecKey, ok := key.(*ecdsa.PrivateKey)
-		if !ok {
-			return fmt.Errorf(
-				"JWT_SIGNING_ALGORITHM=ES256 requires an ECDSA private key, got %T",
-				key,
-			)
-		}
-		if ecKey.Curve != elliptic.P256() {
-			return fmt.Errorf(
-				"JWT_SIGNING_ALGORITHM=ES256 requires P-256 curve, got %s",
-				ecKey.Curve.Params().Name,
-			)
-		}
-	default:
-		return fmt.Errorf("unsupported algorithm: %s", algorithm)
-	}
-	return nil
 }

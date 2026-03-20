@@ -882,3 +882,59 @@ func TestNewLocalTokenProvider_ES256_NoKey_Error(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "ES256 requires a signing key")
 }
+
+func TestNewLocalTokenProvider_ES256_WrongCurve(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	require.NoError(t, err)
+	cfg := &config.Config{
+		JWTSigningAlgorithm: "ES256",
+		JWTExpiration:       1 * time.Hour,
+		BaseURL:             "http://localhost:8080",
+	}
+	_, err = NewLocalTokenProvider(cfg,
+		WithSigningKey(key, &key.PublicKey),
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "requires P-256 curve")
+}
+
+func TestNewLocalTokenProvider_RS256_WrongKeyType(t *testing.T) {
+	ecKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	cfg := &config.Config{
+		JWTSigningAlgorithm: "RS256",
+		JWTExpiration:       1 * time.Hour,
+		BaseURL:             "http://localhost:8080",
+	}
+	_, err = NewLocalTokenProvider(cfg,
+		WithSigningKey(ecKey, &ecKey.PublicKey),
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "RS256 requires *rsa.PrivateKey")
+}
+
+func TestNewLocalTokenProvider_ES256_WrongKeyType(t *testing.T) {
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	cfg := &config.Config{
+		JWTSigningAlgorithm: "ES256",
+		JWTExpiration:       1 * time.Hour,
+		BaseURL:             "http://localhost:8080",
+	}
+	_, err = NewLocalTokenProvider(cfg,
+		WithSigningKey(rsaKey, &rsaKey.PublicKey),
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "ES256 requires *ecdsa.PrivateKey")
+}
+
+func TestNewLocalTokenProvider_UnsupportedAlgorithm(t *testing.T) {
+	cfg := &config.Config{
+		JWTSigningAlgorithm: "PS256",
+		JWTExpiration:       1 * time.Hour,
+		BaseURL:             "http://localhost:8080",
+	}
+	_, err := NewLocalTokenProvider(cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported JWTSigningAlgorithm")
+}
