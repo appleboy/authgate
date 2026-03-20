@@ -273,13 +273,15 @@ openssl ecparam -genkey -name prime256v1 -noout -out ec-private.pem
 
 ### JWKS Endpoint
 
-When using RS256 or ES256, AuthGate exposes the public key at:
+When using RS256 or ES256 with the local token provider (`TOKEN_PROVIDER_MODE=local` or empty), AuthGate exposes the public key at:
 
 ```
 GET /.well-known/jwks.json
 ```
 
 Resource servers can fetch this endpoint to verify JWT signatures without sharing secrets. The OIDC Discovery endpoint (`/.well-known/openid-configuration`) includes the `jwks_uri` field automatically.
+
+> **Note**: JWKS and `jwks_uri` are only available when the local token provider loads an asymmetric private key. When using `TOKEN_PROVIDER_MODE=http_api`, the JWKS endpoint returns an empty key set.
 
 For HS256, the JWKS endpoint returns an empty key set (`{"keys":[]}`) since symmetric secrets are never exposed.
 
@@ -296,7 +298,7 @@ Use `JWT_KEY_ID` to set an explicit `kid` (Key ID) header in JWTs. This enables 
 > rotation, pre-cache the new JWKS at resource servers before switching, or accept a brief
 > gap while cached JWKS entries expire. Multi-key JWKS is not currently supported.
 
-If `JWT_KEY_ID` is not set, it is automatically derived from the key's SHA-256 thumbprint.
+If `JWT_KEY_ID` is not set, it is automatically derived from the SHA-256 hash of the DER-encoded public key.
 
 ---
 
