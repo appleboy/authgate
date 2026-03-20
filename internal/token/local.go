@@ -65,16 +65,24 @@ func NewLocalTokenProvider(cfg *config.Config, opts ...Option) (*LocalTokenProvi
 				"NewLocalTokenProvider: RS256 requires a signing key; use WithSigningKey",
 			)
 		}
-		if _, ok := p.signKey.(*rsa.PrivateKey); !ok {
+		privKey, ok := p.signKey.(*rsa.PrivateKey)
+		if !ok {
 			return nil, fmt.Errorf(
 				"NewLocalTokenProvider: RS256 requires *rsa.PrivateKey, got %T",
 				p.signKey,
 			)
 		}
-		if _, ok := p.verifyKey.(*rsa.PublicKey); !ok {
+		pubKey, ok := p.verifyKey.(*rsa.PublicKey)
+		if !ok {
 			return nil, fmt.Errorf(
 				"NewLocalTokenProvider: RS256 requires *rsa.PublicKey, got %T",
 				p.verifyKey,
+			)
+		}
+		derivedPub := &privKey.PublicKey
+		if pubKey.E != derivedPub.E || pubKey.N.Cmp(derivedPub.N) != 0 {
+			return nil, errors.New(
+				"NewLocalTokenProvider: RS256 signing and verification keys do not match",
 			)
 		}
 	case "ES256":
