@@ -88,6 +88,7 @@ func initializeHandlers(deps handlerDeps) handlerSet {
 		oidc: handlers.NewOIDCHandler(
 			deps.services.token, deps.services.user,
 			deps.cfg, len(jwksHandler.Keys()) > 0,
+			isIDTokenSupported(deps.tokenProvider),
 		),
 		registration: handlers.NewRegistrationHandler(
 			deps.services.client,
@@ -105,6 +106,12 @@ type jwksInfoProvider interface {
 	PublicKey() crypto.PublicKey
 	KeyID() string
 	Algorithm() string
+}
+
+// isIDTokenSupported returns true when the token provider can generate OIDC ID tokens.
+func isIDTokenSupported(tp core.TokenProvider) bool {
+	_, ok := tp.(core.IDTokenProvider)
+	return ok
 }
 
 // buildJWKSHandler creates a JWKS handler from the token provider.
