@@ -210,13 +210,19 @@ func main() {
 			return
 		}
 
-		claims := token.Claims.(jwt.MapClaims)
-		if claims["type"] != "access" {
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			http.Error(w, "Invalid token claims", http.StatusUnauthorized)
+			return
+		}
+
+		tokenType, ok := claims["type"].(string)
+		if !ok || tokenType != "access" {
 			http.Error(w, "Invalid token type", http.StatusUnauthorized)
 			return
 		}
 
-		userID := claims["user_id"].(string)
+		userID, _ := claims["user_id"].(string)
 		fmt.Fprintf(w, "Hello, user %s!", userID)
 	})
 

@@ -144,14 +144,14 @@ Response (relevant fields):
 {
   "issuer": "https://your-authgate",
   "jwks_uri": "https://your-authgate/.well-known/jwks.json",
-  "id_token_signing_alg_values_supported": ["RS256"],  // Reflects JWT_SIGNING_ALGORITHM (RS256 or ES256)
+  "id_token_signing_alg_values_supported": ["RS256"],
   "token_endpoint": "https://your-authgate/oauth/token",
   "authorization_endpoint": "https://your-authgate/oauth/authorize",
   "userinfo_endpoint": "https://your-authgate/oauth/userinfo"
 }
 ```
 
-> **Note**: The `jwks_uri` field is only present when AuthGate is configured with RS256 or ES256. It is omitted for HS256.
+> **Note**: The `jwks_uri` field is only present when AuthGate is configured with RS256 or ES256. It is omitted for HS256. The `id_token_signing_alg_values_supported` value reflects the configured `JWT_SIGNING_ALGORITHM` (e.g., `["ES256"]` when using ES256), and may be omitted if ID tokens are not supported.
 
 ## JWKS Endpoint
 
@@ -280,12 +280,10 @@ Using [`github.com/MicahParks/keyfunc/v3`](https://github.com/MicahParks/keyfunc
 package main
 
 import (
-  "context"
   "fmt"
   "log"
   "net/http"
   "strings"
-  "time"
 
   "github.com/MicahParks/keyfunc/v3"
   "github.com/golang-jwt/jwt/v5"
@@ -320,25 +318,27 @@ func main() {
     }
 
     claims, ok := token.Claims.(jwt.MapClaims)
-    if !ok || !token.Valid {
+    if !ok {
       http.Error(w, "Invalid token claims", http.StatusUnauthorized)
       return
     }
 
     // Check token type
-    if claims["type"] != "access" {
+    tokenType, ok := claims["type"].(string)
+    if !ok || tokenType != "access" {
       http.Error(w, "Invalid token type", http.StatusUnauthorized)
       return
     }
 
     // Check scopes
-    scopes := strings.Fields(claims["scope"].(string))
+    scopeStr, _ := claims["scope"].(string)
+    scopes := strings.Fields(scopeStr)
     if !contains(scopes, "read") {
       http.Error(w, "Insufficient scope", http.StatusForbidden)
       return
     }
 
-    userID := claims["user_id"].(string)
+    userID, _ := claims["user_id"].(string)
     fmt.Fprintf(w, "Hello, user %s!", userID)
   })
 
@@ -483,7 +483,7 @@ server.listen(8081, () => console.log("Resource server on :8081"));
 
 ## Key Rotation
 
-AuthGate supports key rotation with zero-downtime:
+AuthGate supports key rotation. To achieve zero-downtime, run multiple AuthGate instances behind a load balancer and perform a rolling restart:
 
 1. **Generate a new key pair** (see [Configuring AuthGate](#configuring-authgate))
 2. **Update `JWT_PRIVATE_KEY_PATH`** (and optionally `JWT_KEY_ID`) in AuthGate's configuration
@@ -540,6 +540,6 @@ If your servers' clocks are not synchronized, token expiration checks may fail. 
 ## Related Documentation
 
 - [Configuration Guide — JWT Signing Algorithm](CONFIGURATION.md#jwt-signing-algorithm) — Full configuration reference for key generation, PEM formats, and validation rules
-- [Security Guide — Asymmetric Key Management](SECURITY.md#asymmetric-key-management-rs256es256) — Private key storage, permissions, and rotation security practices
+- [Security Guide — Secrets Management](SECURITY.md#secrets-management) — Private key storage, permissions, and rotation security practices
 - [Troubleshooting — JWT Signature Verification](TROUBLESHOOTING.md#issue-jwt-signature-verification-fails) — Debugging verification failures
 - [Architecture Guide](ARCHITECTURE.md) — Overall system design and component overview
