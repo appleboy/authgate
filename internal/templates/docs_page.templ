@@ -31,8 +31,17 @@ templ DocsPage(props DocsPageProps) {
 		<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
 		<script>Prism.highlightAll();</script>
 		<!-- Mermaid diagrams -->
-		<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-		<script>mermaid.initialize({ startOnLoad: true, theme: 'default' });</script>
+		<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+		<script>
+		(function() {
+			// Mermaid destroys source text on render; preserve it for theme-switch re-rendering
+			document.querySelectorAll('.mermaid').forEach(function(el) {
+				el.setAttribute('data-mermaid-source', el.textContent);
+			});
+			var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+			mermaid.initialize({ startOnLoad: true, theme: isDark ? 'dark' : 'default' });
+		})();
+		</script>
 		<!-- Code block enhancements: language badge + copy button -->
 		<script>
 		(function () {
