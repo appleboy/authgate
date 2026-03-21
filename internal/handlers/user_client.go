@@ -296,7 +296,7 @@ func (h *UserClientHandler) RegenerateAppSecret(c *gin.Context) {
 	templates.RenderTempl(
 		c,
 		http.StatusOK,
-		templates.UserAppCreated(templates.UserClientCreatedPageProps{
+		templates.UserAppSecret(templates.UserClientCreatedPageProps{
 			BaseProps:   templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
 			NavbarProps: buildNavbarProps(c, userModel, "my-apps"),
 			Client:      display,
