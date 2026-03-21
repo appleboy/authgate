@@ -65,16 +65,17 @@ func (h *UserClientHandler) CreateApp(c *gin.Context) {
 	userModel := getUserFromContext(c)
 
 	req := services.CreateClientRequest{
-		ClientName:         c.PostForm("client_name"),
-		Description:        c.PostForm("description"),
-		UserID:             userID.(string),
-		Scopes:             c.PostForm("scopes"),
-		RedirectURIs:       parseRedirectURIs(c.PostForm("redirect_uris")),
-		CreatedBy:          userID.(string),
-		ClientType:         c.PostForm("client_type"),
-		EnableDeviceFlow:   c.PostForm("enable_device_flow") == queryValueTrue,
-		EnableAuthCodeFlow: c.PostForm("enable_auth_code_flow") == queryValueTrue,
-		IsAdminCreated:     false, // user-created: starts as pending
+		ClientName:                  c.PostForm("client_name"),
+		Description:                 c.PostForm("description"),
+		UserID:                      userID.(string),
+		Scopes:                      c.PostForm("scopes"),
+		RedirectURIs:                parseRedirectURIs(c.PostForm("redirect_uris")),
+		CreatedBy:                   userID.(string),
+		ClientType:                  c.PostForm("client_type"),
+		EnableDeviceFlow:            c.PostForm("enable_device_flow") == queryValueTrue,
+		EnableAuthCodeFlow:          c.PostForm("enable_auth_code_flow") == queryValueTrue,
+		EnableClientCredentialsFlow: c.PostForm("enable_client_credentials_flow") == queryValueTrue,
+		IsAdminCreated:              false, // user-created: starts as pending
 	}
 
 	// Validate scopes before calling service to give a user-friendly error
@@ -100,13 +101,14 @@ func (h *UserClientHandler) CreateApp(c *gin.Context) {
 	resp, err := h.clientService.CreateClient(c.Request.Context(), req)
 	if err != nil {
 		clientData := &templates.ClientDisplay{
-			ClientName:         req.ClientName,
-			Description:        req.Description,
-			Scopes:             req.Scopes,
-			RedirectURIs:       strings.Join(req.RedirectURIs, ", "),
-			ClientType:         req.ClientType,
-			EnableDeviceFlow:   req.EnableDeviceFlow,
-			EnableAuthCodeFlow: req.EnableAuthCodeFlow,
+			ClientName:                  req.ClientName,
+			Description:                 req.Description,
+			Scopes:                      req.Scopes,
+			RedirectURIs:                strings.Join(req.RedirectURIs, ", "),
+			ClientType:                  req.ClientType,
+			EnableDeviceFlow:            req.EnableDeviceFlow,
+			EnableAuthCodeFlow:          req.EnableAuthCodeFlow,
+			EnableClientCredentialsFlow: req.EnableClientCredentialsFlow,
 		}
 		renderUserAppForm(c, userModel, clientData, "/apps", false, err.Error())
 		return
@@ -199,13 +201,14 @@ func (h *UserClientHandler) UpdateApp(c *gin.Context) {
 	userModel := getUserFromContext(c)
 
 	req := services.UserUpdateClientRequest{
-		ClientName:         c.PostForm("client_name"),
-		Description:        c.PostForm("description"),
-		Scopes:             c.PostForm("scopes"),
-		RedirectURIs:       parseRedirectURIs(c.PostForm("redirect_uris")),
-		ClientType:         c.PostForm("client_type"),
-		EnableDeviceFlow:   c.PostForm("enable_device_flow") == queryValueTrue,
-		EnableAuthCodeFlow: c.PostForm("enable_auth_code_flow") == queryValueTrue,
+		ClientName:                  c.PostForm("client_name"),
+		Description:                 c.PostForm("description"),
+		Scopes:                      c.PostForm("scopes"),
+		RedirectURIs:                parseRedirectURIs(c.PostForm("redirect_uris")),
+		ClientType:                  c.PostForm("client_type"),
+		EnableDeviceFlow:            c.PostForm("enable_device_flow") == queryValueTrue,
+		EnableAuthCodeFlow:          c.PostForm("enable_auth_code_flow") == queryValueTrue,
+		EnableClientCredentialsFlow: c.PostForm("enable_client_credentials_flow") == queryValueTrue,
 	}
 
 	err := h.clientService.UserUpdateClient(c.Request.Context(), clientID, userID.(string), req)
@@ -217,13 +220,14 @@ func (h *UserClientHandler) UpdateApp(c *gin.Context) {
 
 		client, _ := h.clientService.GetClient(clientID)
 		clientData := &templates.ClientDisplay{
-			ClientName:         req.ClientName,
-			Description:        req.Description,
-			Scopes:             req.Scopes,
-			RedirectURIs:       strings.Join(req.RedirectURIs, ", "),
-			ClientType:         req.ClientType,
-			EnableDeviceFlow:   req.EnableDeviceFlow,
-			EnableAuthCodeFlow: req.EnableAuthCodeFlow,
+			ClientName:                  req.ClientName,
+			Description:                 req.Description,
+			Scopes:                      req.Scopes,
+			RedirectURIs:                strings.Join(req.RedirectURIs, ", "),
+			ClientType:                  req.ClientType,
+			EnableDeviceFlow:            req.EnableDeviceFlow,
+			EnableAuthCodeFlow:          req.EnableAuthCodeFlow,
+			EnableClientCredentialsFlow: req.EnableClientCredentialsFlow,
 		}
 		if client != nil {
 			clientData.ID = client.ID

@@ -132,13 +132,14 @@ type CreateClientRequest struct {
 
 // UserUpdateClientRequest contains the restricted set of fields a non-admin user may update on their own client.
 type UserUpdateClientRequest struct {
-	ClientName         string
-	Description        string
-	Scopes             string // validated against allowedUserScopes
-	RedirectURIs       []string
-	ClientType         string
-	EnableDeviceFlow   bool
-	EnableAuthCodeFlow bool
+	ClientName                  string
+	Description                 string
+	Scopes                      string // validated against allowedUserScopes
+	RedirectURIs                []string
+	ClientType                  string
+	EnableDeviceFlow            bool
+	EnableAuthCodeFlow          bool
+	EnableClientCredentialsFlow bool // Enable Client Credentials Grant (RFC 6749 §4.4); confidential clients only
 }
 
 type UpdateClientRequest struct {
@@ -594,9 +595,14 @@ func (s *ClientService) UserUpdateClient(
 
 	client.EnableDeviceFlow = req.EnableDeviceFlow
 	client.EnableAuthCodeFlow = req.EnableAuthCodeFlow
-	// User-created clients cannot enable client credentials flow.
-	client.EnableClientCredentialsFlow = false
-	client.GrantTypes = buildGrantTypes(req.EnableDeviceFlow, req.EnableAuthCodeFlow, false)
+	enableClientCredentials := req.EnableClientCredentialsFlow &&
+		client.ClientType == ClientTypeConfidential
+	client.EnableClientCredentialsFlow = enableClientCredentials
+	client.GrantTypes = buildGrantTypes(
+		req.EnableDeviceFlow,
+		req.EnableAuthCodeFlow,
+		enableClientCredentials,
+	)
 
 	if err := s.store.UpdateClient(client); err != nil {
 		return err
