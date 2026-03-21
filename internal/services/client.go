@@ -557,7 +557,7 @@ func (s *ClientService) UserUpdateClient(
 		return ErrClientNameRequired
 	}
 
-	if !req.EnableDeviceFlow && !req.EnableAuthCodeFlow {
+	if !req.EnableDeviceFlow && !req.EnableAuthCodeFlow && !req.EnableClientCredentialsFlow {
 		return ErrAtLeastOneGrantRequired
 	}
 
