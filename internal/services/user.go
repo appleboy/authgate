@@ -283,7 +283,10 @@ func (s *UserService) GetUserByID(id string) (*models.User, error) {
 	fetchFn := func(ctx context.Context, key string) (models.User, error) {
 		u, err := s.store.GetUserByID(id)
 		if err != nil {
-			return models.User{}, ErrUserNotFound
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return models.User{}, ErrUserNotFound
+			}
+			return models.User{}, err
 		}
 		// Strip credential material before caching: PasswordHash must never be
 		// written to a shared cache backend (Redis) where it could be read if

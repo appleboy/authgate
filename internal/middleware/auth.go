@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"time"
@@ -43,30 +44,41 @@ func GenerateFingerprint(ip, userAgent string, includeIP bool) string {
 }
 
 // loadUserFromSession reads the user_id from the session, fetches the user, and
-// populates "user_id", "user", and the request context. Returns false if there
-// is no session or the user cannot be loaded.
-func loadUserFromSession(c *gin.Context, userService *services.UserService) bool {
+// populates "user_id", "user", and the request context.
+// Returns (true, nil) on success, (false, nil) when there is no session or the
+// user was deleted, and (false, err) on transient failures (DB down, etc.).
+func loadUserFromSession(c *gin.Context, userService *services.UserService) (bool, error) {
 	session := sessions.Default(c)
 	userID := session.Get(SessionUserID)
 	if userID == nil {
-		return false
+		return false, nil
 	}
 	userIDStr := userID.(string)
 	user, err := userService.GetUserByID(userIDStr)
 	if err != nil {
-		return false
+		if errors.Is(err, services.ErrUserNotFound) {
+			// User no longer exists in DB — clear stale session to prevent redirect loops.
+			// Return save errors so callers can 503 instead of redirect-looping.
+			session.Clear()
+			if saveErr := session.Save(); saveErr != nil {
+				return false, saveErr
+			}
+			return false, nil
+		}
+		// Transient DB error — don't clear the session
+		return false, err
 	}
 	c.Set("user_id", userIDStr)
 	c.Set("user", user)
 	c.Request = c.Request.WithContext(models.SetUserContext(c.Request.Context(), user))
-	return true
+	return true, nil
 }
 
 // OptionalAuth loads the user from session if logged in, but does not redirect if not.
 // Use for public pages that show richer UI when authenticated.
 func OptionalAuth(userService *services.UserService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		loadUserFromSession(c, userService)
+		_, _ = loadUserFromSession(c, userService)
 		c.Next()
 	}
 }
@@ -74,7 +86,17 @@ func OptionalAuth(userService *services.UserService) gin.HandlerFunc {
 // RequireAuth is a middleware that requires the user to be logged in
 func RequireAuth(userService *services.UserService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !loadUserFromSession(c, userService) {
+		loaded, err := loadUserFromSession(c, userService)
+		if err != nil {
+			// Transient DB error — return 503 instead of redirecting to avoid loops
+			c.String(
+				http.StatusServiceUnavailable,
+				"Service temporarily unavailable. Please try again.",
+			)
+			c.Abort()
+			return
+		}
+		if !loaded {
 			// Redirect to login with return URL
 			redirectURL := c.Request.URL.String()
 			c.Redirect(http.StatusFound, "/login?redirect="+url.QueryEscape(redirectURL))

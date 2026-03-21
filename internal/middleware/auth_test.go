@@ -40,16 +40,31 @@ func setupTestRouter() *gin.Engine {
 // Uses an in-memory SQLite database to avoid nil pointer issues.
 func createTestUserService(t *testing.T) *services.UserService {
 	t.Helper()
+	svc, _ := createTestUserServiceWithStore(t)
+	return svc
+}
+
+// createTestUserServiceWithStore creates a UserService and returns both
+// the service and the underlying store (for close/manipulation in tests).
+func createTestUserServiceWithStore(
+	t *testing.T,
+) (*services.UserService, *store.Store) {
+	t.Helper()
 
 	// Create in-memory store
-	testStore, err := store.New(context.Background(), "sqlite", ":memory:", &config.Config{})
+	testStore, err := store.New(
+		context.Background(), "sqlite", ":memory:", &config.Config{},
+	)
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = testStore.Close(context.Background())
+	})
 
 	// Create minimal auth providers
 	localProvider := auth.NewLocalAuthProvider(testStore)
 
 	// Create UserService with nil audit service (not needed for these tests)
-	return services.NewUserService(
+	svc := services.NewUserService(
 		testStore,
 		localProvider,
 		nil, // httpAPIProvider not needed
@@ -59,6 +74,7 @@ func createTestUserService(t *testing.T) *services.UserService {
 		cache.NewMemoryCache[models.User](),
 		5*time.Minute,
 	)
+	return svc, testStore
 }
 
 func TestSessionIdleTimeout_Disabled(t *testing.T) {
@@ -696,4 +712,86 @@ func TestSessionOptions_Development(t *testing.T) {
 	assert.True(t, opts.HttpOnly)
 	assert.False(t, opts.Secure)
 	assert.Equal(t, http.SameSiteLaxMode, opts.SameSite)
+}
+
+func TestRequireAuth_DeletedUser_ClearsSessionAndRedirects(t *testing.T) {
+	userService := createTestUserService(t)
+
+	r := setupTestRouter()
+
+	// Inject a stale user_id into the session before RequireAuth runs.
+	// Do NOT call session.Save() here — values are shared in-memory within
+	// the same request, and saving early creates a duplicate Set-Cookie.
+	r.Use(func(c *gin.Context) {
+		session := sessions.Default(c)
+		session.Set(SessionUserID, "non-existent-user-id")
+		c.Next()
+	})
+	r.Use(RequireAuth(userService))
+	r.GET("/protected", func(c *gin.Context) {
+		c.String(http.StatusOK, "OK")
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequestWithContext(
+		context.Background(), http.MethodGet, "/protected", nil,
+	)
+	r.ServeHTTP(w, req)
+
+	// Should redirect to login (not 503)
+	assert.Equal(t, http.StatusFound, w.Code)
+	assert.Contains(t, w.Header().Get("Location"), "/login")
+
+	// Verify session is actually cleared by making a follow-up request
+	// with the returned cookies and inspecting the session directly.
+	r2 := setupTestRouter()
+	var sessionUserID any
+	r2.GET("/check-session", func(c *gin.Context) {
+		session := sessions.Default(c)
+		sessionUserID = session.Get(SessionUserID)
+		c.String(http.StatusOK, "login page")
+	})
+
+	w2 := httptest.NewRecorder()
+	req2, _ := http.NewRequestWithContext(
+		context.Background(), http.MethodGet, "/check-session", nil,
+	)
+	// Forward cookies from first response
+	for _, c := range w.Result().Cookies() {
+		req2.AddCookie(c)
+	}
+	r2.ServeHTTP(w2, req2)
+
+	// The session should no longer contain the stale user_id
+	assert.Nil(t, sessionUserID, "stale user_id should be cleared from session")
+}
+
+func TestRequireAuth_TransientDBError_Returns503(t *testing.T) {
+	userService, testStore := createTestUserServiceWithStore(t)
+
+	// Close the database to simulate a transient DB failure
+	require.NoError(t, testStore.Close(context.Background()))
+
+	r := setupTestRouter()
+
+	// Inject a user_id into the session
+	r.Use(func(c *gin.Context) {
+		session := sessions.Default(c)
+		session.Set(SessionUserID, "some-user-id")
+		_ = session.Save()
+		c.Next()
+	})
+	r.Use(RequireAuth(userService))
+	r.GET("/protected", func(c *gin.Context) {
+		c.String(http.StatusOK, "OK")
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequestWithContext(
+		context.Background(), http.MethodGet, "/protected", nil,
+	)
+	r.ServeHTTP(w, req)
+
+	// Should return 503 (not redirect, not clear session)
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 }
