@@ -22,6 +22,11 @@ type NavbarProps struct {
 	PendingClientsCount int    // Badge count for admin → OAuth Clients link
 }
 
+// IsDocsActive returns true if the current ActiveLink belongs to a docs page.
+func (p *NavbarProps) IsDocsActive() bool {
+	return len(p.ActiveLink) > 5 && p.ActiveLink[:5] == "docs-"
+}
+
 // DisplayName returns FullName if set, otherwise Username.
 func (p *NavbarProps) DisplayName() string {
 	if p.FullName != "" {

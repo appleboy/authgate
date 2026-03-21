@@ -382,7 +382,7 @@ AUTHGATE_URL = "https://your-authgate"
 JWKS_URL = f"{AUTHGATE_URL}/.well-known/jwks.json"
 
 # PyJWKClient caches JWKS keys automatically
-jwks_client = PyJWKClient(JWKS_URL, cache_jwk_set=True, lifespan=3600)
+jwks_client = PyJWKClient(JWKS_URL, cache_keys=True, lifespan=3600)
 
 @app.route("/api/resource")
 def protected_resource():
