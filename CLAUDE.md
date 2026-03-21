@@ -93,7 +93,7 @@ In addition to Device Code Flow, AuthGate supports Authorization Code Flow with 
 - `internal/config/` - Environment configuration management
 - `internal/store/` - GORM-based data access layer (SQLite/PostgreSQL), uses map-based driver factory
 - `internal/auth/` - Authentication providers (local, HTTP API, OAuth providers)
-- `internal/token/` - Token providers (local JWT, HTTP API)
+- `internal/token/` - Token provider (local JWT)
 - `internal/services/` - Business logic layer (user, device, authorization, token, client, audit services)
 - `internal/handlers/` - HTTP request handlers for all endpoints
 - `internal/models/` - GORM database models (User, OAuthApplication, UserAuthorization, DeviceCode, AuthorizationCode, AccessToken, OAuthConnection, AuditLog)
@@ -121,17 +121,13 @@ In addition to Device Code Flow, AuthGate supports Authorization Code Flow with 
 - Configured via `AUTH_MODE` env var (`local` or `http_api`)
 - Default admin user always uses local auth as failsafe
 
-**Pluggable Token Providers**
+**Token Provider**
 
-- Supports local JWT and external HTTP API token services
-- Configured via `TOKEN_PROVIDER_MODE` env var (`local` or `http_api`)
-- Token records always stored in local database for management
 - LocalTokenProvider: Uses golang-jwt/jwt library with configurable signing algorithm
   - `HS256` (default): Symmetric HMAC-SHA256 using `JWT_SECRET`
   - `RS256`: Asymmetric RSA signing with PEM private key (`JWT_PRIVATE_KEY_PATH`)
   - `ES256`: Asymmetric ECDSA P-256 signing with PEM private key (`JWT_PRIVATE_KEY_PATH`)
 - JWKS endpoint at `/.well-known/jwks.json` exposes public keys for RS256/ES256
-- HTTPTokenProvider: Delegates to external API, supports custom signing algorithms
 
 **Refresh Tokens (RFC 6749)**
 
@@ -260,7 +256,6 @@ Key configuration categories (see `.env.example` and `docs/CONFIGURATION.md` for
 **Authentication & Authorization**
 
 - `AUTH_MODE` (local/http_api) - Authentication backend
-- `TOKEN_PROVIDER_MODE` (local/http_api) - Token generation backend
 - `ENABLE_REFRESH_TOKENS`, `ENABLE_TOKEN_ROTATION` - Refresh token modes (fixed vs rotation)
 
 **Security Features**
@@ -313,17 +308,9 @@ When `AUTH_MODE=http_api`, AuthGate delegates authentication to external API:
 - First login auto-creates user with `auth_source="http_api"`
 - Default admin user always uses local auth (failsafe)
 
-### HTTP API Token Provider
-
-When `TOKEN_PROVIDER_MODE=http_api`, AuthGate delegates token generation/validation to external API:
-
-- Generation: POST to `{TOKEN_API_URL}/generate` with user_id, client_id, scopes, expires_in
-- Validation: POST to `{TOKEN_API_URL}/validate` with token
-- Token records still saved to local database for revocation/management
-
 ### Service-to-Service Authentication
 
-Secure communication with external APIs using `HTTP_API_AUTH_MODE` / `TOKEN_API_AUTH_MODE`:
+Secure communication with external APIs using `HTTP_API_AUTH_MODE`:
 
 - `none` - No authentication (default, trusted networks only)
 - `simple` - Shared secret header (e.g., `X-API-Secret: your-secret`)
@@ -344,7 +331,7 @@ Secure communication with external APIs using `HTTP_API_AUTH_MODE` / `TOKEN_API_
   - **Currently have interfaces**: `Cache`, `MetricsCollector` (swappable implementations)
   - **Should consider adding interfaces** for pluggable components to improve extensibility and testability:
     - `AuthProvider` - Already has 3 implementations (local, http_api, OAuth); interface would enable third-party auth backends
-    - `TokenProvider` - Already has 2 implementations (local JWT, http_api); interface would enable custom token formats (e.g., RS256, ES256)
+    - `TokenProvider` - Currently used for mock-based testing; interface would enable custom token formats
     - `Store` - Supports SQLite/PostgreSQL; interface would enable MySQL, MongoDB, or custom storage backends
   - **Don't need interfaces**: Services (UserService, DeviceService, etc.) - these are core business logic with single implementations
   - Use direct struct dependency injection for simplicity where multiple implementations are unlikely

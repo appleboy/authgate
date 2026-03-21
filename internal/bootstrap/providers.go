@@ -36,34 +36,8 @@ func initializeHTTPAPIAuthProvider(cfg *config.Config) core.AuthProvider {
 	}
 }
 
-// initializeTokenProvider returns the configured TokenProvider.
-// It always returns a concrete core.TokenProvider: an HTTP API provider when
-// TokenProviderModeHTTPAPI is set, or a local token provider by default.
-func initializeTokenProvider(cfg *config.Config) core.TokenProvider {
-	switch cfg.TokenProviderMode {
-	case config.TokenProviderModeHTTPAPI:
-		tokenRetryClient, err := client.CreateRetryClient(client.RetryClientConfig{
-			AuthMode:           cfg.TokenAPIAuthMode,
-			AuthSecret:         cfg.TokenAPIAuthSecret,
-			Timeout:            cfg.TokenAPITimeout,
-			InsecureSkipVerify: cfg.TokenAPIInsecureSkipVerify,
-			MaxRetries:         cfg.TokenAPIMaxRetries,
-			RetryDelay:         cfg.TokenAPIRetryDelay,
-			MaxRetryDelay:      cfg.TokenAPIMaxRetryDelay,
-			AuthHeader:         cfg.TokenAPIAuthHeader,
-		})
-		if err != nil {
-			log.Fatalf("Failed to create token API client: %v", err)
-		}
-		log.Printf("HTTP API token provider enabled: %s", cfg.TokenAPIURL)
-		return token.NewHTTPTokenProvider(cfg, tokenRetryClient)
-	default:
-		return newLocalTokenProvider(cfg)
-	}
-}
-
-// newLocalTokenProvider creates a LocalTokenProvider with key loading for asymmetric algorithms.
-func newLocalTokenProvider(cfg *config.Config) *token.LocalTokenProvider {
+// initializeTokenProvider creates a LocalTokenProvider with key loading for asymmetric algorithms.
+func initializeTokenProvider(cfg *config.Config) *token.LocalTokenProvider {
 	switch cfg.JWTSigningAlgorithm {
 	case "HS256", "":
 		log.Printf("Token signing: HS256 (symmetric)")

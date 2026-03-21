@@ -106,12 +106,11 @@ func TestConfig_Validate_JWTSigningAlgorithm(t *testing.T) {
 	}
 
 	tests := []struct {
-		name              string
-		algorithm         string
-		keyPath           string
-		tokenProviderMode string
-		expectError       bool
-		errorMsg          string
+		name        string
+		algorithm   string
+		keyPath     string
+		expectError bool
+		errorMsg    string
 	}{
 		{
 			name:        "HS256 default - no key required",
@@ -124,37 +123,28 @@ func TestConfig_Validate_JWTSigningAlgorithm(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:              "RS256 local - requires key path",
-			algorithm:         "RS256",
-			tokenProviderMode: TokenProviderModeLocal,
-			expectError:       true,
-			errorMsg:          "JWT_PRIVATE_KEY_PATH is required",
+			name:        "RS256 requires key path",
+			algorithm:   "RS256",
+			expectError: true,
+			errorMsg:    "JWT_PRIVATE_KEY_PATH is required",
 		},
 		{
-			name:              "RS256 local - with key path OK",
-			algorithm:         "RS256",
-			keyPath:           "/some/key.pem",
-			tokenProviderMode: TokenProviderModeLocal,
-			expectError:       false,
+			name:        "RS256 with key path OK",
+			algorithm:   "RS256",
+			keyPath:     "/some/key.pem",
+			expectError: false,
 		},
 		{
-			name:              "ES256 local - requires key path",
-			algorithm:         "ES256",
-			tokenProviderMode: TokenProviderModeLocal,
-			expectError:       true,
-			errorMsg:          "JWT_PRIVATE_KEY_PATH is required",
+			name:        "ES256 requires key path",
+			algorithm:   "ES256",
+			expectError: true,
+			errorMsg:    "JWT_PRIVATE_KEY_PATH is required",
 		},
 		{
-			name:              "RS256 http_api - key path not required",
-			algorithm:         "RS256",
-			tokenProviderMode: TokenProviderModeHTTPAPI,
-			expectError:       false,
-		},
-		{
-			name:              "ES256 http_api - key path not required",
-			algorithm:         "ES256",
-			tokenProviderMode: TokenProviderModeHTTPAPI,
-			expectError:       false,
+			name:        "ES256 with key path OK",
+			algorithm:   "ES256",
+			keyPath:     "/some/key.pem",
+			expectError: false,
 		},
 		{
 			name:        "unsupported algorithm",
@@ -169,7 +159,6 @@ func TestConfig_Validate_JWTSigningAlgorithm(t *testing.T) {
 			cfg := *base
 			cfg.JWTSigningAlgorithm = tt.algorithm
 			cfg.JWTPrivateKeyPath = tt.keyPath
-			cfg.TokenProviderMode = tt.tokenProviderMode
 			err := cfg.Validate()
 			if tt.expectError {
 				require.Error(t, err)

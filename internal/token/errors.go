@@ -22,15 +22,4 @@ var (
 
 	// ErrInvalidScope indicates scope validation failed
 	ErrInvalidScope = errors.New("invalid scope")
-
-	// HTTP API specific errors
-
-	// ErrHTTPTokenConnection indicates failed connection to token API
-	ErrHTTPTokenConnection = errors.New("failed to connect to token API")
-
-	// ErrHTTPTokenAuthFailed indicates token API rejected request
-	ErrHTTPTokenAuthFailed = errors.New("token API rejected request")
-
-	// ErrHTTPTokenInvalidResp indicates invalid response from token API
-	ErrHTTPTokenInvalidResp = errors.New("invalid response from token API")
 )

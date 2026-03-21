@@ -72,8 +72,8 @@ openssl rand -base64 48
 | `oauth_tokens_refreshed_total`            | Counter   | Token refresh attempts    | `result` (success, error)                                                 |
 | `oauth_token_validation_total`            | Counter   | Token validation attempts | `result` (valid, invalid, expired)                                        |
 | `oauth_tokens_active`                     | Gauge     | Current active tokens     | `token_type` (access, refresh)                                            |
-| `oauth_token_generation_duration_seconds` | Histogram | Token generation time     | `provider` (local, http_api)                                              |
-| `oauth_token_validation_duration_seconds` | Histogram | Token validation time     | `provider` (local, http_api)                                              |
+| `oauth_token_generation_duration_seconds` | Histogram | Token generation time     | `provider` (local)                                                        |
+| `oauth_token_validation_duration_seconds` | Histogram | Token validation time     | `provider` (local)                                                        |
 
 ### Authentication Metrics
 

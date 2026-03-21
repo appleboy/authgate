@@ -116,7 +116,7 @@ func isIDTokenSupported(tp core.TokenProvider) bool {
 
 // buildJWKSHandler creates a JWKS handler from the token provider.
 // For LocalTokenProvider with asymmetric keys, it exposes the public key.
-// For HS256 or HTTP API providers, it returns an empty key set.
+// For HS256, it returns an empty key set.
 func buildJWKSHandler(tp core.TokenProvider, cfg *config.Config) *handlers.JWKSHandler {
 	if info, ok := tp.(jwksInfoProvider); ok {
 		return handlers.NewJWKSHandler(info.Algorithm(), info.KeyID(), info.PublicKey())

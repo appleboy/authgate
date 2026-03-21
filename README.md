@@ -140,7 +140,7 @@ AuthGate also serves as a lightweight **centralised identity gateway** for inter
 ## ✨ Key Features
 
 - **Three OAuth 2.0 Grant Types**: Device Authorization Grant ([RFC 8628][rfc8628]) for CLI/IoT, Authorization Code Flow with PKCE ([RFC 6749][rfc6749] + [RFC 7636][rfc7636]) for web/mobile apps, and Client Credentials Grant ([RFC 6749][rfc6749] §4.4) for machine-to-machine authentication
-- **OIDC ID Token & UserInfo**: When `TOKEN_PROVIDER_MODE=local`, issues a signed `id_token` (OIDC Core 1.0) alongside the access token when `openid` scope is granted. In `TOKEN_PROVIDER_MODE=http_api`, no ID tokens are generated. Supports `nonce`, `at_hash`, and scope-gated profile/email claims. Includes `/.well-known/openid-configuration` discovery, `/.well-known/jwks.json` (JWKS), and `/oauth/userinfo` endpoints.
+- **OIDC ID Token & UserInfo**: Issues a signed `id_token` (OIDC Core 1.0) alongside the access token when `openid` scope is granted. Supports `nonce`, `at_hash`, and scope-gated profile/email claims. Includes `/.well-known/openid-configuration` discovery, `/.well-known/jwks.json` (JWKS), and `/oauth/userinfo` endpoints.
 - **Flexible JWT Signing**: Supports HS256 (symmetric), RS256 (RSA), and ES256 (ECDSA P-256) signing algorithms. Asymmetric keys enable resource servers to verify tokens via the JWKS endpoint without sharing secrets.
 - **User Consent Management**: Users can review and revoke per-app access at `/account/authorizations`; admins can force re-authentication for all users of any client
 - **Security First**: Rate limiting, audit logging, CSRF protection, PKCE enforcement, and session management built-in
@@ -429,7 +429,6 @@ ENABLE_AUDIT_LOGGING=true       # Comprehensive audit trails
 
 - **OAuth Third-Party Login**: GitHub, Gitea, Microsoft Entra ID
 - **External Authentication**: Integrate with existing auth systems
-- **Pluggable Token Providers**: Use external token services
 - **Service-to-Service Auth**: HMAC or simple header authentication
 - **HTTP Retry with Backoff**: Resilient external API calls
 - **Rate Limiting**: Memory or Redis store for distributed deployments

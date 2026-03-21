@@ -272,16 +272,6 @@ echo "eyJhbGc..." | base64 -d
 # Look for unexpected modifications
 ```
 
-5. **Verify token provider configuration:**
-
-```bash
-# If using TOKEN_PROVIDER_MODE=http_api
-# Ensure external service is reachable and using correct signing key
-curl -X POST https://token-api.example.com/api/validate \
-  -H "Content-Type: application/json" \
-  -d '{"token":"eyJhbGc..."}'
-```
-
 ---
 
 ### Issue: Private key loading errors at startup
@@ -355,14 +345,7 @@ grep JWT_SIGNING_ALGORITHM .env
 # Must be RS256 or ES256 for JWKS to contain keys
 ```
 
-3. **Verify token provider mode:**
-
-```bash
-grep TOKEN_PROVIDER_MODE .env
-# Must be "local" (or unset). http_api mode does not serve JWKS keys.
-```
-
-4. **Verify the JWKS endpoint is working:**
+3. **Verify the JWKS endpoint is working:**
 
 ```bash
 curl -s http://localhost:8080/.well-known/jwks.json | jq .

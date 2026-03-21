@@ -15,12 +15,6 @@ const (
 	AuthModeHTTPAPI = "http_api"
 )
 
-// Token provider mode constants
-const (
-	TokenProviderModeLocal   = "local"
-	TokenProviderModeHTTPAPI = "http_api"
-)
-
 // Rate limit store constants
 const (
 	RateLimitStoreMemory = "memory"
@@ -86,20 +80,6 @@ type Config struct {
 	HTTPAPIMaxRetries         int    // Maximum retry attempts (default: 3)
 	HTTPAPIRetryDelay         time.Duration
 	HTTPAPIMaxRetryDelay      time.Duration
-
-	// Token Provider
-	TokenProviderMode string // "local" or "http_api"
-
-	// HTTP API Token Provider
-	TokenAPIURL                string
-	TokenAPITimeout            time.Duration
-	TokenAPIInsecureSkipVerify bool
-	TokenAPIAuthMode           string // Authentication mode: "none", "simple", or "hmac"
-	TokenAPIAuthSecret         string // Shared secret for authentication
-	TokenAPIAuthHeader         string // Custom header name for simple mode (default: "X-API-Secret")
-	TokenAPIMaxRetries         int    // Maximum retry attempts (default: 3)
-	TokenAPIRetryDelay         time.Duration
-	TokenAPIMaxRetryDelay      time.Duration
 
 	// Refresh Token settings
 	RefreshTokenExpiration time.Duration // Refresh token lifetime (default: 720h = 30 days)
@@ -281,20 +261,6 @@ func Load() *Config {
 		HTTPAPIMaxRetries:         getEnvInt("HTTP_API_MAX_RETRIES", 3),
 		HTTPAPIRetryDelay:         getEnvDuration("HTTP_API_RETRY_DELAY", 1*time.Second),
 		HTTPAPIMaxRetryDelay:      getEnvDuration("HTTP_API_MAX_RETRY_DELAY", 10*time.Second),
-
-		// Token Provider
-		TokenProviderMode: getEnv("TOKEN_PROVIDER_MODE", TokenProviderModeLocal),
-
-		// HTTP API Token Provider
-		TokenAPIURL:                getEnv("TOKEN_API_URL", ""),
-		TokenAPITimeout:            getEnvDuration("TOKEN_API_TIMEOUT", 10*time.Second),
-		TokenAPIInsecureSkipVerify: getEnvBool("TOKEN_API_INSECURE_SKIP_VERIFY", false),
-		TokenAPIAuthMode:           getEnv("TOKEN_API_AUTH_MODE", "none"),
-		TokenAPIAuthSecret:         getEnv("TOKEN_API_AUTH_SECRET", ""),
-		TokenAPIAuthHeader:         getEnv("TOKEN_API_AUTH_HEADER", "X-API-Secret"),
-		TokenAPIMaxRetries:         getEnvInt("TOKEN_API_MAX_RETRIES", 3),
-		TokenAPIRetryDelay:         getEnvDuration("TOKEN_API_RETRY_DELAY", 1*time.Second),
-		TokenAPIMaxRetryDelay:      getEnvDuration("TOKEN_API_MAX_RETRY_DELAY", 10*time.Second),
 
 		// Refresh Token settings
 		RefreshTokenExpiration: getEnvDuration(
@@ -508,34 +474,15 @@ func validateCacheType(name, value, redisAddr string) error {
 
 // Validate checks the configuration for invalid values
 func (c *Config) Validate() error {
-	// Normalize empty TokenProviderMode to local
-	if c.TokenProviderMode == "" {
-		c.TokenProviderMode = TokenProviderModeLocal
-	}
-
-	// Validate token provider mode
-	switch c.TokenProviderMode {
-	case TokenProviderModeLocal, TokenProviderModeHTTPAPI:
-		// ok
-	default:
-		return fmt.Errorf(
-			"invalid TOKEN_PROVIDER_MODE value: %q (must be %q or %q)",
-			c.TokenProviderMode,
-			TokenProviderModeLocal,
-			TokenProviderModeHTTPAPI,
-		)
-	}
-
 	// Validate JWT signing algorithm
 	switch c.JWTSigningAlgorithm {
 	case "", "HS256":
 		// default, no key file required
 	case "RS256", "ES256":
-		if c.JWTPrivateKeyPath == "" && c.TokenProviderMode != TokenProviderModeHTTPAPI {
+		if c.JWTPrivateKeyPath == "" {
 			return fmt.Errorf(
-				"JWT_PRIVATE_KEY_PATH is required when JWT_SIGNING_ALGORITHM=%s and TOKEN_PROVIDER_MODE is not %q",
+				"JWT_PRIVATE_KEY_PATH is required when JWT_SIGNING_ALGORITHM=%s",
 				c.JWTSigningAlgorithm,
-				TokenProviderModeHTTPAPI,
 			)
 		}
 	default:
