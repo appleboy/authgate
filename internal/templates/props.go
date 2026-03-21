@@ -282,6 +282,19 @@ type UserClientCreatedPageProps struct {
 // a self-describing name for the regeneration flow.
 type UserClientSecretPageProps = UserClientCreatedPageProps
 
+// SecretRegeneratedCardProps configures the shared secret-regeneration card
+// used by both AdminClientSecret and UserAppSecret.
+type SecretRegeneratedCardProps struct {
+	BreadcrumbItems []BreadcrumbItem
+	ClientName      string
+	PlainSecret     string
+	EditLabel       string // e.g. "Edit Client Settings" or "Edit App Settings"
+	EditPath        string
+	DetailsPath     string
+	BackLabel       string // e.g. "Back to Clients List" or "Back to My Apps"
+	BackPath        string
+}
+
 // ClientFormFieldsProps configures the shared client form fields component.
 type ClientFormFieldsProps struct {
 	Client                *ClientDisplay
