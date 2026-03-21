@@ -248,7 +248,7 @@ The `kid` (Key ID) header identifies which key was used to sign the token. Use t
 
 | Claim       | Description                            |
 | ----------- | -------------------------------------- |
-| `user_id`   | End-user identifier; may be absent for `client_credentials` tokens |
+| `user_id`   | End-user identifier, or `client:<client_id>` for `client_credentials` tokens |
 | `client_id` | OAuth client that requested the token  |
 | `scope`     | Space-separated list of granted scopes |
 | `type`      | `access` or `refresh`                  |
@@ -258,7 +258,7 @@ The `kid` (Key ID) header identifies which key was used to sign the token. Use t
 | `sub`       | Subject: user UUID for user tokens, or `client:<client_id>` for `client_credentials` tokens |
 | `jti`       | Unique token identifier (UUID)         |
 
-> **Note:** For access tokens issued via the `client_credentials` grant, there is no end user. In that case, `sub` is a synthetic client subject (`client:<client_id>`), and `user_id` may be omitted.
+> **Note:** For access tokens issued via the `client_credentials` grant, there is no end user. Both `sub` and `user_id` are set to a synthetic machine identity (`client:<client_id>`).
 
 ## Verification Steps
 
@@ -345,12 +345,13 @@ func main() {
       return
     }
 
-    userID, ok := claims["user_id"].(string)
-    if !ok || userID == "" {
+    // For user tokens, user_id is a UUID; for client_credentials, it is "client:<client_id>"
+    subject, ok := claims["sub"].(string)
+    if !ok || subject == "" {
       http.Error(w, "Invalid token claims", http.StatusUnauthorized)
       return
     }
-    fmt.Fprintf(w, "Hello, user %s!", userID)
+    fmt.Fprintf(w, "Hello, %s!", subject)
   })
 
   log.Fatal(http.ListenAndServe(":8081", nil))

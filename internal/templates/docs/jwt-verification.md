@@ -75,7 +75,7 @@ curl https://your-authgate/.well-known/openid-configuration
 }
 ```
 
-> The `jwks_uri` field is only present when RS256 or ES256 is configured. The `id_token_signing_alg_values_supported` value reflects the configured `JWT_SIGNING_ALGORITHM` (e.g., `["ES256"]` when using ES256).
+> The `jwks_uri` field is only present when RS256 or ES256 is configured. When present, `id_token_signing_alg_values_supported` reflects the configured `JWT_SIGNING_ALGORITHM` (e.g., `["ES256"]` when using ES256), but this field may be omitted entirely when ID tokens are not supported.
 
 ## JWKS Endpoint
 
@@ -146,7 +146,7 @@ The response includes `Cache-Control: public, max-age=3600` — cache for up to 
 
 | Claim       | Description                            |
 | ----------- | -------------------------------------- |
-| `user_id`   | End-user identifier; may be absent for `client_credentials` tokens |
+| `user_id`   | End-user identifier, or `client:<client_id>` for `client_credentials` tokens |
 | `client_id` | OAuth client that requested the token  |
 | `scope`     | Space-separated granted scopes         |
 | `type`      | `access` or `refresh`      |
@@ -155,7 +155,7 @@ The response includes `Cache-Control: public, max-age=3600` — cache for up to 
 | `sub`       | Subject: user UUID for user tokens, or `client:<client_id>` for `client_credentials` tokens |
 | `jti`       | Unique token identifier (UUID)         |
 
-> **Note:** For `client_credentials` tokens, there is no end user. `sub` is a synthetic client subject (`client:<client_id>`), and `user_id` may be omitted.
+> **Note:** For `client_credentials` tokens, there is no end user. Both `sub` and `user_id` are set to a synthetic machine identity (`client:<client_id>`).
 
 ## Verification Steps
 
@@ -225,12 +225,13 @@ func main() {
 			return
 		}
 
-		userID, ok := claims["user_id"].(string)
-		if !ok || userID == "" {
+		// For user tokens, sub is a UUID; for client_credentials, it is "client:<client_id>"
+		subject, ok := claims["sub"].(string)
+		if !ok || subject == "" {
 			http.Error(w, "Invalid token claims", http.StatusUnauthorized)
 			return
 		}
-		fmt.Fprintf(w, "Hello, user %s!", userID)
+		fmt.Fprintf(w, "Hello, %s!", subject)
 	})
 
 	log.Fatal(http.ListenAndServe(":8081", nil))
