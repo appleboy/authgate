@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"time"
@@ -54,6 +55,11 @@ func loadUserFromSession(c *gin.Context, userService *services.UserService) bool
 	userIDStr := userID.(string)
 	user, err := userService.GetUserByID(userIDStr)
 	if err != nil {
+		if errors.Is(err, services.ErrUserNotFound) {
+			// User no longer exists in DB — clear stale session to prevent redirect loops
+			session.Clear()
+			_ = session.Save()
+		}
 		return false
 	}
 	c.Set("user_id", userIDStr)
