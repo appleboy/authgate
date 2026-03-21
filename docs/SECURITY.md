@@ -25,9 +25,11 @@ Before deploying AuthGate to production, complete this security checklist:
 - [ ] Change `JWT_SECRET` to strong random value (32+ characters, use `openssl rand -hex 32`)
 - [ ] Change `SESSION_SECRET` to strong random value (32+ characters)
 - [ ] Set secure `DEFAULT_ADMIN_PASSWORD` (or immediately change auto-generated password)
-- [ ] Never commit secrets to version control
+- [ ] Never commit secrets or private keys to version control
 - [ ] Use environment variables or secrets management system
 - [ ] Rotate secrets regularly (JWT_SECRET: every 90 days, SESSION_SECRET: every 180 days)
+- [ ] If using RS256/ES256: set `JWT_PRIVATE_KEY_PATH` file permissions to 0400 (read-only by owner)
+- [ ] If using RS256/ES256: use at least 2048-bit RSA key or P-256 curve for ECDSA
 
 ### Network Security
 
@@ -124,9 +126,10 @@ Before deploying AuthGate to production, complete this security checklist:
 
 ✅ **Token Tampering**
 
-- JWTs signed with HMAC-SHA256 (or external provider)
+- JWTs signed with HS256, RS256, or ES256 (configurable)
 - Signature verification on every request
 - Token claims cannot be modified without detection
+- RS256/ES256 public keys exposed via JWKS endpoint for decentralized verification
 
 ✅ **Brute Force Attacks**
 
@@ -185,6 +188,15 @@ Before deploying AuthGate to production, complete this security checklist:
 - Session secret rotation (every 180 days)
 - Admin password changes (every 90 days)
 - OAuth client secret rotation (as needed)
+- Asymmetric key rotation for RS256/ES256 (see below)
+
+🔒 **Asymmetric Key Management (RS256/ES256)**
+
+- Store private key files with restricted permissions (`chmod 0400`)
+- Never commit private keys to version control; use secrets management or volume mounts
+- The JWKS endpoint caches responses with `Cache-Control: public, max-age=3600` (1 hour); resource servers may not see the new key immediately after rotation
+- Rotation procedure: generate new key → update `JWT_PRIVATE_KEY_PATH` and `JWT_KEY_ID` → restart → allow up to 1 hour for JWKS cache expiry at resource servers
+- AuthGate serves a single active public key in JWKS; multi-key JWKS is not supported
 
 🔒 **Network Isolation**
 

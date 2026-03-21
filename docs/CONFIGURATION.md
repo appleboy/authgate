@@ -279,11 +279,37 @@ When using RS256 or ES256 with the local token provider (`TOKEN_PROVIDER_MODE=lo
 GET /.well-known/jwks.json
 ```
 
-Resource servers can fetch this endpoint to verify JWT signatures without sharing secrets. The OIDC Discovery endpoint (`/.well-known/openid-configuration`) includes the `jwks_uri` field automatically.
+Resource servers can fetch this endpoint to verify JWT signatures without sharing secrets. The OIDC Discovery endpoint (`/.well-known/openid-configuration`) includes the `jwks_uri` field automatically when asymmetric keys are available.
+
+The JWKS response includes a `Cache-Control: public, max-age=3600` header (1 hour). Resource servers should respect this cache directive; after key rotation, allow up to 1 hour for cached JWKS entries to expire.
 
 > **Note**: JWKS and `jwks_uri` are only available when the local token provider loads an asymmetric private key. When using `TOKEN_PROVIDER_MODE=http_api`, the JWKS endpoint returns an empty key set.
 
 For HS256, the JWKS endpoint returns an empty key set (`{"keys":[]}`) since symmetric secrets are never exposed.
+
+### Supported Key Formats
+
+AuthGate supports the following PEM-encoded private key formats:
+
+| Format | PEM Header                  | Algorithms  |
+| ------ | --------------------------- | ----------- |
+| PKCS#1 | `BEGIN RSA PRIVATE KEY`     | RS256       |
+| PKCS#8 | `BEGIN PRIVATE KEY`         | RS256/ES256 |
+| SEC1   | `BEGIN EC PRIVATE KEY`      | ES256       |
+
+PEM files with multiple blocks (e.g., `EC PARAMETERS` followed by `EC PRIVATE KEY`) are scanned automatically — the loader iterates through all blocks until it finds a supported key.
+
+### Validation Rules
+
+AuthGate validates signing keys at startup and rejects invalid configurations:
+
+| Rule                          | Detail                                                             |
+| ----------------------------- | ------------------------------------------------------------------ |
+| RS256 minimum key size        | 2048 bits (smaller RSA keys are rejected)                          |
+| ES256 curve                   | P-256 only (P-384, P-521, and other curves are not supported)      |
+| Key type must match algorithm | RSA key for RS256, ECDSA key for ES256                             |
+| Key pair match                | Public key must correspond to the private key                      |
+| Unknown algorithm             | Algorithms other than HS256/RS256/ES256 are rejected at startup    |
 
 ### Key Rotation
 
@@ -296,9 +322,10 @@ Use `JWT_KEY_ID` to set an explicit `kid` (Key ID) header in JWTs. This enables 
 
 > **Note**: The JWKS endpoint serves a single active public key at a time. For zero-downtime
 > rotation, pre-cache the new JWKS at resource servers before switching, or accept a brief
-> gap while cached JWKS entries expire. Multi-key JWKS is not currently supported.
+> gap while cached JWKS entries expire (up to 1 hour due to `Cache-Control: max-age=3600`).
+> Multi-key JWKS is not currently supported.
 
-If `JWT_KEY_ID` is not set, it is automatically derived from the SHA-256 hash of the DER-encoded public key.
+If `JWT_KEY_ID` is not set, it is automatically derived from the SHA-256 hash of the DER-encoded public key (base64url-encoded, 43 characters). This derivation is deterministic — the same key always produces the same `kid`.
 
 ---
 
@@ -430,8 +457,8 @@ Uses local JWT secret for token signing and verification:
 TOKEN_PROVIDER_MODE=local  # Default, can be omitted
 ```
 
-- JWT signed with HMAC-SHA256
-- Uses `JWT_SECRET` from environment
+- JWT signed with configurable algorithm (HS256/RS256/ES256)
+- HS256 uses `JWT_SECRET`; RS256/ES256 use `JWT_PRIVATE_KEY_PATH`
 - No external dependencies
 - Best for: Self-contained deployments
 

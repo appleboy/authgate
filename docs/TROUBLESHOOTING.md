@@ -224,11 +224,11 @@ Use namespaced usernames in external API (e.g., email addresses instead of short
 }
 ```
 
-**Cause:** `JWT_SECRET` changed between token issuance and verification, or token was tampered with.
+**Cause:** Signing key changed between token issuance and verification, or token was tampered with.
 
 **Solution:**
 
-1. **Verify JWT_SECRET consistency:**
+1. **For HS256 — verify JWT_SECRET consistency:**
 
 ```bash
 # Check current JWT_SECRET
@@ -237,17 +237,33 @@ grep JWT_SECRET .env
 # Ensure it hasn't changed since tokens were issued
 ```
 
-2. **Don't change JWT_SECRET with active tokens:**
+2. **For RS256/ES256 — verify private key configuration:**
 
-If you must change it:
+```bash
+# Confirm the key file exists and is readable
+ls -la $JWT_PRIVATE_KEY_PATH
+
+# Verify the algorithm matches the key type
+grep JWT_SIGNING_ALGORITHM .env
+
+# RS256 requires an RSA key (2048+ bits)
+openssl rsa -in private.pem -check -noout
+
+# ES256 requires an ECDSA P-256 key
+openssl ec -in private.pem -check -noout
+```
+
+3. **Don't change signing keys with active tokens:**
+
+If you must change:
 
 - Schedule maintenance window
 - Notify users that they'll need to re-authenticate
-- Change `JWT_SECRET`
+- Update `JWT_SECRET` (HS256) or `JWT_PRIVATE_KEY_PATH` + `JWT_KEY_ID` (RS256/ES256)
 - Restart service
 - All existing tokens become invalid
 
-3. **Check for token tampering:**
+4. **Check for token tampering:**
 
 ```bash
 # Decode JWT to inspect claims (without verification)
@@ -256,7 +272,7 @@ echo "eyJhbGc..." | base64 -d
 # Look for unexpected modifications
 ```
 
-4. **Verify token provider configuration:**
+5. **Verify token provider configuration:**
 
 ```bash
 # If using TOKEN_PROVIDER_MODE=http_api
@@ -264,6 +280,93 @@ echo "eyJhbGc..." | base64 -d
 curl -X POST https://token-api.example.com/api/validate \
   -H "Content-Type: application/json" \
   -d '{"token":"eyJhbGc..."}'
+```
+
+---
+
+### Issue: Private key loading errors at startup
+
+**Symptoms:**
+
+```
+NewLocalTokenProvider: RS256 requires *rsa.PrivateKey, got *ecdsa.PrivateKey
+NewLocalTokenProvider: RS256 requires at least 2048-bit RSA key, got 1024-bit
+NewLocalTokenProvider: ES256 requires P-256 curve, got P-384
+failed to load signing key: no supported private key found in PEM file
+```
+
+**Cause:** Key file is missing, has wrong permissions, or the key type doesn't match the configured algorithm.
+
+**Solution:**
+
+1. **Verify file exists and is readable by the service user:**
+
+```bash
+ls -la /path/to/private.pem
+# Should be -r-------- (0400) or -rw------- (0600), owned by authgate user
+```
+
+2. **Verify key type matches algorithm:**
+
+```bash
+# For RS256: must be an RSA key (2048+ bits)
+openssl rsa -in private.pem -check -noout 2>&1 && echo "Valid RSA key"
+
+# For ES256: must be an ECDSA P-256 key
+openssl ec -in private.pem -check -noout 2>&1 && echo "Valid EC key"
+```
+
+3. **Supported PEM formats:**
+
+- RSA: PKCS#1 (`BEGIN RSA PRIVATE KEY`) or PKCS#8 (`BEGIN PRIVATE KEY`)
+- ECDSA: SEC1 (`BEGIN EC PRIVATE KEY`) or PKCS#8 (`BEGIN PRIVATE KEY`)
+- Files with multiple PEM blocks (e.g., EC PARAMETERS + EC PRIVATE KEY) are scanned automatically
+
+4. **Regenerate key if needed:**
+
+```bash
+# RSA 2048-bit
+openssl genrsa -out rsa-private.pem 2048
+
+# ECDSA P-256
+openssl ecparam -genkey -name prime256v1 -noout -out ec-private.pem
+```
+
+---
+
+### Issue: JWKS endpoint returns empty keys
+
+**Symptoms:**
+
+```json
+{ "keys": [] }
+```
+
+**Cause:** This is expected in certain configurations.
+
+**Solution:**
+
+1. **HS256 mode**: JWKS always returns an empty key set — symmetric secrets are never exposed. This is correct behavior.
+
+2. **Verify you're using asymmetric signing:**
+
+```bash
+grep JWT_SIGNING_ALGORITHM .env
+# Must be RS256 or ES256 for JWKS to contain keys
+```
+
+3. **Verify token provider mode:**
+
+```bash
+grep TOKEN_PROVIDER_MODE .env
+# Must be "local" (or unset). http_api mode does not serve JWKS keys.
+```
+
+4. **Verify the JWKS endpoint is working:**
+
+```bash
+curl -s http://localhost:8080/.well-known/jwks.json | jq .
+# Should contain a key with kty, alg, kid fields for RS256/ES256
 ```
 
 ---

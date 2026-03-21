@@ -97,6 +97,12 @@ RATE_LIMIT_STORE=memory
 ENABLE_AUDIT_LOGGING=true
 AUDIT_LOG_RETENTION=2160h
 
+# JWT Signing (optional — default is HS256 with JWT_SECRET)
+# For asymmetric signing, uncomment and configure:
+# JWT_SIGNING_ALGORITHM=RS256
+# JWT_PRIVATE_KEY_PATH=/etc/authgate/keys/private.pem
+# JWT_KEY_ID=                    # Optional: auto-derived from key fingerprint
+
 # Optional: Tune timeouts for production (defaults shown)
 # DB_INIT_TIMEOUT=30s
 # SERVER_SHUTDOWN_TIMEOUT=5s
@@ -136,6 +142,7 @@ PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/var/lib/authgate
+ReadOnlyPaths=/etc/authgate/keys
 
 # Environment
 EnvironmentFile=/etc/authgate/.env
@@ -220,6 +227,21 @@ docker run -d \
   -e DEFAULT_ADMIN_PASSWORD=your-secure-password \
   authgate:latest
 
+# For RS256/ES256 signing, mount the private key file (read-only):
+# docker run -d \
+#   --name authgate \
+#   --restart unless-stopped \
+#   -p 8080:8080 \
+#   -v authgate-data:/app/data \
+#   -v /path/to/private.pem:/app/keys/private.pem:ro \
+#   -e JWT_SIGNING_ALGORITHM=RS256 \
+#   -e JWT_PRIVATE_KEY_PATH=/app/keys/private.pem \
+#   -e SESSION_SECRET=${SESSION_SECRET} \
+#   -e BASE_URL=https://auth.yourdomain.com \
+#   -e DATABASE_PATH=/app/data/oauth.db \
+#   -e DEFAULT_ADMIN_PASSWORD=your-secure-password \
+#   authgate:latest
+
 # Check health
 curl http://localhost:8080/health
 
@@ -242,6 +264,8 @@ services:
       - "8080:8080"
     volumes:
       - authgate-data:/app/data
+      # Uncomment for RS256/ES256 signing:
+      # - ./keys/private.pem:/app/keys/private.pem:ro
     environment:
       - BASE_URL=https://auth.yourdomain.com
       - JWT_SECRET=${JWT_SECRET}
@@ -250,6 +274,9 @@ services:
       - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD}
       - ENABLE_RATE_LIMIT=true
       - ENABLE_AUDIT_LOGGING=true
+      # Uncomment for RS256/ES256 signing:
+      # - JWT_SIGNING_ALGORITHM=RS256
+      # - JWT_PRIVATE_KEY_PATH=/app/keys/private.pem
     restart: unless-stopped
     healthcheck:
       test:
