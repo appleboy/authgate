@@ -12,7 +12,7 @@ import (
 )
 
 // IDTokenProvider is an optional capability of a TokenProvider.
-// Only LocalTokenProvider implements it.
+// Currently, LocalTokenProvider is the only built-in production implementation.
 // Re-exported from core for callers that import only the token package.
 type IDTokenProvider = core.IDTokenProvider
 
