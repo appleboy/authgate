@@ -141,6 +141,12 @@ func TestConfig_Validate_JWTSigningAlgorithm(t *testing.T) {
 			errorMsg:    "JWT_PRIVATE_KEY_PATH is required",
 		},
 		{
+			name:        "ES256 with key path OK",
+			algorithm:   "ES256",
+			keyPath:     "/some/key.pem",
+			expectError: false,
+		},
+		{
 			name:        "unsupported algorithm",
 			algorithm:   "PS256",
 			expectError: true,
