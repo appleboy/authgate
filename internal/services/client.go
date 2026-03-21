@@ -56,11 +56,16 @@ var (
 	ErrRedirectURIRequired = errors.New(
 		"at least one redirect URI is required when Authorization Code Flow is enabled",
 	)
-	ErrAtLeastOneGrantRequired  = errors.New("at least one grant type must be enabled")
+	ErrAtLeastOneGrantRequired              = errors.New("at least one grant type must be enabled")
+	ErrClientCredentialsRequireConfidential = errors.New(
+		"client credentials flow requires a confidential client",
+	)
 	ErrClientOwnershipRequired  = errors.New("you do not own this client")
 	ErrCannotDeleteActiveClient = errors.New("cannot delete an active client")
-	ErrInvalidScopeForUser      = errors.New("scope not allowed for user-created clients")
-	ErrInvalidClientStatus      = errors.New(
+	ErrInvalidScopeForUser      = errors.New(
+		"scope not allowed for user-created clients",
+	)
+	ErrInvalidClientStatus = errors.New(
 		"status must be \"active\", \"inactive\", or \"pending\"",
 	)
 )
@@ -559,6 +564,10 @@ func (s *ClientService) UserUpdateClient(
 
 	if !req.EnableDeviceFlow && !req.EnableAuthCodeFlow && !req.EnableClientCredentialsFlow {
 		return ErrAtLeastOneGrantRequired
+	}
+
+	if req.EnableClientCredentialsFlow && req.ClientType != ClientTypeConfidential {
+		return ErrClientCredentialsRequireConfidential
 	}
 
 	if req.EnableAuthCodeFlow && len(req.RedirectURIs) == 0 {
