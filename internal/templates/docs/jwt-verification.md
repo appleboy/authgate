@@ -2,6 +2,8 @@
 
 Verify AuthGate-issued JWT tokens at your resource servers using public keys — no callback to AuthGate needed.
 
+> **Important tradeoff**: Local JWT verification cannot detect server-side token revocation or status changes (revoked/disabled). Tokens remain valid until they expire. If you need real-time revocation enforcement, use AuthGate's `/oauth/tokeninfo` endpoint for online validation.
+
 ## When to Use
 
 Use JWT verification with JWKS when:
@@ -11,7 +13,7 @@ Use JWT verification with JWKS when:
 - You need **offline verification** without network dependencies on AuthGate
 - You are deploying in a **zero-trust architecture** where services should not share secrets
 
-> **Prerequisite**: AuthGate must be configured with **RS256** or **ES256** signing. JWKS is not available for HS256 (symmetric) signing.
+> **Prerequisite**: AuthGate must be configured with **RS256** or **ES256** signing. For **HS256** (symmetric) signing, the JWKS endpoint exists but returns an empty key set, and the OIDC discovery document omits `jwks_uri`.
 
 ## How It Works
 
@@ -73,7 +75,7 @@ curl https://your-authgate/.well-known/openid-configuration
 }
 ```
 
-> The `jwks_uri` field is only present when RS256 or ES256 is configured.
+> The `jwks_uri` field is only present when RS256 or ES256 is configured. The `id_token_signing_alg_values_supported` value reflects the configured `JWT_SIGNING_ALGORITHM` (e.g., `["ES256"]` when using ES256).
 
 ## JWKS Endpoint
 
@@ -133,7 +135,7 @@ The response includes `Cache-Control: public, max-age=3600` — cache for up to 
   "user_id": "user-uuid",
   "client_id": "client-uuid",
   "scope": "openid profile email",
-  "type": "access_token",
+  "type": "access",
   "exp": 1700000000,
   "iat": 1699996400,
   "iss": "https://your-authgate",
@@ -147,7 +149,7 @@ The response includes `Cache-Control: public, max-age=3600` — cache for up to 
 | `user_id`   | User identifier                        |
 | `client_id` | OAuth client that requested the token  |
 | `scope`     | Space-separated granted scopes         |
-| `type`      | `access_token` or `refresh_token`      |
+| `type`      | `access` or `refresh`      |
 | `exp`       | Expiration time (Unix timestamp)       |
 | `iss`       | Issuer URL (AuthGate's BASE_URL)       |
 | `sub`       | Subject (same as user_id)              |
@@ -159,7 +161,7 @@ The response includes `Cache-Control: public, max-age=3600` — cache for up to 
 2. **Fetch JWKS** from `/.well-known/jwks.json` (use cached copy if available)
 3. **Find the key** matching the `kid` from the JWT header
 4. **Verify the signature** using the public key
-5. **Validate claims**: `exp` (not expired), `iss` (matches AuthGate URL), `type` (is `access_token`)
+5. **Validate claims**: `exp` (not expired), `iss` (matches AuthGate URL), `type` (is `access`)
 6. **Check authorization**: verify `scope` and `client_id` match your requirements
 
 ## Code Examples
@@ -209,8 +211,8 @@ func main() {
 		}
 
 		claims := token.Claims.(jwt.MapClaims)
-		if claims["type"] != "access_token" {
-			http.Error(w, "Not an access token", http.StatusUnauthorized)
+		if claims["type"] != "access" {
+			http.Error(w, "Invalid token type", http.StatusUnauthorized)
 			return
 		}
 
@@ -259,8 +261,8 @@ def protected_resource():
     except jwt.InvalidTokenError as e:
         return jsonify({"error": f"Invalid token: {e}"}), 401
 
-    if payload.get("type") != "access_token":
-        return jsonify({"error": "Not an access token"}), 401
+    if payload.get("type") != "access":
+        return jsonify({"error": "Invalid token type"}), 401
 
     return jsonify({"message": f"Hello, user {payload['user_id']}!"})
 ```
@@ -292,9 +294,9 @@ const server = createServer(async (req, res) => {
       requiredClaims: ["exp", "sub", "scope"],
     });
 
-    if (payload.type !== "access_token") {
+    if (payload.type !== "access") {
       res.writeHead(401);
-      res.end(JSON.stringify({ error: "Not an access token" }));
+      res.end(JSON.stringify({ error: "Invalid token type" }));
       return;
     }
 
@@ -330,7 +332,7 @@ server.listen(8081, () => console.log("Resource server on :8081"));
 
 - **JWKS empty for HS256** — Switch to RS256 or ES256 for JWKS-based verification
 - **Not validating `iss`** — Always check the issuer matches your AuthGate URL
-- **Accepting refresh tokens** — Always verify `type` is `access_token`
+- **Accepting refresh tokens** — Always verify `type` is `access`
 - **Hardcoding public keys** — Use JWKS for automatic key rotation support
 - **Clock skew** — Keep server clocks synchronized with NTP
 

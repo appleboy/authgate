@@ -2,6 +2,8 @@
 
 This guide explains how **resource servers** (your APIs and microservices) can verify AuthGate-issued JWT tokens locally using public keys, without calling back to AuthGate on every request.
 
+> **Important tradeoff**: Local JWT verification cannot detect server-side token revocation or status changes (revoked/disabled). Tokens remain valid until they expire. If your application requires real-time revocation enforcement, use AuthGate's `/oauth/tokeninfo` endpoint for online validation, or combine local verification with periodic introspection for a balanced approach.
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -142,7 +144,7 @@ Response (relevant fields):
 {
   "issuer": "https://your-authgate",
   "jwks_uri": "https://your-authgate/.well-known/jwks.json",
-  "id_token_signing_alg_values_supported": ["RS256"],
+  "id_token_signing_alg_values_supported": ["RS256"],  // Reflects JWT_SIGNING_ALGORITHM (RS256 or ES256)
   "token_endpoint": "https://your-authgate/oauth/token",
   "authorization_endpoint": "https://your-authgate/oauth/authorize",
   "userinfo_endpoint": "https://your-authgate/oauth/userinfo"
@@ -235,7 +237,7 @@ The `kid` (Key ID) header identifies which key was used to sign the token. Use t
   "user_id": "user-uuid",
   "client_id": "client-uuid",
   "scope": "openid profile email",
-  "type": "access_token",
+  "type": "access",
   "exp": 1700000000,
   "iat": 1699996400,
   "iss": "https://your-authgate",
@@ -249,7 +251,7 @@ The `kid` (Key ID) header identifies which key was used to sign the token. Use t
 | `user_id`   | User identifier                        |
 | `client_id` | OAuth client that requested the token  |
 | `scope`     | Space-separated list of granted scopes |
-| `type`      | `access_token` or `refresh_token`      |
+| `type`      | `access` or `refresh`                  |
 | `exp`       | Expiration time (Unix timestamp)       |
 | `iat`       | Issued-at time (Unix timestamp)        |
 | `iss`       | Issuer URL (AuthGate's `BASE_URL`)     |
@@ -265,7 +267,7 @@ The `kid` (Key ID) header identifies which key was used to sign the token. Use t
 5. **Validate standard claims**:
    - `exp` — token is not expired
    - `iss` — matches your expected AuthGate URL
-   - `type` — is `access_token` (not `refresh_token`)
+   - `type` — is `access` (not `refresh`)
 6. **Check authorization** — verify `scope` and `client_id` match your requirements
 
 ## Code Examples
@@ -324,8 +326,8 @@ func main() {
     }
 
     // Check token type
-    if claims["type"] != "access_token" {
-      http.Error(w, "Not an access token", http.StatusUnauthorized)
+    if claims["type"] != "access" {
+      http.Error(w, "Invalid token type", http.StatusUnauthorized)
       return
     }
 
@@ -395,8 +397,8 @@ def protected_resource():
         return jsonify({"error": f"Invalid token: {e}"}), 401
 
     # Check token type
-    if payload.get("type") != "access_token":
-        return jsonify({"error": "Not an access token"}), 401
+    if payload.get("type") != "access":
+        return jsonify({"error": "Invalid token type"}), 401
 
     # Check scopes
     scopes = payload.get("scope", "").split()
@@ -444,9 +446,9 @@ const server = createServer(async (req, res) => {
     });
 
     // Check token type
-    if (payload.type !== "access_token") {
+    if (payload.type !== "access") {
       res.writeHead(401);
-      res.end(JSON.stringify({ error: "Not an access token" }));
+      res.end(JSON.stringify({ error: "Invalid token type" }));
       return;
     }
 
@@ -529,7 +531,7 @@ The JWKS endpoint returns an empty key set for HS256. Symmetric secrets are neve
 
 ### 6. Accepting refresh tokens as access tokens
 
-Always check the `type` claim. Refresh tokens (`type: "refresh_token"`) should never be accepted by resource server endpoints.
+Always check the `type` claim. Refresh tokens (`type: "refresh"`) should never be accepted by resource server endpoints.
 
 ### 7. Clock skew causing `exp` validation failures
 
