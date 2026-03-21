@@ -192,6 +192,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/MicahParks/keyfunc/v3"
@@ -241,7 +242,7 @@ func main() {
 		// Check scopes
 		scopeStr, _ := claims["scope"].(string)
 		scopes := strings.Fields(scopeStr)
-		if !contains(scopes, "read") {
+		if !slices.Contains(scopes, "read") {
 			http.Error(w, "Insufficient scope", http.StatusForbidden)
 			return
 		}
@@ -256,15 +257,6 @@ func main() {
 	})
 
 	log.Fatal(http.ListenAndServe(":8081", nil))
-}
-
-func contains(ss []string, s string) bool {
-	for _, v := range ss {
-		if v == s {
-			return true
-		}
-	}
-	return false
 }
 ```
 
@@ -351,7 +343,7 @@ const server = createServer(async (req, res) => {
     }
 
     // Check scopes
-    const scopes = (payload.scope || "").split(" ");
+    const scopes = (payload.scope || "").trim().split(/\s+/).filter(Boolean);
     if (!scopes.includes("read")) {
       res.writeHead(403);
       res.end(JSON.stringify({ error: "Insufficient scope" }));
