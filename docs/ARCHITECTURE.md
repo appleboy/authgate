@@ -43,12 +43,11 @@ authgate/
 │   ├── local.go     # Local authentication (database)
 │   ├── http_api.go  # External HTTP API authentication
 │   └── oauth_provider.go  # OAuth 2.0 provider implementations (GitHub, Gitea)
-├── token/           # Token providers (pluggable design)
+├── token/           # Token provider
 │   ├── types.go     # Shared data structures (TokenResult, TokenValidationResult)
 │   ├── errors.go    # Provider-level error definitions
 │   ├── local.go     # Local JWT provider (HS256/RS256/ES256)
-│   ├── key.go       # Asymmetric key loading (PEM) and key ID derivation
-│   └── http_api.go  # External HTTP API token provider
+│   └── key.go       # Asymmetric key loading (PEM) and key ID derivation
 ├── services/        # Business logic layer (depends on store and providers)
 │   ├── user.go      # User management (integrates auth providers)
 │   ├── device.go    # Device code generation and validation
@@ -152,7 +151,7 @@ sequenceDiagram
 | ----------------------------------- | -------- | ------------- | ------------------------------------------------------------------------------------------------- |
 | `/health`                           | GET      | No            | Health check with database connection test                                                        |
 | `/.well-known/openid-configuration` | GET      | No            | OIDC Discovery metadata (RFC 8414 / OIDC Discovery 1.0)                                           |
-| `/.well-known/jwks.json`           | GET      | No            | JWKS public keys for RS256/ES256 JWT verification (RFC 7517)                                       |
+| `/.well-known/jwks.json`            | GET      | No            | JWKS public keys for RS256/ES256 JWT verification (RFC 7517)                                      |
 | `/oauth/device/code`                | POST     | No            | Request device and user codes (CLI/device)                                                        |
 | `/oauth/authorize`                  | GET      | Yes (Session) | Authorization Code Flow consent page (web apps)                                                   |
 | `/oauth/authorize`                  | POST     | Yes (Session) | Submit consent decision (allow/deny)                                                              |
@@ -297,7 +296,7 @@ AuthGate supports refresh tokens following RFC 6749 with configurable rotation m
 - **Token Family Tracking**: `parent_token_id` links tokens for audit trails and revocation
 - **Status Management**: Tokens can be `active`, `disabled`, or `revoked`
 - **Configurable Expiration**: `REFRESH_TOKEN_EXPIRATION` env var (default: 720h = 30 days)
-- **Provider Support**: Both LocalTokenProvider and HTTPTokenProvider support refresh operations
+- **Provider Support**: LocalTokenProvider supports refresh operations
 
 ### Fixed Mode (Default - Multi-Device Friendly)
 

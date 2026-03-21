@@ -30,34 +30,6 @@ func TestValidateAuthConfig(t *testing.T) {
 	assert.Contains(t, err.Error(), "invalid AUTH_MODE")
 }
 
-func TestValidateTokenProviderConfig(t *testing.T) {
-	assert.NoError(
-		t,
-		validateTokenProviderConfig(
-			&config.Config{TokenProviderMode: config.TokenProviderModeLocal},
-		),
-	)
-	assert.NoError(
-		t,
-		validateTokenProviderConfig(
-			&config.Config{
-				TokenProviderMode: config.TokenProviderModeHTTPAPI,
-				TokenAPIURL:       "http://token.example.com",
-			},
-		),
-	)
-
-	err := validateTokenProviderConfig(
-		&config.Config{TokenProviderMode: config.TokenProviderModeHTTPAPI},
-	)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "TOKEN_API_URL is required")
-
-	err = validateTokenProviderConfig(&config.Config{TokenProviderMode: "unknown"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid TOKEN_PROVIDER_MODE")
-}
-
 func TestInitializeMetrics(t *testing.T) {
 	for _, enabled := range []bool{true, false} {
 		cfg := &config.Config{MetricsEnabled: enabled}

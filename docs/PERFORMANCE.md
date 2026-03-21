@@ -342,7 +342,7 @@ server {
    - Solution: Migrate to PostgreSQL
 
 3. **JWT Generation** (minimal, but accumulates)
-   - Consider external token provider for custom needs
+   - Consider asymmetric algorithms (RS256/ES256) for distributed verification via JWKS
 
 4. **Session Cookie Size** (affects request overhead)
    - Keep session data minimal

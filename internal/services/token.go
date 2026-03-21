@@ -935,8 +935,7 @@ func (s *TokenService) ExchangeAuthorizationCode(
 
 	// Generate OIDC ID Token when openid scope was granted (OIDC Core 1.0 §3.1.3.3).
 	// ID tokens are not stored in the database; they are short-lived and non-revocable.
-	// ID token generation is only supported when the provider implements IDTokenProvider
-	// (i.e. LocalTokenProvider). HTTP API providers cannot produce OIDC ID tokens.
+	// ID token generation is only supported when the provider implements IDTokenProvider.
 	var idToken string
 	if idp, ok := s.tokenProvider.(core.IDTokenProvider); ok {
 		scopeSet := util.ScopeSet(authCode.Scopes)

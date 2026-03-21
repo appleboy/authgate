@@ -162,7 +162,7 @@ func initMetrics() *Metrics {
 				Help:    "Time taken to generate tokens",
 				Buckets: prometheus.DefBuckets,
 			},
-			[]string{"provider"}, // local, http_api
+			[]string{"provider"}, // local
 		),
 		TokenValidationDuration: promauto.NewHistogramVec(
 			prometheus.HistogramOpts{
@@ -170,7 +170,7 @@ func initMetrics() *Metrics {
 				Help:    "Time taken to validate tokens",
 				Buckets: prometheus.DefBuckets,
 			},
-			[]string{"provider"}, // local, http_api
+			[]string{"provider"}, // local
 		),
 
 		// Authentication Metrics

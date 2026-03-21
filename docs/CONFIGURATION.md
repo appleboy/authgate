@@ -9,7 +9,6 @@ This guide covers all configuration options for AuthGate, including environment 
 - [Generate Strong Secrets](#generate-strong-secrets)
 - [Default Test Data](#default-test-data)
 - [OAuth Third-Party Login](#oauth-third-party-login)
-- [Pluggable Token Providers](#pluggable-token-providers)
 - [Service-to-Service Authentication](#service-to-service-authentication)
 - [HTTP Retry with Exponential Backoff](#http-retry-with-exponential-backoff)
 - [User Cache](#user-cache)
@@ -59,23 +58,6 @@ HTTP_API_INSECURE_SKIP_VERIFY=false
 HTTP_API_MAX_RETRIES=3           # Maximum retry attempts (default: 3, set 0 to disable)
 HTTP_API_RETRY_DELAY=1s          # Initial retry delay (default: 1s)
 HTTP_API_MAX_RETRY_DELAY=10s     # Maximum retry delay (default: 10s)
-
-# Token Provider Mode
-# Options: local, http_api
-# Default: local
-TOKEN_PROVIDER_MODE=local
-
-# HTTP API Token Provider (when TOKEN_PROVIDER_MODE=http_api)
-# External token service will handle JWT generation and validation
-TOKEN_API_URL=https://token.example.com/api
-TOKEN_API_TIMEOUT=10s
-TOKEN_API_INSECURE_SKIP_VERIFY=false
-
-# Token API Retry Configuration
-# Automatic retry with exponential backoff for failed requests
-TOKEN_API_MAX_RETRIES=3          # Maximum retry attempts (default: 3, set 0 to disable)
-TOKEN_API_RETRY_DELAY=1s         # Initial retry delay (default: 1s)
-TOKEN_API_MAX_RETRY_DELAY=10s    # Maximum retry delay (default: 10s)
 
 # Refresh Token Configuration
 REFRESH_TOKEN_EXPIRATION=720h        # Refresh token lifetime (default: 30 days)
@@ -273,7 +255,7 @@ openssl ecparam -genkey -name prime256v1 -noout -out ec-private.pem
 
 ### JWKS Endpoint
 
-When using RS256 or ES256 with the local token provider (`TOKEN_PROVIDER_MODE=local` or unset), AuthGate exposes the public key at:
+When using RS256 or ES256, AuthGate exposes the public key at:
 
 ```
 GET /.well-known/jwks.json
@@ -283,19 +265,17 @@ Resource servers can fetch this endpoint to verify JWT signatures without sharin
 
 The JWKS response includes a `Cache-Control: public, max-age=3600` header (1 hour). Resource servers should respect this cache directive; after key rotation, allow up to 1 hour for cached JWKS entries to expire.
 
-> **Note**: JWKS and `jwks_uri` are only available when the local token provider loads an asymmetric private key. When using `TOKEN_PROVIDER_MODE=http_api`, the JWKS endpoint returns an empty key set.
-
 For HS256, the JWKS endpoint returns an empty key set (`{"keys":[]}`) since symmetric secrets are never exposed.
 
 ### Supported Key Formats
 
 AuthGate supports the following PEM-encoded private key formats:
 
-| Format | PEM Header                  | Algorithms  |
-| ------ | --------------------------- | ----------- |
-| PKCS#1 | `BEGIN RSA PRIVATE KEY`     | RS256       |
-| PKCS#8 | `BEGIN PRIVATE KEY`         | RS256/ES256 |
-| SEC1   | `BEGIN EC PRIVATE KEY`      | ES256       |
+| Format | PEM Header              | Algorithms  |
+| ------ | ----------------------- | ----------- |
+| PKCS#1 | `BEGIN RSA PRIVATE KEY` | RS256       |
+| PKCS#8 | `BEGIN PRIVATE KEY`     | RS256/ES256 |
+| SEC1   | `BEGIN EC PRIVATE KEY`  | ES256       |
 
 PEM files with multiple blocks (e.g., `EC PARAMETERS` followed by `EC PRIVATE KEY`) are scanned automatically — the loader iterates through all blocks until it finds a supported key.
 
@@ -303,13 +283,13 @@ PEM files with multiple blocks (e.g., `EC PARAMETERS` followed by `EC PRIVATE KE
 
 AuthGate validates signing keys at startup and rejects invalid configurations:
 
-| Rule                          | Detail                                                             |
-| ----------------------------- | ------------------------------------------------------------------ |
-| RS256 minimum key size        | 2048 bits (smaller RSA keys are rejected)                          |
-| ES256 curve                   | P-256 only (P-384, P-521, and other curves are not supported)      |
-| Key type must match algorithm | RSA key for RS256, ECDSA key for ES256                             |
-| Key pair match                | Public key must correspond to the private key                      |
-| Unknown algorithm             | Algorithms other than HS256/RS256/ES256 are rejected at startup    |
+| Rule                          | Detail                                                          |
+| ----------------------------- | --------------------------------------------------------------- |
+| RS256 minimum key size        | 2048 bits (smaller RSA keys are rejected)                       |
+| ES256 curve                   | P-256 only (P-384, P-521, and other curves are not supported)   |
+| Key type must match algorithm | RSA key for RS256, ECDSA key for ES256                          |
+| Key pair match                | Public key must correspond to the private key                   |
+| Unknown algorithm             | Algorithms other than HS256/RS256/ES256 are rejected at startup |
 
 ### Key Rotation
 
@@ -437,155 +417,13 @@ See [OAuth Setup Guide](OAUTH_SETUP.md)
 
 ---
 
-## Pluggable Token Providers
-
-AuthGate supports **pluggable token providers** for JWT generation and validation, allowing you to delegate token operations to external services while maintaining local token management.
-
-### Architecture
-
-- **Token Generation & Validation**: Can be handled locally or by external HTTP API
-- **Local Storage**: Token records are always stored in local database for management (revocation, listing, auditing)
-- **Configuration**: Global mode selection via `TOKEN_PROVIDER_MODE` environment variable
-
-### Token Provider Modes
-
-**1. Local Mode (Default)**
-
-Uses local JWT secret for token signing and verification:
-
-```bash
-TOKEN_PROVIDER_MODE=local  # Default, can be omitted
-```
-
-- JWT signed with configurable algorithm (HS256/RS256/ES256)
-- HS256 uses `JWT_SECRET`; RS256/ES256 use `JWT_PRIVATE_KEY_PATH`
-- No external dependencies
-- Best for: Self-contained deployments
-
-**2. HTTP API Mode**
-
-Delegates JWT generation and validation to external service:
-
-```bash
-TOKEN_PROVIDER_MODE=http_api
-TOKEN_API_URL=https://token-service.example.com/api
-TOKEN_API_TIMEOUT=10s
-TOKEN_API_INSECURE_SKIP_VERIFY=false  # Set true only for dev/testing
-```
-
-- External service generates and validates JWTs
-- Local database still stores token records
-- Supports custom signing algorithms (RS256, ES256, etc.)
-- Best for: Centralized token services, advanced key management
-
-### HTTP API Contract
-
-When using `TOKEN_PROVIDER_MODE=http_api`, your token service must implement:
-
-**Token Generation Endpoint:** `POST {TOKEN_API_URL}/generate`
-
-Request:
-
-```json
-{
-  "user_id": "user-uuid",
-  "client_id": "client-uuid",
-  "scopes": "email profile",
-  "expires_in": 3600
-}
-```
-
-Response:
-
-```json
-{
-  "success": true,
-  "access_token": "eyJhbGc...",
-  "token_type": "Bearer",
-  "expires_in": 3600,
-  "claims": {
-    "custom_claim": "value"
-  }
-}
-```
-
-**Token Validation Endpoint:** `POST {TOKEN_API_URL}/validate`
-
-Request:
-
-```json
-{
-  "token": "eyJhbGc..."
-}
-```
-
-Response (Valid):
-
-```json
-{
-  "valid": true,
-  "user_id": "user-uuid",
-  "client_id": "client-uuid",
-  "scopes": "email profile",
-  "expires_at": 1736899200,
-  "claims": {
-    "custom_claim": "value"
-  }
-}
-```
-
-Response (Invalid):
-
-```json
-{
-  "valid": false,
-  "message": "Token expired or invalid"
-}
-```
-
-### Why Local Storage is Retained
-
-Even when using external token providers, AuthGate stores token records locally for:
-
-1. **Revocation**: Users can revoke tokens via `/account/sessions` or `/oauth/revoke`
-2. **Management**: Users can list their active sessions
-3. **Auditing**: Track when and for which clients tokens were issued
-4. **Client Association**: Link tokens to OAuth clients
-
-### Use Cases
-
-**Local Mode:**
-
-- Self-hosted deployments
-- Simple setups
-- When you don't need advanced key management
-
-**HTTP API Mode:**
-
-- Centralized token services across multiple apps
-- Advanced key rotation policies
-- Custom JWT signing algorithms (RS256, ES256)
-- Compliance requirements for token generation
-- Integration with existing IAM systems
-
-### Migration Path
-
-1. Start with `TOKEN_PROVIDER_MODE=local` (default)
-2. Test thoroughly
-3. Set up external token service
-4. Switch to `TOKEN_PROVIDER_MODE=http_api`
-5. Monitor logs for errors
-6. Can rollback to local mode without data loss
-
----
-
 ## Service-to-Service Authentication
 
-When AuthGate connects to external HTTP APIs (for authentication or token operations), you can secure these service-to-service communications with authentication headers.
+When AuthGate connects to external HTTP APIs (for authentication), you can secure these service-to-service communications with authentication headers.
 
 ### Why Service-to-Service Authentication?
 
-External HTTP API providers (authentication and token services) need to verify that incoming requests are from a trusted AuthGate instance. Without authentication, these endpoints would be vulnerable to unauthorized access.
+External HTTP API providers (authentication services) need to verify that incoming requests are from a trusted AuthGate instance. Without authentication, these endpoints would be vulnerable to unauthorized access.
 
 ### Authentication Modes
 
@@ -598,7 +436,6 @@ No authentication headers are added. Suitable for development or when the extern
 ```bash
 # No configuration needed - this is the default
 HTTP_API_AUTH_MODE=none
-TOKEN_API_AUTH_MODE=none
 ```
 
 **2. Simple Mode**
@@ -606,15 +443,9 @@ TOKEN_API_AUTH_MODE=none
 Adds a shared secret in a custom header (default: `X-API-Secret`). Quick to set up but less secure than HMAC.
 
 ```bash
-# HTTP API Authentication
 HTTP_API_AUTH_MODE=simple
 HTTP_API_AUTH_SECRET=your-shared-secret-here
 HTTP_API_AUTH_HEADER=X-API-Secret  # Optional, default shown
-
-# Token API Authentication
-TOKEN_API_AUTH_MODE=simple
-TOKEN_API_AUTH_SECRET=your-token-secret-here
-TOKEN_API_AUTH_HEADER=X-API-Secret  # Optional, default shown
 ```
 
 **3. HMAC Mode (Recommended)**
@@ -622,13 +453,8 @@ TOKEN_API_AUTH_HEADER=X-API-Secret  # Optional, default shown
 Uses HMAC-SHA256 signature with timestamp validation to prevent replay attacks. Provides the highest security for production environments.
 
 ```bash
-# HTTP API Authentication
 HTTP_API_AUTH_MODE=hmac
 HTTP_API_AUTH_SECRET=your-hmac-secret-here
-
-# Token API Authentication
-TOKEN_API_AUTH_MODE=hmac
-TOKEN_API_AUTH_SECRET=your-hmac-token-secret
 ```
 
 HMAC mode automatically adds these headers to each request:
@@ -637,18 +463,13 @@ HMAC mode automatically adds these headers to each request:
 - `X-Timestamp`: Unix timestamp (validated within 5-minute window)
 - `X-Nonce`: Unique request identifier
 
-### Configuration per Service
+### Configuration
 
-Authentication is configured **separately** for each external service:
-
-| Environment Variable    | Purpose                           | Service       |
-| ----------------------- | --------------------------------- | ------------- |
-| `HTTP_API_AUTH_MODE`    | Auth mode for user authentication | HTTP API Auth |
-| `HTTP_API_AUTH_SECRET`  | Shared secret for authentication  | HTTP API Auth |
-| `HTTP_API_AUTH_HEADER`  | Custom header name (simple mode)  | HTTP API Auth |
-| `TOKEN_API_AUTH_MODE`   | Auth mode for token operations    | Token API     |
-| `TOKEN_API_AUTH_SECRET` | Shared secret for token API       | Token API     |
-| `TOKEN_API_AUTH_HEADER` | Custom header name (simple mode)  | Token API     |
+| Environment Variable   | Purpose                           |
+| ---------------------- | --------------------------------- |
+| `HTTP_API_AUTH_MODE`   | Auth mode for user authentication |
+| `HTTP_API_AUTH_SECRET` | Shared secret for authentication  |
+| `HTTP_API_AUTH_HEADER` | Custom header name (simple mode)  |
 
 ### Server-Side Verification Example
 
@@ -734,20 +555,10 @@ Requests are **not** retried on:
 
 Configure retry behavior for each external service independently:
 
-**HTTP API Authentication:**
-
 ```bash
 HTTP_API_MAX_RETRIES=5              # Maximum retry attempts (default: 3)
 HTTP_API_RETRY_DELAY=2s             # Initial retry delay (default: 1s)
 HTTP_API_MAX_RETRY_DELAY=30s        # Maximum retry delay (default: 10s)
-```
-
-**Token API:**
-
-```bash
-TOKEN_API_MAX_RETRIES=5             # Maximum retry attempts (default: 3)
-TOKEN_API_RETRY_DELAY=2s            # Initial retry delay (default: 1s)
-TOKEN_API_MAX_RETRY_DELAY=30s       # Maximum retry delay (default: 10s)
 ```
 
 ### Disable Retries
@@ -756,7 +567,6 @@ To disable retries (not recommended for production):
 
 ```bash
 HTTP_API_MAX_RETRIES=0
-TOKEN_API_MAX_RETRIES=0
 ```
 
 ### Use Cases
@@ -791,7 +601,7 @@ When external APIs return 429 (rate limit), AuthGate backs off and retries:
 2. **High-Traffic Environments**: Consider increasing `MAX_RETRY_DELAY` to 30s-60s to avoid overwhelming recovering services
 3. **Low-Latency Requirements**: Reduce `MAX_RETRIES` to 1-2 for time-sensitive operations
 4. **Monitoring**: Track retry rates to identify unreliable external services
-5. **Timeouts**: Ensure `HTTP_API_TIMEOUT` and `TOKEN_API_TIMEOUT` are set appropriately to account for retries
+5. **Timeouts**: Ensure `HTTP_API_TIMEOUT` is set appropriately to account for retries
 
 ### Example: Aggressive Retry Configuration
 

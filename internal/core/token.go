@@ -27,7 +27,6 @@ type IDTokenParams struct {
 }
 
 // IDTokenProvider is an optional capability of a TokenProvider.
-// Only LocalTokenProvider implements it; HTTP API providers cannot produce OIDC ID tokens.
 type IDTokenProvider interface {
 	GenerateIDToken(params IDTokenParams) (string, error)
 }
@@ -57,13 +56,11 @@ type TokenRefreshResult struct {
 }
 
 // TokenProvider is the interface that token-generation backends must implement.
-// Both LocalTokenProvider and HTTPTokenProvider satisfy this interface.
 type TokenProvider interface {
 	GenerateToken(ctx context.Context, userID, clientID, scopes string) (*TokenResult, error)
 	GenerateRefreshToken(ctx context.Context, userID, clientID, scopes string) (*TokenResult, error)
 	// GenerateClientCredentialsToken generates a token for the client_credentials grant.
-	// HTTP API provider delegates to GenerateToken; local provider may apply
-	// a different expiry or claim set.
+	// May apply a different expiry or claim set than GenerateToken.
 	GenerateClientCredentialsToken(
 		ctx context.Context,
 		userID, clientID, scopes string,
