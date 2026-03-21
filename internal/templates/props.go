@@ -300,7 +300,7 @@ type ClientFormFieldsProps struct {
 	Client                *ClientDisplay
 	IsEdit                bool
 	NameLabel             string // Display label: "App Name" (user) or "Client Name" (admin)
-	ShowClientCredentials bool   // Show Client Credentials Flow checkbox (confidential clients)
+	ShowClientCredentials bool   // Render the Client Credentials Flow checkbox; client-type restriction (disabled for public) is enforced in template JS
 	ScopePresetsOnly      bool   // Restrict scopes to preset chips only (user form)
 }
 
