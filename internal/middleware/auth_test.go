@@ -56,6 +56,9 @@ func createTestUserServiceWithStore(
 		context.Background(), "sqlite", ":memory:", &config.Config{},
 	)
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = testStore.Close(context.Background())
+	})
 
 	// Create minimal auth providers
 	localProvider := auth.NewLocalAuthProvider(testStore)
@@ -716,11 +719,12 @@ func TestRequireAuth_DeletedUser_ClearsSessionAndRedirects(t *testing.T) {
 
 	r := setupTestRouter()
 
-	// Inject a stale user_id into the session before RequireAuth runs
+	// Inject a stale user_id into the session before RequireAuth runs.
+	// Do NOT call session.Save() here — values are shared in-memory within
+	// the same request, and saving early creates a duplicate Set-Cookie.
 	r.Use(func(c *gin.Context) {
 		session := sessions.Default(c)
 		session.Set(SessionUserID, "non-existent-user-id")
-		_ = session.Save()
 		c.Next()
 	})
 	r.Use(RequireAuth(userService))
@@ -739,12 +743,10 @@ func TestRequireAuth_DeletedUser_ClearsSessionAndRedirects(t *testing.T) {
 	assert.Contains(t, w.Header().Get("Location"), "/login")
 
 	// Verify session is actually cleared by making a follow-up request
-	// with the returned cookies — RequireAuth should redirect again
-	// (no user_id in session) rather than loop back to /account/sessions.
+	// with the returned cookies and inspecting the session directly.
 	r2 := setupTestRouter()
-	r2.Use(RequireAuth(userService))
 	var sessionUserID any
-	r2.GET("/login", func(c *gin.Context) {
+	r2.GET("/check-session", func(c *gin.Context) {
 		session := sessions.Default(c)
 		sessionUserID = session.Get(SessionUserID)
 		c.String(http.StatusOK, "login page")
@@ -752,7 +754,7 @@ func TestRequireAuth_DeletedUser_ClearsSessionAndRedirects(t *testing.T) {
 
 	w2 := httptest.NewRecorder()
 	req2, _ := http.NewRequestWithContext(
-		context.Background(), http.MethodGet, "/login", nil,
+		context.Background(), http.MethodGet, "/check-session", nil,
 	)
 	// Forward cookies from first response
 	for _, c := range w.Result().Cookies() {
