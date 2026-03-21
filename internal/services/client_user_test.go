@@ -13,6 +13,44 @@ import (
 )
 
 // ============================================================
+// CreateClient – Client Credentials Flow validation
+// ============================================================
+
+func TestCreateClient_CCFlowConfidentialSuccess(t *testing.T) {
+	s := setupTestStore(t)
+	svc := NewClientService(s, nil, nil, 0)
+	userID := uuid.New().String()
+
+	resp, err := svc.CreateClient(context.Background(), CreateClientRequest{
+		ClientName:                  "CC Confidential",
+		UserID:                      userID,
+		CreatedBy:                   userID,
+		ClientType:                  ClientTypeConfidential,
+		EnableClientCredentialsFlow: true,
+		IsAdminCreated:              true,
+	})
+	require.NoError(t, err)
+	assert.True(t, resp.EnableClientCredentialsFlow)
+	assert.Contains(t, resp.GrantTypes, "client_credentials")
+}
+
+func TestCreateClient_CCFlowPublicRejected(t *testing.T) {
+	s := setupTestStore(t)
+	svc := NewClientService(s, nil, nil, 0)
+	userID := uuid.New().String()
+
+	_, err := svc.CreateClient(context.Background(), CreateClientRequest{
+		ClientName:                  "CC Public",
+		UserID:                      userID,
+		CreatedBy:                   userID,
+		ClientType:                  ClientTypePublic,
+		EnableClientCredentialsFlow: true,
+		IsAdminCreated:              true,
+	})
+	assert.ErrorIs(t, err, ErrClientCredentialsRequireConfidential)
+}
+
+// ============================================================
 // CreateClient – IsAdminCreated flag
 // ============================================================
 

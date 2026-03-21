@@ -300,7 +300,7 @@ type ClientFormFieldsProps struct {
 	Client                *ClientDisplay
 	IsEdit                bool
 	NameLabel             string // Display label: "App Name" (user) or "Client Name" (admin)
-	ShowClientCredentials bool   // Show Client Credentials Flow checkbox (admin only)
+	ShowClientCredentials bool   // Show Client Credentials Flow checkbox (confidential clients)
 	ScopePresetsOnly      bool   // Restrict scopes to preset chips only (user form)
 }
 
