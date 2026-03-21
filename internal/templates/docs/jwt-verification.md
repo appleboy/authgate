@@ -177,7 +177,7 @@ The response includes `Cache-Control: public, max-age=3600` — cache for up to 
 3. **Find the key** matching the `kid` from the JWT header
 4. **Verify the signature** using the public key
 5. **Validate claims**: `exp` (not expired), `iss` (matches AuthGate URL), `type` (is `access`)
-6. **Check authorization**: verify `scope` and `client_id` match your requirements
+6. **Check authorization**: verify `scope` matches your requirements; optionally validate `client_id` if your API restricts access to specific clients
 
 ## Code Examples
 
@@ -385,7 +385,7 @@ T+0~1h: Resource servers with cached old JWKS re-fetch on unknown kid
 T+1h:   All old access tokens have expired (default expiry = 1 hour)
 ```
 
-> **Limitations**: AuthGate serves a single active public key in the JWKS response. During rotation, resource servers that don't handle unknown `kid` gracefully may reject new tokens until their JWKS cache expires (up to 1 hour).
+> **Limitations**: AuthGate serves a single active public key in the JWKS response. During rotation, resource servers that don't handle unknown `kid` gracefully may reject new tokens until their JWKS cache expires (up to 1 hour). Once a resource server refreshes to the new JWKS, it can no longer verify still-unexpired tokens signed with the old key. To minimize disruption, use short-lived access tokens or schedule rotation during low-traffic periods.
 
 ## Common Pitfalls
 
