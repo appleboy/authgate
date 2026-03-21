@@ -542,3 +542,140 @@ func TestRequireAdmin_NoUserInContext(t *testing.T) {
 
 	assert.Equal(t, http.StatusForbidden, w.Code)
 }
+
+func TestSessionRememberMeMiddleware_SetsOptions(t *testing.T) {
+	r := setupTestRouter()
+
+	// Set up session with remember_me flag
+	r.Use(func(c *gin.Context) {
+		session := sessions.Default(c)
+		session.Set(SessionUserID, "user123")
+		session.Set(SessionRememberMe, true)
+		_ = session.Save()
+		c.Next()
+	})
+
+	r.Use(SessionRememberMeMiddleware(2592000, false))
+
+	handlerCalled := false
+	r.GET("/test", func(c *gin.Context) {
+		handlerCalled = true
+		c.String(http.StatusOK, "OK")
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.True(t, handlerCalled)
+}
+
+func TestSessionRememberMeMiddleware_NoRememberMe(t *testing.T) {
+	r := setupTestRouter()
+
+	// Set up session WITHOUT remember_me flag
+	r.Use(func(c *gin.Context) {
+		session := sessions.Default(c)
+		session.Set(SessionUserID, "user123")
+		_ = session.Save()
+		c.Next()
+	})
+
+	r.Use(SessionRememberMeMiddleware(2592000, false))
+
+	handlerCalled := false
+	r.GET("/test", func(c *gin.Context) {
+		handlerCalled = true
+		c.String(http.StatusOK, "OK")
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.True(t, handlerCalled)
+}
+
+func TestSessionIdleTimeout_RememberMeBypassesTimeout(t *testing.T) {
+	r := setupTestRouter()
+
+	// Set up session with remember_me AND expired last activity
+	r.Use(func(c *gin.Context) {
+		session := sessions.Default(c)
+		session.Set(SessionUserID, "user123")
+		session.Set(SessionRememberMe, true)
+		session.Set(SessionLastActivity, time.Now().Unix()-3600) // 1 hour ago
+		_ = session.Save()
+		c.Next()
+	})
+
+	// Add idle timeout middleware (30 seconds — would normally expire)
+	r.Use(SessionIdleTimeout(30))
+
+	handlerCalled := false
+	r.GET("/test", func(c *gin.Context) {
+		handlerCalled = true
+		c.String(http.StatusOK, "OK")
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
+	r.ServeHTTP(w, req)
+
+	// Should NOT redirect (remember-me bypasses idle timeout)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.True(t, handlerCalled)
+}
+
+func TestSessionIdleTimeout_RememberMeUpdatesLastActivity(t *testing.T) {
+	r := setupTestRouter()
+
+	oldTimestamp := time.Now().Unix() - 3600 // 1 hour ago
+
+	// Set up session with remember_me and old last activity
+	r.Use(func(c *gin.Context) {
+		session := sessions.Default(c)
+		session.Set(SessionUserID, "user123")
+		session.Set(SessionRememberMe, true)
+		session.Set(SessionLastActivity, oldTimestamp)
+		_ = session.Save()
+		c.Next()
+	})
+
+	r.Use(SessionIdleTimeout(30))
+
+	r.GET("/test", func(c *gin.Context) {
+		session := sessions.Default(c)
+		lastActivity := session.Get(SessionLastActivity)
+		assert.NotNil(t, lastActivity)
+		// Last activity should be updated even for remember-me sessions
+		assert.Greater(t, lastActivity.(int64), oldTimestamp)
+		c.String(http.StatusOK, "OK")
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestSessionOptions_Production(t *testing.T) {
+	opts := SessionOptions(3600, true)
+	assert.Equal(t, "/", opts.Path)
+	assert.Equal(t, 3600, opts.MaxAge)
+	assert.True(t, opts.HttpOnly)
+	assert.True(t, opts.Secure)
+	assert.Equal(t, http.SameSiteLaxMode, opts.SameSite)
+}
+
+func TestSessionOptions_Development(t *testing.T) {
+	opts := SessionOptions(2592000, false)
+	assert.Equal(t, "/", opts.Path)
+	assert.Equal(t, 2592000, opts.MaxAge)
+	assert.True(t, opts.HttpOnly)
+	assert.False(t, opts.Secure)
+	assert.Equal(t, http.SameSiteLaxMode, opts.SameSite)
+}

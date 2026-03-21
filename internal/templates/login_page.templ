@@ -118,7 +118,13 @@ templ LoginPage(props LoginPageProps) {
 										<polyline points="2.5 6 5 8.5 9.5 3.5"></polyline>
 									</svg>
 								</span>
-								<span class="login-remember-text">{ fmt.Sprintf("Remember me for %d days", props.RememberMeDays) }</span>
+								<span class="login-remember-text">
+								if props.RememberMeDays == 1 {
+									{ fmt.Sprintf("Remember me for %d day", props.RememberMeDays) }
+								} else {
+									{ fmt.Sprintf("Remember me for %d days", props.RememberMeDays) }
+								}
+							</span>
 							</label>
 						</div>
 					}
