@@ -248,15 +248,17 @@ The `kid` (Key ID) header identifies which key was used to sign the token. Use t
 
 | Claim       | Description                            |
 | ----------- | -------------------------------------- |
-| `user_id`   | User identifier                        |
+| `user_id`   | End-user identifier; may be absent for `client_credentials` tokens |
 | `client_id` | OAuth client that requested the token  |
 | `scope`     | Space-separated list of granted scopes |
 | `type`      | `access` or `refresh`                  |
 | `exp`       | Expiration time (Unix timestamp)       |
 | `iat`       | Issued-at time (Unix timestamp)        |
 | `iss`       | Issuer URL (AuthGate's `BASE_URL`)     |
-| `sub`       | Subject (same as `user_id`)            |
+| `sub`       | Subject: user UUID for user tokens, or `client:<client_id>` for `client_credentials` tokens |
 | `jti`       | Unique token identifier (UUID)         |
+
+> **Note:** For access tokens issued via the `client_credentials` grant, there is no end user. In that case, `sub` is a synthetic client subject (`client:<client_id>`), and `user_id` may be omitted.
 
 ## Verification Steps
 
@@ -311,6 +313,7 @@ func main() {
     token, err := jwt.Parse(tokenString, k.Keyfunc,
       jwt.WithIssuer("https://your-authgate"),
       jwt.WithExpirationRequired(),
+      jwt.WithValidMethods([]string{"RS256", "ES256"}),
     )
     if err != nil {
       http.Error(w, fmt.Sprintf("Invalid token: %v", err), http.StatusUnauthorized)
@@ -331,14 +334,22 @@ func main() {
     }
 
     // Check scopes
-    scopeStr, _ := claims["scope"].(string)
+    scopeStr, ok := claims["scope"].(string)
+    if !ok || scopeStr == "" {
+      http.Error(w, "Insufficient scope", http.StatusForbidden)
+      return
+    }
     scopes := strings.Fields(scopeStr)
     if !contains(scopes, "read") {
       http.Error(w, "Insufficient scope", http.StatusForbidden)
       return
     }
 
-    userID, _ := claims["user_id"].(string)
+    userID, ok := claims["user_id"].(string)
+    if !ok || userID == "" {
+      http.Error(w, "Invalid token claims", http.StatusUnauthorized)
+      return
+    }
     fmt.Fprintf(w, "Hello, user %s!", userID)
   })
 
@@ -442,6 +453,7 @@ const server = createServer(async (req, res) => {
     // Verify the JWT using JWKS (auto-fetched and cached)
     const { payload } = await jwtVerify(token, JWKS, {
       issuer: AUTHGATE_URL,
+      algorithms: ["RS256", "ES256"],
       requiredClaims: ["exp", "sub", "scope"],
     });
 

@@ -146,14 +146,16 @@ The response includes `Cache-Control: public, max-age=3600` — cache for up to 
 
 | Claim       | Description                            |
 | ----------- | -------------------------------------- |
-| `user_id`   | User identifier                        |
+| `user_id`   | End-user identifier; may be absent for `client_credentials` tokens |
 | `client_id` | OAuth client that requested the token  |
 | `scope`     | Space-separated granted scopes         |
 | `type`      | `access` or `refresh`      |
 | `exp`       | Expiration time (Unix timestamp)       |
 | `iss`       | Issuer URL (AuthGate's BASE_URL)       |
-| `sub`       | Subject (same as user_id)              |
+| `sub`       | Subject: user UUID for user tokens, or `client:<client_id>` for `client_credentials` tokens |
 | `jti`       | Unique token identifier (UUID)         |
+
+> **Note:** For `client_credentials` tokens, there is no end user. `sub` is a synthetic client subject (`client:<client_id>`), and `user_id` may be omitted.
 
 ## Verification Steps
 
@@ -204,6 +206,7 @@ func main() {
 		token, err := jwt.Parse(tokenString, k.Keyfunc,
 			jwt.WithIssuer("https://your-authgate"),
 			jwt.WithExpirationRequired(),
+			jwt.WithValidMethods([]string{"RS256", "ES256"}),
 		)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Invalid token: %v", err), http.StatusUnauthorized)
@@ -222,7 +225,11 @@ func main() {
 			return
 		}
 
-		userID, _ := claims["user_id"].(string)
+		userID, ok := claims["user_id"].(string)
+		if !ok || userID == "" {
+			http.Error(w, "Invalid token claims", http.StatusUnauthorized)
+			return
+		}
 		fmt.Fprintf(w, "Hello, user %s!", userID)
 	})
 
@@ -297,6 +304,7 @@ const server = createServer(async (req, res) => {
   try {
     const { payload } = await jwtVerify(auth.slice(7), JWKS, {
       issuer: AUTHGATE_URL,
+      algorithms: ["RS256", "ES256"],
       requiredClaims: ["exp", "sub", "scope"],
     });
 
