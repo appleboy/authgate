@@ -252,10 +252,15 @@ function reRenderMermaid(theme) {
     if (!source) return;
 
     el.removeAttribute('data-processed');
-    el.innerHTML = source;
+    el.textContent = source;
   });
 
-  mermaid.run({ nodes: containers });
+  var runResult = mermaid.run({ nodes: containers });
+  if (runResult && typeof runResult.catch === 'function') {
+    runResult.catch(function(err) {
+      console.error('Mermaid rendering failed:', err);
+    });
+  }
 }
 
 function updateThemeToggleIcon(theme) {
