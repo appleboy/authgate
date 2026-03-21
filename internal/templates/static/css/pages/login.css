@@ -103,7 +103,18 @@
   background: linear-gradient(135deg, var(--color-primary-pale), #dbeafe);
   border: 1px solid rgba(0, 114, 255, 0.15);
   color: var(--color-primary);
-  animation: scaleIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.3s both;
+  animation: loginScaleIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.3s both;
+}
+
+@keyframes loginScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .login-brand-icon svg {
@@ -512,6 +523,14 @@
   .login-oauth-btn,
   .login-submit-btn,
   .login-brand-icon {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .login-card::before,
+  .login-card::after,
+  .login-oauth-btn::before,
+  .login-submit-btn::before {
     animation: none !important;
     transition: none !important;
   }
