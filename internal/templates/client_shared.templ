@@ -106,6 +106,59 @@ templ ClientsListPagination(pagination store.PaginationResult, pageSize int, sea
 	</div>
 }
 
+// SecretRegeneratedCard renders the shared card for secret regeneration,
+// used by both AdminClientSecret and UserAppSecret.
+templ SecretRegeneratedCard(props SecretRegeneratedCardProps) {
+	<div class="card">
+		@Breadcrumb(props.BreadcrumbItems)
+		<div class="header">
+			<h1 class="page-title-with-icon">
+				<span>Client Secret Regenerated</span>
+			</h1>
+		</div>
+		<div class="alert alert-success alert-success-spaced">
+			A new client secret has been successfully generated for "<strong>{ props.ClientName }</strong>"
+		</div>
+		<div class="warning-box warning-box-enhanced">
+			<div class="warning-icon" aria-hidden="true">⚠</div>
+			<div class="warning-content">
+				<strong>Important Security Notice</strong>
+				<p>
+					This client secret is shown only once for security reasons.
+					Please copy and save it in a secure location immediately.
+					The old secret has been invalidated and will no longer work.
+				</p>
+			</div>
+		</div>
+		<div class="secret-box secret-box-enhanced">
+			<div class="secret-header">
+				<strong class="secret-title">New Client Secret</strong>
+				<p class="secret-description">
+					Copy this secret and store it securely. You won't be able to see it again.
+				</p>
+			</div>
+			<div class="secret-value secret-value-enhanced" id="clientSecret">{ props.PlainSecret }</div>
+			<button onclick="copySecret()" class="btn btn-secondary btn-small copy-button-spaced">
+				Copy to Clipboard
+			</button>
+		</div>
+		<div class="whats-next-section">
+			<h3 class="whats-next-title">What's Next?</h3>
+			<div class="action-buttons">
+				<a href={ templ.URL(props.EditPath) } class="btn btn-secondary">
+					{ props.EditLabel }
+				</a>
+				<a href={ templ.URL(props.DetailsPath) } class="btn btn-secondary">
+					View Details
+				</a>
+				<a href={ templ.URL(props.BackPath) } class="btn btn-primary">
+					{ props.BackLabel }
+				</a>
+			</div>
+		</div>
+	</div>
+}
+
 // ClientFormCommonFields renders the form fields shared by AdminClientForm and UserAppForm.
 // Callers wrap this in a <form> and append their own admin-only fields and submit/cancel buttons.
 templ ClientFormCommonFields(props ClientFormFieldsProps) {

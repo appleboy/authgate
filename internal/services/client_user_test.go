@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/go-authgate/authgate/internal/core"
 	"github.com/go-authgate/authgate/internal/models"
 	"github.com/go-authgate/authgate/internal/store"
 
@@ -11,6 +12,44 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// ============================================================
+// CreateClient – Client Credentials Flow validation
+// ============================================================
+
+func TestCreateClient_CCFlowConfidentialSuccess(t *testing.T) {
+	s := setupTestStore(t)
+	svc := NewClientService(s, nil, nil, 0)
+	userID := uuid.New().String()
+
+	resp, err := svc.CreateClient(context.Background(), CreateClientRequest{
+		ClientName:                  "CC Confidential",
+		UserID:                      userID,
+		CreatedBy:                   userID,
+		ClientType:                  core.ClientTypeConfidential,
+		EnableClientCredentialsFlow: true,
+		IsAdminCreated:              true,
+	})
+	require.NoError(t, err)
+	assert.True(t, resp.EnableClientCredentialsFlow)
+	assert.Contains(t, resp.GrantTypes, "client_credentials")
+}
+
+func TestCreateClient_CCFlowPublicRejected(t *testing.T) {
+	s := setupTestStore(t)
+	svc := NewClientService(s, nil, nil, 0)
+	userID := uuid.New().String()
+
+	_, err := svc.CreateClient(context.Background(), CreateClientRequest{
+		ClientName:                  "CC Public",
+		UserID:                      userID,
+		CreatedBy:                   userID,
+		ClientType:                  core.ClientTypePublic,
+		EnableClientCredentialsFlow: true,
+		IsAdminCreated:              true,
+	})
+	assert.ErrorIs(t, err, ErrClientCredentialsRequireConfidential)
+}
 
 // ============================================================
 // CreateClient – IsAdminCreated flag
@@ -162,6 +201,109 @@ func TestUserUpdateClient_AllowedScopesAccepted(t *testing.T) {
 		},
 	)
 	require.NoError(t, err)
+}
+
+// ============================================================
+// UserUpdateClient – Client Credentials Flow
+// ============================================================
+
+func TestUserUpdateClient_CCFlowConfidentialClient(t *testing.T) {
+	s := setupTestStore(t)
+	svc := NewClientService(s, nil, nil, 0)
+	ownerID := uuid.New().String()
+
+	resp, err := svc.CreateClient(context.Background(), CreateClientRequest{
+		ClientName:     "CC App",
+		UserID:         ownerID,
+		CreatedBy:      ownerID,
+		ClientType:     core.ClientTypeConfidential,
+		IsAdminCreated: false,
+	})
+	require.NoError(t, err)
+
+	err = svc.UserUpdateClient(
+		context.Background(),
+		resp.ClientID,
+		ownerID,
+		UserUpdateClientRequest{
+			ClientName:                  "CC App",
+			ClientType:                  core.ClientTypeConfidential,
+			EnableClientCredentialsFlow: true,
+			Scopes:                      "email",
+		},
+	)
+	require.NoError(t, err)
+
+	updated, err := svc.GetClient(resp.ClientID)
+	require.NoError(t, err)
+	assert.True(t, updated.EnableClientCredentialsFlow)
+	assert.Contains(t, updated.GrantTypes, "client_credentials")
+}
+
+func TestUserUpdateClient_CCFlowPublicClientRejected(t *testing.T) {
+	s := setupTestStore(t)
+	svc := NewClientService(s, nil, nil, 0)
+	ownerID := uuid.New().String()
+
+	resp, err := svc.CreateClient(context.Background(), CreateClientRequest{
+		ClientName:     "Public CC App",
+		UserID:         ownerID,
+		CreatedBy:      ownerID,
+		ClientType:     core.ClientTypePublic,
+		IsAdminCreated: false,
+	})
+	require.NoError(t, err)
+
+	err = svc.UserUpdateClient(
+		context.Background(),
+		resp.ClientID,
+		ownerID,
+		UserUpdateClientRequest{
+			ClientName:                  "Public CC App",
+			ClientType:                  core.ClientTypePublic,
+			EnableClientCredentialsFlow: true,
+			Scopes:                      "email",
+		},
+	)
+	assert.ErrorIs(t, err, ErrClientCredentialsRequireConfidential)
+}
+
+func TestUserUpdateClient_CCOnlyConfidentialClient(t *testing.T) {
+	s := setupTestStore(t)
+	svc := NewClientService(s, nil, nil, 0)
+	ownerID := uuid.New().String()
+
+	resp, err := svc.CreateClient(context.Background(), CreateClientRequest{
+		ClientName:     "CC Only App",
+		UserID:         ownerID,
+		CreatedBy:      ownerID,
+		ClientType:     core.ClientTypeConfidential,
+		IsAdminCreated: false,
+	})
+	require.NoError(t, err)
+
+	// CC-only (no device, no auth code) should succeed for confidential
+	err = svc.UserUpdateClient(
+		context.Background(),
+		resp.ClientID,
+		ownerID,
+		UserUpdateClientRequest{
+			ClientName:                  "CC Only App",
+			ClientType:                  core.ClientTypeConfidential,
+			EnableClientCredentialsFlow: true,
+			EnableDeviceFlow:            false,
+			EnableAuthCodeFlow:          false,
+			Scopes:                      "email",
+		},
+	)
+	require.NoError(t, err)
+
+	updated, err := svc.GetClient(resp.ClientID)
+	require.NoError(t, err)
+	assert.True(t, updated.EnableClientCredentialsFlow)
+	assert.False(t, updated.EnableDeviceFlow)
+	assert.False(t, updated.EnableAuthCodeFlow)
+	assert.Equal(t, "client_credentials", updated.GrantTypes)
 }
 
 // ============================================================

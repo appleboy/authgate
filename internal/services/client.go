@@ -18,12 +18,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// Client type constants
-const (
-	ClientTypeConfidential = "confidential"
-	ClientTypePublic       = "public"
-)
-
 const pendingClientsCountCacheKey = "clients:pending_count"
 
 // buildGrantTypes derives the GrantTypes string from per-flow enable flags.
@@ -56,11 +50,16 @@ var (
 	ErrRedirectURIRequired = errors.New(
 		"at least one redirect URI is required when Authorization Code Flow is enabled",
 	)
-	ErrAtLeastOneGrantRequired  = errors.New("at least one grant type must be enabled")
+	ErrAtLeastOneGrantRequired              = errors.New("at least one grant type must be enabled")
+	ErrClientCredentialsRequireConfidential = errors.New(
+		"client credentials flow requires a confidential client",
+	)
 	ErrClientOwnershipRequired  = errors.New("you do not own this client")
 	ErrCannotDeleteActiveClient = errors.New("cannot delete an active client")
-	ErrInvalidScopeForUser      = errors.New("scope not allowed for user-created clients")
-	ErrInvalidClientStatus      = errors.New(
+	ErrInvalidScopeForUser      = errors.New(
+		"scope not allowed for user-created clients",
+	)
+	ErrInvalidClientStatus = errors.New(
 		"status must be \"active\", \"inactive\", or \"pending\"",
 	)
 )
@@ -123,22 +122,23 @@ type CreateClientRequest struct {
 	Scopes                      string
 	RedirectURIs                []string
 	CreatedBy                   string
-	ClientType                  string // ClientTypeConfidential or ClientTypePublic (default: ClientTypeConfidential)
-	EnableDeviceFlow            bool   // Enable Device Authorization Grant (RFC 8628)
-	EnableAuthCodeFlow          bool   // Enable Authorization Code Flow (RFC 6749)
-	EnableClientCredentialsFlow bool   // Enable Client Credentials Grant (RFC 6749 §4.4); confidential clients only
-	IsAdminCreated              bool   // When true: Status=active; when false: Status=pending
+	ClientType                  core.ClientType
+	EnableDeviceFlow            bool // Enable Device Authorization Grant (RFC 8628)
+	EnableAuthCodeFlow          bool // Enable Authorization Code Flow (RFC 6749)
+	EnableClientCredentialsFlow bool // Enable Client Credentials Grant (RFC 6749 §4.4); confidential clients only
+	IsAdminCreated              bool // When true: Status=active; when false: Status=pending
 }
 
 // UserUpdateClientRequest contains the restricted set of fields a non-admin user may update on their own client.
 type UserUpdateClientRequest struct {
-	ClientName         string
-	Description        string
-	Scopes             string // validated against allowedUserScopes
-	RedirectURIs       []string
-	ClientType         string
-	EnableDeviceFlow   bool
-	EnableAuthCodeFlow bool
+	ClientName                  string
+	Description                 string
+	Scopes                      string // validated against allowedUserScopes
+	RedirectURIs                []string
+	ClientType                  core.ClientType
+	EnableDeviceFlow            bool
+	EnableAuthCodeFlow          bool
+	EnableClientCredentialsFlow bool // Enable Client Credentials Grant (RFC 6749 §4.4); confidential clients only
 }
 
 type UpdateClientRequest struct {
@@ -147,7 +147,7 @@ type UpdateClientRequest struct {
 	Scopes                      string
 	RedirectURIs                []string
 	Status                      string // "active" or "inactive"
-	ClientType                  string
+	ClientType                  core.ClientType
 	EnableDeviceFlow            bool
 	EnableAuthCodeFlow          bool
 	EnableClientCredentialsFlow bool // Enable Client Credentials Grant (RFC 6749 §4.4); confidential clients only
@@ -172,6 +172,12 @@ func (s *ClientService) CreateClient(
 		return nil, ErrClientNameRequired
 	}
 
+	clientType := req.ClientType.OrDefault()
+
+	if req.EnableClientCredentialsFlow && clientType != core.ClientTypeConfidential {
+		return nil, ErrClientCredentialsRequireConfidential
+	}
+
 	if req.EnableAuthCodeFlow && len(req.RedirectURIs) == 0 {
 		return nil, ErrRedirectURIRequired
 	}
@@ -189,15 +195,7 @@ func (s *ClientService) CreateClient(
 		scopes = "email profile"
 	}
 
-	// Default client type
-	clientType := req.ClientType
-	if clientType != ClientTypePublic {
-		clientType = ClientTypeConfidential
-	}
-
-	// Client credentials flow is only available for confidential clients
-	enableClientCredentials := req.EnableClientCredentialsFlow &&
-		clientType == ClientTypeConfidential
+	enableClientCredentials := req.EnableClientCredentialsFlow
 
 	// If neither flow is explicitly enabled, default to device flow
 	enableDevice := req.EnableDeviceFlow
@@ -224,7 +222,7 @@ func (s *ClientService) CreateClient(
 		Scopes:                      scopes,
 		GrantTypes:                  grantTypes,
 		RedirectURIs:                models.StringArray(req.RedirectURIs),
-		ClientType:                  clientType,
+		ClientType:                  clientType.String(),
 		EnableDeviceFlow:            enableDevice,
 		EnableAuthCodeFlow:          enableAuthCode,
 		EnableClientCredentialsFlow: enableClientCredentials,
@@ -281,8 +279,14 @@ func (s *ClientService) UpdateClient(
 		return ErrClientNameRequired
 	}
 
+	clientType := req.ClientType.OrDefault()
+
 	if !req.EnableDeviceFlow && !req.EnableAuthCodeFlow && !req.EnableClientCredentialsFlow {
 		return ErrAtLeastOneGrantRequired
+	}
+
+	if req.EnableClientCredentialsFlow && clientType != core.ClientTypeConfidential {
+		return ErrClientCredentialsRequireConfidential
 	}
 
 	if req.EnableAuthCodeFlow && len(req.RedirectURIs) == 0 {
@@ -314,18 +318,10 @@ func (s *ClientService) UpdateClient(
 	client.Scopes = strings.TrimSpace(req.Scopes)
 	client.RedirectURIs = models.StringArray(req.RedirectURIs)
 	client.Status = req.Status
-
-	// Client type defaults to confidential
-	if req.ClientType == ClientTypePublic {
-		client.ClientType = ClientTypePublic
-	} else {
-		client.ClientType = ClientTypeConfidential
-	}
+	client.ClientType = clientType.String()
 
 	// Rebuild GrantTypes from enablement flags
-	// Client credentials flow is restricted to confidential clients
-	enableClientCredentials := req.EnableClientCredentialsFlow &&
-		client.ClientType == ClientTypeConfidential
+	enableClientCredentials := req.EnableClientCredentialsFlow
 	client.EnableDeviceFlow = req.EnableDeviceFlow
 	client.EnableAuthCodeFlow = req.EnableAuthCodeFlow
 	client.EnableClientCredentialsFlow = enableClientCredentials
@@ -556,8 +552,14 @@ func (s *ClientService) UserUpdateClient(
 		return ErrClientNameRequired
 	}
 
-	if !req.EnableDeviceFlow && !req.EnableAuthCodeFlow {
+	clientType := req.ClientType.OrDefault()
+
+	if !req.EnableDeviceFlow && !req.EnableAuthCodeFlow && !req.EnableClientCredentialsFlow {
 		return ErrAtLeastOneGrantRequired
+	}
+
+	if req.EnableClientCredentialsFlow && clientType != core.ClientTypeConfidential {
+		return ErrClientCredentialsRequireConfidential
 	}
 
 	if req.EnableAuthCodeFlow && len(req.RedirectURIs) == 0 {
@@ -585,18 +587,17 @@ func (s *ClientService) UserUpdateClient(
 	client.Description = strings.TrimSpace(req.Description)
 	client.Scopes = strings.TrimSpace(req.Scopes)
 	client.RedirectURIs = models.StringArray(req.RedirectURIs)
-
-	if req.ClientType == ClientTypePublic {
-		client.ClientType = ClientTypePublic
-	} else {
-		client.ClientType = ClientTypeConfidential
-	}
+	client.ClientType = clientType.String()
 
 	client.EnableDeviceFlow = req.EnableDeviceFlow
 	client.EnableAuthCodeFlow = req.EnableAuthCodeFlow
-	// User-created clients cannot enable client credentials flow.
-	client.EnableClientCredentialsFlow = false
-	client.GrantTypes = buildGrantTypes(req.EnableDeviceFlow, req.EnableAuthCodeFlow, false)
+	enableClientCredentials := req.EnableClientCredentialsFlow
+	client.EnableClientCredentialsFlow = enableClientCredentials
+	client.GrantTypes = buildGrantTypes(
+		req.EnableDeviceFlow,
+		req.EnableAuthCodeFlow,
+		enableClientCredentials,
+	)
 
 	if err := s.store.UpdateClient(client); err != nil {
 		return err

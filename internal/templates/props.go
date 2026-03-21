@@ -277,12 +277,30 @@ type UserClientCreatedPageProps struct {
 	PlainSecret string
 }
 
+// UserClientSecretPageProps is used by the dedicated secret-regeneration page.
+// It carries the same fields as UserClientCreatedPageProps but gives the template
+// a self-describing name for the regeneration flow.
+type UserClientSecretPageProps = UserClientCreatedPageProps
+
+// SecretRegeneratedCardProps configures the shared secret-regeneration card
+// used by both AdminClientSecret and UserAppSecret.
+type SecretRegeneratedCardProps struct {
+	BreadcrumbItems []BreadcrumbItem
+	ClientName      string
+	PlainSecret     string
+	EditLabel       string // e.g. "Edit Client Settings" or "Edit App Settings"
+	EditPath        string
+	DetailsPath     string
+	BackLabel       string // e.g. "Back to Clients List" or "Back to My Apps"
+	BackPath        string
+}
+
 // ClientFormFieldsProps configures the shared client form fields component.
 type ClientFormFieldsProps struct {
 	Client                *ClientDisplay
 	IsEdit                bool
 	NameLabel             string // Display label: "App Name" (user) or "Client Name" (admin)
-	ShowClientCredentials bool   // Show Client Credentials Flow checkbox (admin only)
+	ShowClientCredentials bool   // Render the Client Credentials Flow checkbox; client-type restriction (disabled for public) is enforced in template JS
 	ScopePresetsOnly      bool   // Restrict scopes to preset chips only (user form)
 }
 
