@@ -32,6 +32,7 @@ func createTestClient(t *testing.T, s *Store, clientID, clientName string) {
 	t.Helper()
 	client := &models.OAuthApplication{
 		ClientID:         clientID,
+		ClientSecret:     "secret",
 		ClientName:       clientName,
 		UserID:           uuid.New().String(),
 		Scopes:           "read write",
