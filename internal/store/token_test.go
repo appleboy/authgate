@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
 // createTestToken is a helper that builds a minimal AccessToken with sensible defaults.
@@ -213,17 +214,18 @@ func TestRevokeToken(t *testing.T) {
 		tok := createTestToken(uuid.New().String(), uuid.New().String())
 		require.NoError(t, store.CreateAccessToken(tok))
 
-		// Verify token exists
 		_, err := store.GetAccessTokenByID(tok.ID)
 		require.NoError(t, err)
 
-		// Revoke (hard delete)
 		err = store.RevokeToken(tok.ID)
 		require.NoError(t, err)
 
-		// Verify token is gone
 		_, err = store.GetAccessTokenByID(tok.ID)
-		assert.Error(t, err)
+		require.ErrorIs(t, err, gorm.ErrRecordNotFound)
+
+		// Also verify hash-based lookup fails (production code path)
+		_, err = store.GetAccessTokenByHash(tok.TokenHash)
+		require.ErrorIs(t, err, gorm.ErrRecordNotFound)
 	})
 
 	t.Run("NonExistentToken", func(t *testing.T) {

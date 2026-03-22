@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
 func TestGetAuthorizationCodeByHash(t *testing.T) {
@@ -43,7 +44,7 @@ func TestGetAuthorizationCodeByHash(t *testing.T) {
 		store := createFreshStore(t, "sqlite", nil)
 
 		_, err := store.GetAuthorizationCodeByHash("nonexistent-hash")
-		assert.Error(t, err)
+		assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
 	})
 }
 

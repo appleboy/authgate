@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
 func TestGetDeviceCodeByUserCode(t *testing.T) {
@@ -39,7 +40,7 @@ func TestGetDeviceCodeByUserCode(t *testing.T) {
 		store := createFreshStore(t, "sqlite", nil)
 
 		_, err := store.GetDeviceCodeByUserCode("NOEXIST1")
-		assert.Error(t, err)
+		assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
 	})
 }
 
