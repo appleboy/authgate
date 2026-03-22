@@ -14,9 +14,9 @@ import (
 	"github.com/google/uuid"
 )
 
-// revokeTokenFamilyWithAudit revokes all tokens in a token family when refresh token
+// revokeTokenFamilyWithAudit revokes all active tokens in a token family when refresh token
 // reuse is detected during rotation mode. This prevents stolen token abuse by invalidating
-// all tokens derived from the same parent (RFC 6819 §4.14.2).
+// all active tokens derived from the same parent (RFC 6819 §4.14.2).
 func (s *TokenService) revokeTokenFamilyWithAudit(
 	ctx context.Context, reusedToken *models.AccessToken,
 ) {
