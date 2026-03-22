@@ -367,9 +367,8 @@ func TestListClientsPaginated(t *testing.T) {
 			PaginationParams{Page: 1, PageSize: 50},
 		)
 		require.NoError(t, err)
-		// At least our 2 + the seeded default
 		assert.GreaterOrEqual(t, len(clients), 2)
-		assert.Equal(t, pagination.Total, int64(len(clients)))
+		assert.Equal(t, int64(len(clients)), pagination.Total)
 	})
 
 	t.Run("search filters by client name", func(t *testing.T) {
@@ -539,8 +538,8 @@ func TestListClientsPaginated(t *testing.T) {
 			store,
 			&models.OAuthApplication{ClientName: prefix + " Older"},
 		)
-		// Ensure different timestamps
-		time.Sleep(10 * time.Millisecond)
+		// Set c1's created_at to the past for deterministic ordering
+		store.db.Model(c1).Update("created_at", time.Now().Add(-1*time.Hour))
 		c2 := createTestClientWithOpts(
 			t,
 			store,
@@ -554,7 +553,6 @@ func TestListClientsPaginated(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.Len(t, clients, 2)
-		// Newest first
 		assert.Equal(t, c2.ClientID, clients[0].ClientID)
 		assert.Equal(t, c1.ClientID, clients[1].ClientID)
 	})

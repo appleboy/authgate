@@ -331,18 +331,10 @@ func TestRevokeAllActiveTokensByClientID(t *testing.T) {
 		)
 		require.NoError(t, err)
 
+		activeOtherCount := 0
 		for _, tok := range tokens {
 			assert.NotEqual(t, clientID, tok.ClientID,
 				"no active tokens should remain for the target client")
-		}
-
-		// Other client's tokens should be unaffected
-		otherTokens, err := store.GetTokensByCategoryAndStatus(
-			userID, models.TokenCategoryAccess, models.TokenStatusActive,
-		)
-		require.NoError(t, err)
-		activeOtherCount := 0
-		for _, tok := range otherTokens {
 			if tok.ClientID == otherClientID {
 				activeOtherCount++
 			}
