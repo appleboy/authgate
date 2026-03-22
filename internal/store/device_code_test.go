@@ -96,8 +96,7 @@ func TestDeleteDeviceCodeByID(t *testing.T) {
 		// Delete by primary key
 		require.NoError(t, store.DeleteDeviceCodeByID(dc.ID))
 
-		// Verify it is gone
 		_, err := store.GetDeviceCodeByUserCode("DELCODE1")
-		assert.Error(t, err)
+		assert.ErrorIs(t, err, gorm.ErrRecordNotFound)
 	})
 }

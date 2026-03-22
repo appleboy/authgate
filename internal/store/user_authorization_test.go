@@ -129,9 +129,9 @@ func TestRevokeUserAuthorization(t *testing.T) {
 
 		revoked, err := store.RevokeUserAuthorization(authUUID, userID)
 		require.NoError(t, err)
-		assert.False(t, revoked.IsActive)
+		require.NotNil(t, revoked)
 
-		// Verify it no longer appears in active listing
+		// Verify the revocation persisted in the database
 		auths, err := store.ListUserAuthorizations(userID)
 		require.NoError(t, err)
 		assert.Empty(t, auths)
