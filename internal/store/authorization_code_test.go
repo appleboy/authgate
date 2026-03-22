@@ -114,4 +114,10 @@ func TestMarkAuthorizationCodeUsed(t *testing.T) {
 		err := store.MarkAuthorizationCodeUsed(code.ID)
 		require.ErrorIs(t, err, ErrAuthCodeAlreadyUsed)
 	})
+
+	// Sequential double-call already tests the atomic WHERE used_at IS NULL
+	// guard above. True concurrent goroutine testing requires PostgreSQL
+	// (SQLite :memory: uses separate connections per goroutine, each seeing
+	// an empty database). The existing store_test.go
+	// TestMarkAuthorizationCodeUsed_AtomicDoubleCall covers this path.
 }
