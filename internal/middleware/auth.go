@@ -155,7 +155,12 @@ func SessionFingerprintMiddleware(enabled, includeIP bool) gin.HandlerFunc {
 					// Fingerprint mismatch - possible session hijacking
 					session.Clear()
 					if err := session.Save(); err != nil {
-						log.Printf("[session] save error: %v", err)
+						log.Printf(
+							"[session] save error while clearing fingerprint-mismatched session: %v",
+							err,
+						)
+						c.AbortWithStatus(http.StatusInternalServerError)
+						return
 					}
 
 					// Redirect to login with security warning
@@ -211,6 +216,8 @@ func SessionIdleTimeout(idleTimeoutSeconds int) gin.HandlerFunc {
 						session.Clear()
 						if err := session.Save(); err != nil {
 							log.Printf("[session] save error: %v", err)
+							c.AbortWithStatus(http.StatusInternalServerError)
+							return
 						}
 
 						// Redirect to login with timeout message
