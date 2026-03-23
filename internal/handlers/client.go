@@ -120,6 +120,10 @@ func (h *ClientHandler) ShowCreateClientPage(c *gin.Context) {
 // CreateClient handles the creation of a new OAuth client
 func (h *ClientHandler) CreateClient(c *gin.Context) {
 	userID := getUserIDFromContext(c)
+	if userID == "" {
+		renderErrorPage(c, http.StatusUnauthorized, "User not authenticated")
+		return
+	}
 
 	req := services.CreateClientRequest{
 		ClientName:                  c.PostForm("client_name"),

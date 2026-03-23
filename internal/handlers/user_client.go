@@ -63,6 +63,10 @@ func (h *UserClientHandler) ShowCreateAppPage(c *gin.Context) {
 // CreateApp handles POST /apps to register a new OAuth client.
 func (h *UserClientHandler) CreateApp(c *gin.Context) {
 	userID := getUserIDFromContext(c)
+	if userID == "" {
+		renderErrorPage(c, http.StatusUnauthorized, "User not authenticated")
+		return
+	}
 	userModel := getUserFromContext(c)
 
 	req := services.CreateClientRequest{
