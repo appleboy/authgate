@@ -427,6 +427,12 @@
   flex-wrap: wrap;
 }
 
+/* Forms wrapping buttons (e.g. Regenerate Secret) must participate in flex layout */
+.admin-action-buttons form {
+  margin: 0;
+  display: contents;
+}
+
 .admin-action-btn {
   padding: var(--space-4) var(--space-6);
   font-size: var(--text-base);

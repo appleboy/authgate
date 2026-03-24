@@ -191,14 +191,87 @@ templ AdminAuditLogs(props AuditLogsPageProps) {
 	}
 }
 
+// humanReadableEventType converts raw event type constants to friendly labels.
+func humanReadableEventType(eventType models.EventType) string {
+	switch eventType {
+	case models.EventAuthenticationSuccess:
+		return "Login Success"
+	case models.EventAuthenticationFailure:
+		return "Login Failure"
+	case models.EventOAuthAuthentication:
+		return "OAuth Login"
+	case models.EventLogout:
+		return "Logout"
+	case models.EventAccessTokenIssued:
+		return "Token Issued"
+	case models.EventRefreshTokenIssued:
+		return "Refresh Token Issued"
+	case models.EventIDTokenIssued:
+		return "ID Token Issued"
+	case models.EventTokenRefreshed:
+		return "Token Refreshed"
+	case models.EventTokenRevoked:
+		return "Token Revoked"
+	case models.EventTokenDisabled:
+		return "Token Disabled"
+	case models.EventTokenEnabled:
+		return "Token Enabled"
+	case models.EventTokenIntrospected:
+		return "Token Introspected"
+	case models.EventDeviceCodeGenerated:
+		return "Device Code Created"
+	case models.EventDeviceCodeAuthorized:
+		return "Device Authorized"
+	case models.EventAuthorizationCodeGenerated:
+		return "Auth Code Generated"
+	case models.EventAuthorizationCodeExchanged:
+		return "Auth Code Exchanged"
+	case models.EventAuthorizationCodeDenied:
+		return "Auth Code Denied"
+	case models.EventClientCreated:
+		return "Client Created"
+	case models.EventClientUpdated:
+		return "Client Updated"
+	case models.EventClientDeleted:
+		return "Client Deleted"
+	case models.EventClientSecretRegenerated:
+		return "Secret Regenerated"
+	case models.EventClientRegistered:
+		return "Client Registered"
+	case models.EventClientApproved:
+		return "Client Approved"
+	case models.EventClientRejected:
+		return "Client Rejected"
+	case models.EventClientCredentialsTokenIssued:
+		return "Client Credentials Issued"
+	case models.EventRateLimitExceeded:
+		return "Rate Limited"
+	case models.EventSuspiciousActivity:
+		return "Suspicious Activity"
+	case models.EventUserAuthorizationGranted:
+		return "Access Granted"
+	case models.EventUserAuthorizationRevoked:
+		return "Access Revoked"
+	case models.EventClientTokensRevokedAll:
+		return "All Tokens Revoked"
+	case models.EventTypeAuditLogView:
+		return "Audit Log Viewed"
+	case models.EventTypeAuditLogExported:
+		return "Audit Log Exported"
+	default:
+		return string(eventType)
+	}
+}
+
 templ AuditLogRow(log *models.AuditLog) {
 	<tr>
 		<td class="audit-timestamp-cell" data-label="Time">
 			<div class="audit-timestamp-date">{ log.EventTime.Format("2006-01-02") }</div>
 			<div class="audit-timestamp-time">{ log.EventTime.Format("15:04:05") }</div>
+			<div class="audit-timestamp-relative" data-timestamp={ log.EventTime.Format("2006-01-02T15:04:05Z07:00") }></div>
 		</td>
 		<td data-label="Event Type">
-			<span class="audit-event-type">{ log.EventType }</span>
+			<span class="audit-event-type" title={ log.EventType }>{ humanReadableEventType(log.EventType) }</span>
 		</td>
 		<td data-label="Severity">
 			if log.Severity == "INFO" {

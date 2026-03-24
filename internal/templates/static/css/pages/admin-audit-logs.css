@@ -262,6 +262,13 @@
   font-family: var(--font-mono);
 }
 
+.audit-timestamp-relative {
+  font-size: 0.65rem;
+  color: var(--color-text-tertiary);
+  font-style: italic;
+  margin-top: var(--space-1);
+}
+
 /* Event type */
 .audit-event-type {
   font-family: var(--font-mono);

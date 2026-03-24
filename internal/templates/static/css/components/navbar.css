@@ -309,6 +309,29 @@
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 
+/* Dropdown item with badge layout */
+.navbar-dropdown-item--with-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Dropdown notification badge */
+.navbar-dropdown-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: #EF4444;
+  color: #fff;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 /* Admin dropdown items */
 .navbar-dropdown-item.admin {
   color: var(--color-text-secondary);

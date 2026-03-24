@@ -93,7 +93,7 @@ templ UserAppDetail(props UserClientDetailPageProps) {
 							Edit App
 						</a>
 						if props.Client.ClientType == "confidential" {
-							<form method="POST" action={ templ.URL("/apps/" + props.Client.ClientID + "/regenerate-secret") } style="display:inline; margin:0;">
+							<form method="POST" action={ templ.URL("/apps/" + props.Client.ClientID + "/regenerate-secret") } class="form-inline">
 								<input type="hidden" name="csrf_token" value={ props.CSRFToken }/>
 								<button
 									type="submit"
@@ -124,7 +124,7 @@ templ UserAppDetail(props UserClientDetailPageProps) {
 										<strong>Delete App</strong>
 										<span>Permanently remove this app and all associated data.</span>
 									</div>
-									<form method="POST" action={ templ.URL("/apps/" + props.Client.ClientID + "/delete") } style="margin:0;">
+									<form method="POST" action={ templ.URL("/apps/" + props.Client.ClientID + "/delete") } class="form-inline">
 										<input type="hidden" name="csrf_token" value={ props.CSRFToken }/>
 										<button
 											type="submit"

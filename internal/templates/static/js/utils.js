@@ -342,6 +342,51 @@ function initCollapsibleFilters() {
   }
 }
 
+/**
+ * Initialize relative time display for elements with data-timestamp attribute
+ */
+function initRelativeTime() {
+  var elements = document.querySelectorAll('[data-timestamp]');
+  elements.forEach(function(el) {
+    var ts = el.getAttribute('data-timestamp');
+    if (ts) {
+      el.textContent = formatRelativeTime(ts);
+      el.title = new Date(ts).toLocaleString();
+    }
+  });
+}
+
+/**
+ * Initialize search clear buttons
+ */
+function initSearchClear() {
+  document.querySelectorAll('.search-input-wrapper').forEach(function(wrapper) {
+    var input = wrapper.querySelector('.search-input');
+    if (!input || wrapper.querySelector('.search-clear-btn')) return;
+
+    var clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.className = 'search-clear-btn';
+    clearBtn.setAttribute('aria-label', 'Clear search');
+    clearBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+    clearBtn.style.display = input.value ? 'flex' : 'none';
+    wrapper.appendChild(clearBtn);
+
+    input.addEventListener('input', function() {
+      clearBtn.style.display = this.value ? 'flex' : 'none';
+    });
+
+    clearBtn.addEventListener('click', function() {
+      input.value = '';
+      clearBtn.style.display = 'none';
+      input.focus();
+      // Submit form to clear search results
+      var form = input.closest('form');
+      if (form) form.submit();
+    });
+  });
+}
+
 export {
   formatRelativeTime,
   copyToClipboard,
@@ -351,7 +396,9 @@ export {
   toggleTheme,
   initDebounceSearch,
   toggleFilters,
-  initCollapsibleFilters
+  initCollapsibleFilters,
+  initRelativeTime,
+  initSearchClear
 };
 
 /**
@@ -367,6 +414,12 @@ document.addEventListener('DOMContentLoaded', function() {
   // Collapsible filters
   initCollapsibleFilters();
 
+  // Relative time display
+  initRelativeTime();
+
+  // Search clear buttons
+  initSearchClear();
+
   // Keyboard shortcuts
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
@@ -375,6 +428,18 @@ document.addEventListener('DOMContentLoaded', function() {
         navbarMenu.classList.remove('active');
       }
     }
+  });
+
+  // Prevent double-submit: add loading state to submit buttons.
+  // Skip forms/buttons with data-confirm-* (handled by the confirm modal below).
+  document.addEventListener('submit', function(e) {
+    var form = e.target;
+    var btn = e.submitter || form.querySelector('button[type="submit"], input[type="submit"]');
+    if (!btn || btn.classList.contains('btn-loading')) return;
+    var hasConfirm = (btn.hasAttribute('data-confirm-title') || form.hasAttribute('data-confirm-title'));
+    if (hasConfirm) return;
+    btn.classList.add('btn-loading');
+    setTimeout(function() { btn.classList.remove('btn-loading'); }, 5000);
   });
 
   // Delegated handler for data-confirm-* attributes

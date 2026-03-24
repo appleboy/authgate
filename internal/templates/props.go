@@ -54,8 +54,9 @@ type OAuthProvider struct {
 // ErrorPageProps contains properties for the error page
 type ErrorPageProps struct {
 	BaseProps
-	Error   string
-	Message string
+	Error    string
+	Message  string
+	RetryURL string // URL for the "Try Again" button; defaults to "/" if empty
 }
 
 // SuccessPageProps contains properties for the success page

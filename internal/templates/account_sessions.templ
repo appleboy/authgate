@@ -55,7 +55,7 @@ templ AccountSessions(props SessionsPageProps) {
 					if len(props.Sessions) > 0 {
 						<div class="sessions-list-header">
 							<h3 class="sessions-count">{ fmt.Sprintf("%d", len(props.Sessions)) } Active Sessions</h3>
-							<form method="POST" action="/account/sessions/revoke-all" style="margin: 0;">
+							<form method="POST" action="/account/sessions/revoke-all" class="form-inline">
 								<input type="hidden" name="csrf_token" value={ props.CSRFToken }/>
 								<button
 									type="submit"
@@ -72,6 +72,7 @@ templ AccountSessions(props SessionsPageProps) {
 						<!-- Sessions Table -->
 						<div class="sessions-table-wrapper">
 							<table class="sessions-table">
+								<caption class="sr-only">Active token sessions</caption>
 								<thead>
 									<tr>
 										<th>Client</th>
@@ -164,6 +165,7 @@ templ SessionTableRow(session services.TokenWithClient, csrfToken string) {
 		<td class="session-table-date" data-label="Created">
 			<span class="session-table-date-label">Created</span>
 			<span class="session-table-date-value">{ session.CreatedAt.Format("2006-01-02 15:04") }</span>
+			<span class="session-table-date-relative" data-timestamp={ session.CreatedAt.Format("2006-01-02T15:04:05Z07:00") }></span>
 		</td>
 		<!-- Expires Date -->
 		<td class="session-table-date" data-label="Expires">
@@ -176,15 +178,16 @@ templ SessionTableRow(session services.TokenWithClient, csrfToken string) {
 			if session.TokenCategory == "refresh" && session.LastUsedAt != nil && !session.LastUsedAt.IsZero() {
 				<span class="session-table-date-label">Last Used</span>
 				<span class="session-table-date-value">{ session.LastUsedAt.Format("2006-01-02 15:04") }</span>
+				<span class="session-table-date-relative" data-timestamp={ session.LastUsedAt.Format("2006-01-02T15:04:05Z07:00") }></span>
 			} else {
-				<span style="color: var(--color-text-tertiary);">—</span>
+				<span class="text-tertiary">—</span>
 			}
 		</td>
 		<!-- Actions -->
 		<td data-label="Actions">
 			<div class="session-table-actions">
 				if session.Status == "active" {
-					<form method="POST" action={ templ.URL("/account/sessions/" + session.ID + "/disable") } style="margin: 0;">
+					<form method="POST" action={ templ.URL("/account/sessions/" + session.ID + "/disable") } class="form-inline">
 						<input type="hidden" name="csrf_token" value={ csrfToken }/>
 						<button
 							type="submit"
@@ -198,7 +201,7 @@ templ SessionTableRow(session services.TokenWithClient, csrfToken string) {
 						</button>
 					</form>
 				} else if session.Status == "disabled" {
-					<form method="POST" action={ templ.URL("/account/sessions/" + session.ID + "/enable") } style="margin: 0;">
+					<form method="POST" action={ templ.URL("/account/sessions/" + session.ID + "/enable") } class="form-inline">
 						<input type="hidden" name="csrf_token" value={ csrfToken }/>
 						<button type="submit" class="session-table-action-btn enable">
 							Enable
@@ -206,7 +209,7 @@ templ SessionTableRow(session services.TokenWithClient, csrfToken string) {
 					</form>
 				}
 				if session.Status != "revoked" {
-					<form method="POST" action={ templ.URL("/account/sessions/" + session.ID + "/revoke") } style="margin: 0;">
+					<form method="POST" action={ templ.URL("/account/sessions/" + session.ID + "/revoke") } class="form-inline">
 						<input type="hidden" name="csrf_token" value={ csrfToken }/>
 						<button
 							type="submit"
