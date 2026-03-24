@@ -430,15 +430,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 
-  // Prevent double-submit: add loading state to submit buttons
+  // Prevent double-submit: add loading state to submit buttons.
+  // Skip forms/buttons with data-confirm-* (handled by the confirm modal below).
   document.addEventListener('submit', function(e) {
     var form = e.target;
-    var btn = form.querySelector('button[type="submit"], input[type="submit"]');
-    if (btn && !btn.classList.contains('btn-loading') && !form.hasAttribute('data-no-loading')) {
-      btn.classList.add('btn-loading');
-      // Re-enable after 5s as safety net (e.g. network error, page doesn't navigate)
-      setTimeout(function() { btn.classList.remove('btn-loading'); }, 5000);
-    }
+    var btn = e.submitter || form.querySelector('button[type="submit"], input[type="submit"]');
+    if (!btn || btn.classList.contains('btn-loading')) return;
+    var hasConfirm = (btn.hasAttribute('data-confirm-title') || form.hasAttribute('data-confirm-title'));
+    if (hasConfirm) return;
+    btn.classList.add('btn-loading');
+    setTimeout(function() { btn.classList.remove('btn-loading'); }, 5000);
   });
 
   // Delegated handler for data-confirm-* attributes

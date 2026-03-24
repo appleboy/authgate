@@ -29,8 +29,8 @@
   animation: btnSpin 0.6s linear infinite;
 }
 
-.btn-loading > * {
-  visibility: hidden;
+.btn-loading {
+  color: transparent;
 }
 
 @keyframes btnSpin {

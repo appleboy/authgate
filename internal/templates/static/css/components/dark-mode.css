@@ -149,6 +149,19 @@
   border-color: rgba(88, 166, 255, 0.3) !important;
 }
 
+/* Client type badges (CSS classes replacing inline styles) */
+[data-theme="dark"] .client-type-badge--public {
+  background: rgba(245, 158, 11, 0.25);
+  color: #FBBF24;
+  border-color: rgba(245, 158, 11, 0.6);
+}
+
+[data-theme="dark"] .client-type-badge--confidential {
+  background: rgba(37, 99, 235, 0.28);
+  color: #BFDBFE;
+  border-color: rgba(59, 130, 246, 0.7);
+}
+
 /* Session table badges */
 [data-theme="dark"] .session-table-badge.token-refresh {
   background: rgba(88, 166, 255, 0.15);

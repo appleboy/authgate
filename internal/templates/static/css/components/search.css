@@ -72,6 +72,11 @@
   color: var(--color-text-tertiary);
 }
 
+/* Add right padding to search input so text doesn't overlap the clear button */
+.search-input-wrapper .search-input {
+  padding-right: 2.5rem;
+}
+
 /* Search clear button */
 .search-clear-btn {
   position: absolute;
