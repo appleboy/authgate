@@ -11,7 +11,13 @@ templ Navbar(props *NavbarProps) {
 					<span class="navbar-brand-tagline">OAuth 2.0 Server</span>
 				</a>
 			</div>
-			<button class="navbar-toggle" onclick="toggleMenu()" aria-label="Toggle navigation menu">☰</button>
+			<button class="navbar-toggle" onclick="toggleMenu()" aria-label="Toggle navigation menu">
+			<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+				<line x1="3" y1="6" x2="21" y2="6"></line>
+				<line x1="3" y1="12" x2="21" y2="12"></line>
+				<line x1="3" y1="18" x2="21" y2="18"></line>
+			</svg>
+		</button>
 			<div class="navbar-menu" id="navbarMenu">
 				if props.Username != "" {
 					<div class="navbar-links">
@@ -145,13 +151,12 @@ templ NavDropdownItem(href, label string, isActive bool, isAdmin bool, isExterna
 templ NavDropdownItemWithBadge(href, label string, isActive bool, badgeCount int) {
 	<a
 		href={ templ.URL(href) }
-		class={ templ.Classes("navbar-dropdown-item", templ.KV("active", isActive), "admin") }
+		class={ templ.Classes("navbar-dropdown-item", "navbar-dropdown-item--with-badge", templ.KV("active", isActive), "admin") }
 		role="menuitem"
-		style="display:flex;align-items:center;gap:var(--space-2);"
 	>
 		{ label }
 		if badgeCount > 0 {
-			<span style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;background:#EF4444;color:#fff;border-radius:9px;font-size:11px;font-weight:700;line-height:1;">
+			<span class="navbar-dropdown-badge">
 				{ fmt.Sprintf("%d", badgeCount) }
 			</span>
 		}

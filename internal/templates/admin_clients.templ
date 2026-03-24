@@ -32,7 +32,7 @@ templ AdminClients(props ClientsPageProps) {
 					</div>
 					@Alert(props.Success, AlertSuccess)
 					<!-- Status Filter Tabs -->
-					<div style="display:flex;gap:var(--space-2);margin-bottom:var(--space-4);border-bottom:1px solid var(--color-border);padding-bottom:var(--space-3);">
+					<div class="status-filter-tabs">
 						@AdminClientsStatusTab("/admin/clients", "All", props.StatusFilter == "")
 						@AdminClientsStatusTab("/admin/clients?status=pending", "Pending", props.StatusFilter == models.ClientStatusPending)
 						@AdminClientsStatusTab("/admin/clients?status=active", "Active", props.StatusFilter == models.ClientStatusActive)
@@ -42,6 +42,7 @@ templ AdminClients(props ClientsPageProps) {
 					if len(props.Clients) > 0 {
 						<div class="admin-clients-table-wrapper">
 							<table class="admin-clients-table">
+								<caption class="sr-only">List of registered OAuth clients</caption>
 								<thead>
 									<tr>
 										<th class="col-client-name">
@@ -184,11 +185,11 @@ templ ClientTableRow(client services.ClientWithCreator, csrfToken string) {
 			<code class="grant-types-code">
 				{ client.GrantTypes }
 			</code>
-			<div style="margin-top:var(--space-1);">
+			<div class="client-type-wrapper">
 				if client.ClientType == "public" {
-					<span class="status-badge" style="background:rgba(245,158,11,0.1);color:#D97706;border:1px solid rgba(245,158,11,0.3);font-size:var(--text-xs);">Public</span>
+					<span class="status-badge client-type-badge--public">Public</span>
 				} else {
-					<span class="status-badge" style="background:rgba(0,114,255,0.08);color:#0072ff;border:1px solid rgba(0,114,255,0.25);font-size:var(--text-xs);">Confidential</span>
+					<span class="status-badge client-type-badge--confidential">Confidential</span>
 				}
 			</div>
 		</td>
@@ -212,13 +213,13 @@ templ ClientTableRow(client services.ClientWithCreator, csrfToken string) {
 			<div class="actions">
 				if client.Status == models.ClientStatusPending {
 					<!-- Quick approve/reject for pending clients -->
-					<form method="POST" action={ templ.URL("/admin/clients/" + client.ClientID + "/approve") } style="display:inline;">
+					<form method="POST" action={ templ.URL("/admin/clients/" + client.ClientID + "/approve") } class="form-inline">
 						<input type="hidden" name="csrf_token" value={ csrfToken }/>
 						<button type="submit" class="btn btn-success btn-small" title="Approve client">
 							Approve
 						</button>
 					</form>
-					<form method="POST" action={ templ.URL("/admin/clients/" + client.ClientID + "/reject") } style="display:inline;">
+					<form method="POST" action={ templ.URL("/admin/clients/" + client.ClientID + "/reject") } class="form-inline">
 						<input type="hidden" name="csrf_token" value={ csrfToken }/>
 						<button type="submit" class="btn btn-warning btn-small" title="Reject client">
 							Reject
@@ -253,17 +254,7 @@ templ ClientTableRow(client services.ClientWithCreator, csrfToken string) {
 templ AdminClientsStatusTab(href, label string, isActive bool) {
 	<a
 		href={ templ.URL(href) }
-		style={
-			templ.SafeCSS(
-				"padding:var(--space-1) var(--space-3);border-radius:var(--radius-sm);font-size:var(--text-sm);font-weight:500;text-decoration:none;" +
-				func() string {
-					if isActive {
-						return "background:var(--color-primary);color:#fff;"
-					}
-					return "color:var(--color-text-secondary);"
-				}(),
-			),
-		}
+		class={ templ.Classes("status-filter-tab", templ.KV("status-filter-tab--active", isActive)) }
 	>
 		{ label }
 	</a>

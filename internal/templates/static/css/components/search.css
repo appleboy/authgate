@@ -72,6 +72,31 @@
   color: var(--color-text-tertiary);
 }
 
+/* Search clear button */
+.search-clear-btn {
+  position: absolute;
+  right: var(--space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-tertiary);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.search-clear-btn:hover {
+  color: var(--color-text-primary);
+  background: var(--color-gray-300);
+}
+
 /* Small variant for compact layouts */
 .search-input-sm {
   padding: var(--space-3) var(--space-3) var(--space-3) 3.25rem;

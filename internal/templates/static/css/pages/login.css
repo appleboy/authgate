@@ -354,6 +354,49 @@
   color: var(--color-gray-400);
 }
 
+/* Password visibility toggle */
+.login-password-wrapper {
+  position: relative;
+}
+
+.login-form-input--password {
+  padding-right: 52px;
+}
+
+.login-password-toggle {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.login-password-toggle:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
+}
+
+.login-password-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 114, 255, 0.15);
+}
+
+.login-password-toggle svg {
+  width: 20px;
+  height: 20px;
+}
+
 /* Remember me checkbox */
 .login-remember {
   margin-bottom: var(--space-6);
@@ -499,7 +542,7 @@
 }
 
 /* ============================================
-   Animations
+   Animations (login-specific only; slideDown, fadeInUp, fadeIn are in base.css)
    ============================================ */
 
 @keyframes loginCardAppear {
@@ -510,37 +553,6 @@
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
   }
 }
 

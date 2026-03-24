@@ -93,7 +93,7 @@ templ UserAppDetail(props UserClientDetailPageProps) {
 							Edit App
 						</a>
 						if props.Client.ClientType == "confidential" {
-							<form method="POST" action={ templ.URL("/apps/" + props.Client.ClientID + "/regenerate-secret") } style="display:inline; margin:0;">
+							<form method="POST" action={ templ.URL("/apps/" + props.Client.ClientID + "/regenerate-secret") } class="form-inline">
 								<input type="hidden" name="csrf_token" value={ props.CSRFToken }/>
 								<button
 									type="submit"

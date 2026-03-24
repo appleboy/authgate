@@ -235,6 +235,14 @@
   font-weight: 600;
 }
 
+.session-table-date-relative {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  font-style: italic;
+  margin-top: var(--space-1);
+}
+
 /* Table cell: Actions */
 .session-table-actions {
   display: flex;

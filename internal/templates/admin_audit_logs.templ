@@ -191,14 +191,67 @@ templ AdminAuditLogs(props AuditLogsPageProps) {
 	}
 }
 
+// humanReadableEventType converts raw event type constants to friendly labels.
+func humanReadableEventType(eventType models.EventType) string {
+	switch string(eventType) {
+	case "AUTHENTICATION_SUCCESS":
+		return "Login Success"
+	case "AUTHENTICATION_FAILURE":
+		return "Login Failure"
+	case "OAUTH_AUTHENTICATION":
+		return "OAuth Login"
+	case "LOGOUT":
+		return "Logout"
+	case "ACCESS_TOKEN_ISSUED":
+		return "Token Issued"
+	case "TOKEN_REFRESHED":
+		return "Token Refreshed"
+	case "TOKEN_REVOKED":
+		return "Token Revoked"
+	case "TOKEN_DISABLED":
+		return "Token Disabled"
+	case "TOKEN_ENABLED":
+		return "Token Enabled"
+	case "DEVICE_CODE_GENERATED":
+		return "Device Code Created"
+	case "DEVICE_CODE_AUTHORIZED":
+		return "Device Authorized"
+	case "CLIENT_CREATED":
+		return "Client Created"
+	case "CLIENT_UPDATED":
+		return "Client Updated"
+	case "CLIENT_DELETED":
+		return "Client Deleted"
+	case "CLIENT_SECRET_REGENERATED":
+		return "Secret Regenerated"
+	case "CLIENT_APPROVED":
+		return "Client Approved"
+	case "CLIENT_REJECTED":
+		return "Client Rejected"
+	case "RATE_LIMIT_EXCEEDED":
+		return "Rate Limited"
+	case "AUTHORIZATION_GRANTED":
+		return "Access Granted"
+	case "AUTHORIZATION_REVOKED":
+		return "Access Revoked"
+	case "ALL_TOKENS_REVOKED":
+		return "All Tokens Revoked"
+	case "ALL_SESSIONS_REVOKED":
+		return "All Sessions Revoked"
+	default:
+		return string(eventType)
+	}
+}
+
 templ AuditLogRow(log *models.AuditLog) {
 	<tr>
 		<td class="audit-timestamp-cell" data-label="Time">
 			<div class="audit-timestamp-date">{ log.EventTime.Format("2006-01-02") }</div>
 			<div class="audit-timestamp-time">{ log.EventTime.Format("15:04:05") }</div>
+			<div class="audit-timestamp-relative" data-timestamp={ log.EventTime.Format("2006-01-02T15:04:05Z07:00") }></div>
 		</td>
 		<td data-label="Event Type">
-			<span class="audit-event-type">{ log.EventType }</span>
+			<span class="audit-event-type" title={ log.EventType }>{ humanReadableEventType(log.EventType) }</span>
 		</td>
 		<td data-label="Severity">
 			if log.Severity == "INFO" {

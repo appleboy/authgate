@@ -2,6 +2,41 @@
    Form Components
    ============================================ */
 
+/* Inline form - removes default margins for forms embedded in flex/grid layouts */
+.form-inline {
+  margin: 0;
+}
+
+/* Button loading state */
+.btn-loading {
+  position: relative;
+  pointer-events: none;
+  opacity: 0.75;
+}
+
+.btn-loading::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  top: 50%;
+  left: 50%;
+  margin-top: -8px;
+  margin-left: -8px;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: btnSpin 0.6s linear infinite;
+}
+
+.btn-loading > * {
+  visibility: hidden;
+}
+
+@keyframes btnSpin {
+  to { transform: rotate(360deg); }
+}
+
 /* Form Groups */
 .form-group {
   display: flex;
