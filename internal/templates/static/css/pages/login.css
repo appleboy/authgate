@@ -397,6 +397,19 @@
   height: 20px;
 }
 
+/* Password visibility states via parent class toggle */
+.login-password-wrapper .eye-closed {
+  display: none;
+}
+
+.login-password-wrapper.show-password .eye-open {
+  display: none;
+}
+
+.login-password-wrapper.show-password .eye-closed {
+  display: block;
+}
+
 /* Remember me checkbox */
 .login-remember {
   margin-bottom: var(--space-6);

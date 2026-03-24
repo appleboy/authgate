@@ -59,7 +59,7 @@ templ AuthorizationItem(auth AuthorizationDisplay, csrfToken string) {
 		</div>
 		<!-- Actions -->
 		<div class="authorization-actions">
-			<form method="POST" action={ templ.URL("/account/authorizations/" + auth.UUID + "/revoke") } style="margin:0;">
+			<form method="POST" action={ templ.URL("/account/authorizations/" + auth.UUID + "/revoke") } class="form-inline">
 				<input type="hidden" name="csrf_token" value={ csrfToken }/>
 				<button
 					type="submit"

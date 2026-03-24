@@ -108,7 +108,7 @@ templ AdminClientDetail(props ClientDetailPageProps) {
 						<div style="margin-bottom:var(--space-4);padding:var(--space-3);background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:var(--radius-md);">
 							<p style="margin:0 0 var(--space-3);color:#92400E;font-weight:600;">This client is pending approval.</p>
 							<div style="display:flex;gap:var(--space-3);">
-								<form method="POST" action={ templ.URL("/admin/clients/" + props.Client.ClientID + "/approve") } style="margin:0;">
+								<form method="POST" action={ templ.URL("/admin/clients/" + props.Client.ClientID + "/approve") } class="form-inline">
 									<input type="hidden" name="csrf_token" value={ props.CSRFToken }/>
 									<button
 										type="submit"
@@ -121,7 +121,7 @@ templ AdminClientDetail(props ClientDetailPageProps) {
 										Approve
 									</button>
 								</form>
-								<form method="POST" action={ templ.URL("/admin/clients/" + props.Client.ClientID + "/reject") } style="margin:0;">
+								<form method="POST" action={ templ.URL("/admin/clients/" + props.Client.ClientID + "/reject") } class="form-inline">
 									<input type="hidden" name="csrf_token" value={ props.CSRFToken }/>
 									<button
 										type="submit"
@@ -183,7 +183,7 @@ templ AdminClientDetail(props ClientDetailPageProps) {
 										}
 									</span>
 								</div>
-								<form method="POST" action={ templ.URL("/admin/clients/" + props.Client.ClientID + "/revoke-all") } style="margin:0;">
+								<form method="POST" action={ templ.URL("/admin/clients/" + props.Client.ClientID + "/revoke-all") } class="form-inline">
 									<input type="hidden" name="csrf_token" value={ props.CSRFToken }/>
 									<button
 										type="submit"

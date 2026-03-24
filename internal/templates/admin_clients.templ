@@ -125,33 +125,7 @@ templ AdminClients(props ClientsPageProps) {
 				</div>
 			</div>
 		</div>
-		<script>
-			// Toggle client description
-			function toggleDescription(button) {
-				const cell = button.closest('.client-name-cell');
-				const description = cell.querySelector('.client-description');
-				const icon = button.querySelector('.toggle-icon');
-
-				if (description.style.display === 'none') {
-					description.style.display = 'block';
-					button.classList.add('expanded');
-					// Animate height
-					description.style.maxHeight = '0';
-					description.style.opacity = '0';
-					setTimeout(() => {
-						description.style.maxHeight = description.scrollHeight + 'px';
-						description.style.opacity = '1';
-					}, 10);
-				} else {
-					description.style.maxHeight = '0';
-					description.style.opacity = '0';
-					button.classList.remove('expanded');
-					setTimeout(() => {
-						description.style.display = 'none';
-					}, 300);
-				}
-			}
-		</script>
+		<!-- toggleDescription is provided globally via admin.js/main.js -->
 	}
 }
 

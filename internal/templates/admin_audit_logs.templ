@@ -193,51 +193,71 @@ templ AdminAuditLogs(props AuditLogsPageProps) {
 
 // humanReadableEventType converts raw event type constants to friendly labels.
 func humanReadableEventType(eventType models.EventType) string {
-	switch string(eventType) {
-	case "AUTHENTICATION_SUCCESS":
+	switch eventType {
+	case models.EventAuthenticationSuccess:
 		return "Login Success"
-	case "AUTHENTICATION_FAILURE":
+	case models.EventAuthenticationFailure:
 		return "Login Failure"
-	case "OAUTH_AUTHENTICATION":
+	case models.EventOAuthAuthentication:
 		return "OAuth Login"
-	case "LOGOUT":
+	case models.EventLogout:
 		return "Logout"
-	case "ACCESS_TOKEN_ISSUED":
+	case models.EventAccessTokenIssued:
 		return "Token Issued"
-	case "TOKEN_REFRESHED":
+	case models.EventRefreshTokenIssued:
+		return "Refresh Token Issued"
+	case models.EventIDTokenIssued:
+		return "ID Token Issued"
+	case models.EventTokenRefreshed:
 		return "Token Refreshed"
-	case "TOKEN_REVOKED":
+	case models.EventTokenRevoked:
 		return "Token Revoked"
-	case "TOKEN_DISABLED":
+	case models.EventTokenDisabled:
 		return "Token Disabled"
-	case "TOKEN_ENABLED":
+	case models.EventTokenEnabled:
 		return "Token Enabled"
-	case "DEVICE_CODE_GENERATED":
+	case models.EventTokenIntrospected:
+		return "Token Introspected"
+	case models.EventDeviceCodeGenerated:
 		return "Device Code Created"
-	case "DEVICE_CODE_AUTHORIZED":
+	case models.EventDeviceCodeAuthorized:
 		return "Device Authorized"
-	case "CLIENT_CREATED":
+	case models.EventAuthorizationCodeGenerated:
+		return "Auth Code Generated"
+	case models.EventAuthorizationCodeExchanged:
+		return "Auth Code Exchanged"
+	case models.EventAuthorizationCodeDenied:
+		return "Auth Code Denied"
+	case models.EventClientCreated:
 		return "Client Created"
-	case "CLIENT_UPDATED":
+	case models.EventClientUpdated:
 		return "Client Updated"
-	case "CLIENT_DELETED":
+	case models.EventClientDeleted:
 		return "Client Deleted"
-	case "CLIENT_SECRET_REGENERATED":
+	case models.EventClientSecretRegenerated:
 		return "Secret Regenerated"
-	case "CLIENT_APPROVED":
+	case models.EventClientRegistered:
+		return "Client Registered"
+	case models.EventClientApproved:
 		return "Client Approved"
-	case "CLIENT_REJECTED":
+	case models.EventClientRejected:
 		return "Client Rejected"
-	case "RATE_LIMIT_EXCEEDED":
+	case models.EventClientCredentialsTokenIssued:
+		return "Client Credentials Issued"
+	case models.EventRateLimitExceeded:
 		return "Rate Limited"
-	case "AUTHORIZATION_GRANTED":
+	case models.EventSuspiciousActivity:
+		return "Suspicious Activity"
+	case models.EventUserAuthorizationGranted:
 		return "Access Granted"
-	case "AUTHORIZATION_REVOKED":
+	case models.EventUserAuthorizationRevoked:
 		return "Access Revoked"
-	case "ALL_TOKENS_REVOKED":
+	case models.EventClientTokensRevokedAll:
 		return "All Tokens Revoked"
-	case "ALL_SESSIONS_REVOKED":
-		return "All Sessions Revoked"
+	case models.EventTypeAuditLogView:
+		return "Audit Log Viewed"
+	case models.EventTypeAuditLogExported:
+		return "Audit Log Exported"
 	default:
 		return string(eventType)
 	}

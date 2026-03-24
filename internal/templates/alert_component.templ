@@ -9,16 +9,19 @@ const (
 	AlertWarning AlertType = "alert-warning"
 )
 
-func alertAriaLive(alertType AlertType) string {
+// alertRole returns the ARIA role for the alert type.
+// role="alert" implies aria-live="assertive" (for errors).
+// role="status" implies aria-live="polite" (for success/info/warning).
+func alertRole(alertType AlertType) string {
 	if alertType == AlertError {
-		return "assertive"
+		return "alert"
 	}
-	return "polite"
+	return "status"
 }
 
 templ Alert(message string, alertType AlertType) {
 	if message != "" {
-		<div class={ templ.Classes("alert", string(alertType)) } role="alert" aria-live={ alertAriaLive(alertType) }>
+		<div class={ templ.Classes("alert", string(alertType)) } role={ alertRole(alertType) }>
 			{ message }
 		</div>
 	}
