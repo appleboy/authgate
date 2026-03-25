@@ -33,6 +33,8 @@ type Application struct {
 	UserCacheCloser        func() error
 	ClientCountCache       core.Cache[int64]
 	ClientCountCacheCloser func() error
+	TokenCache             core.Cache[models.AccessToken]
+	TokenCacheCloser       func() error
 	RateLimitRedisClient   *redis.Client
 
 	// Services
@@ -114,6 +116,12 @@ func (app *Application) initializeInfrastructure(ctx context.Context) error {
 		return err
 	}
 
+	// Token Cache
+	app.TokenCache, app.TokenCacheCloser, err = initializeTokenCache(ctx, app.Config)
+	if err != nil {
+		return err
+	}
+
 	// Redis (for rate limiting)
 	app.RateLimitRedisClient, err = initializeRateLimitRedisClient(ctx, app.Config)
 	if err != nil {
@@ -144,6 +152,7 @@ func (app *Application) initializeBusinessLayer() {
 		app.UserCache,
 		app.ClientCountCache,
 		app.TokenProvider,
+		app.TokenCache,
 	)
 }
 
@@ -194,6 +203,7 @@ func (app *Application) startWithGracefulShutdown() {
 	addCacheCleanupJob(m, app.MetricsCache, app.Config)
 	addUserCacheCleanupJob(m, app.UserCache, app.Config)
 	addClientCountCacheCleanupJob(m, app.ClientCountCache, app.Config)
+	addTokenCacheCleanupJob(m, app.TokenCache, app.Config)
 	addDatabaseShutdownJob(m, app.DB, app.Config)
 	addAuditLogCleanupJob(m, app.Config, app.AuditService)
 	addExpiredTokenCleanupJob(m, app.DB, app.Config)

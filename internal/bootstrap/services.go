@@ -27,6 +27,7 @@ func initializeServices(
 	userCache core.Cache[models.User],
 	clientCountCache core.Cache[int64],
 	tokenProvider core.TokenProvider,
+	tokenCache core.Cache[models.AccessToken],
 ) serviceSet {
 	// Initialize authentication providers
 	localProvider := auth.NewLocalAuthProvider(db)
@@ -51,6 +52,7 @@ func initializeServices(
 		tokenProvider,
 		auditService,
 		prometheusMetrics,
+		tokenCache,
 	)
 	clientService := services.NewClientService(
 		db, auditService, clientCountCache, cfg.ClientCountCacheTTL,

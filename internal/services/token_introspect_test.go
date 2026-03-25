@@ -28,7 +28,7 @@ func newIntrospectTokenService(t *testing.T) (*TokenService, *store.Store) {
 	}
 	localProvider, err := token.NewLocalTokenProvider(cfg)
 	require.NoError(t, err)
-	svc := NewTokenService(s, cfg, nil, localProvider, nil, metrics.NewNoopMetrics())
+	svc := NewTokenService(s, cfg, nil, localProvider, nil, metrics.NewNoopMetrics(), nil)
 	return svc, s
 }
 

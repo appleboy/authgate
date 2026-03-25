@@ -13,6 +13,10 @@ import (
 // authorization server is the token issuer and can rely on its own database state.
 // Returns (token, true) for active tokens, (token, false) for inactive/expired tokens,
 // and (nil, false) if the token does not exist.
+//
+// This method intentionally bypasses the token cache and always queries the database,
+// because introspection serves as the authoritative ground-truth endpoint for resource
+// servers (RFC 7662 §2.2) and must reflect real-time revocation status.
 func (s *TokenService) IntrospectToken(
 	ctx context.Context,
 	tokenString, callerClientID string,

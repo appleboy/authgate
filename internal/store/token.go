@@ -118,6 +118,16 @@ func (s *Store) RevokeTokenFamily(familyID string) (int64, error) {
 	return result.RowsAffected, result.Error
 }
 
+// GetActiveTokenHashesByFamilyID returns token hashes for all active tokens in a family.
+// Used for cache invalidation before bulk revocation.
+func (s *Store) GetActiveTokenHashesByFamilyID(familyID string) ([]string, error) {
+	var hashes []string
+	err := s.db.Model(&models.AccessToken{}).
+		Where("token_family_id = ? AND status = ?", familyID, models.TokenStatusActive).
+		Pluck("token_hash", &hashes).Error
+	return hashes, err
+}
+
 // GetTokensByCategoryAndStatus returns tokens filtered by category and status
 func (s *Store) GetTokensByCategoryAndStatus(
 	userID, category, status string,

@@ -113,6 +113,23 @@ func initializeClientCountCache(
 	})
 }
 
+// initializeTokenCache initializes the token verification cache (disabled by default)
+func initializeTokenCache(
+	ctx context.Context,
+	cfg *config.Config,
+) (core.Cache[models.AccessToken], func() error, error) {
+	if !cfg.TokenCacheEnabled {
+		return nil, nil, nil
+	}
+	return initializeCache[models.AccessToken](ctx, cfg, cacheOpts{
+		cacheType:   cfg.TokenCacheType,
+		keyPrefix:   "authgate:tokens:",
+		clientTTL:   cfg.TokenCacheClientTTL,
+		sizePerConn: cfg.TokenCacheSizePerConn,
+		label:       "Token",
+	})
+}
+
 // initializeUserCache initializes the user cache (always enabled, defaults to memory)
 func initializeUserCache(
 	ctx context.Context,

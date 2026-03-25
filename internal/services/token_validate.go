@@ -37,8 +37,8 @@ func (s *TokenService) ValidateToken(
 		return nil, err
 	}
 
-	// Check token exists in database and validate its state (revocation, expiry, category)
-	tok, err := s.store.GetAccessTokenByHash(util.SHA256Hex(tokenString))
+	// Check token exists in database (or cache) and validate its state (revocation, expiry, category)
+	tok, err := s.getAccessTokenByHash(ctx, util.SHA256Hex(tokenString))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("token not found or revoked")

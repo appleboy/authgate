@@ -49,6 +49,7 @@ type TokenService struct {
 	tokenProvider core.TokenProvider
 	auditService  *AuditService
 	metrics       core.Recorder
+	tokenCache    core.Cache[models.AccessToken]
 }
 
 func NewTokenService(
@@ -58,6 +59,7 @@ func NewTokenService(
 	provider core.TokenProvider,
 	auditService *AuditService,
 	m core.Recorder,
+	tokenCache core.Cache[models.AccessToken],
 ) *TokenService {
 	return &TokenService{
 		store:         s,
@@ -66,6 +68,46 @@ func NewTokenService(
 		tokenProvider: provider,
 		auditService:  auditService,
 		metrics:       m,
+		tokenCache:    tokenCache,
+	}
+}
+
+// getAccessTokenByHash looks up a token, using cache if available.
+func (s *TokenService) getAccessTokenByHash(
+	ctx context.Context,
+	hash string,
+) (*models.AccessToken, error) {
+	if s.tokenCache != nil {
+		tok, err := s.tokenCache.GetWithFetch(ctx, hash, s.config.TokenCacheTTL,
+			func(ctx context.Context, key string) (models.AccessToken, error) {
+				t, err := s.store.GetAccessTokenByHash(key)
+				if err != nil {
+					return models.AccessToken{}, err
+				}
+				return *t, nil
+			},
+		)
+		if err != nil {
+			return nil, err
+		}
+		return &tok, nil
+	}
+	return s.store.GetAccessTokenByHash(hash)
+}
+
+// invalidateTokenCache removes a token from cache by its hash.
+func (s *TokenService) invalidateTokenCache(ctx context.Context, hash string) {
+	if s.tokenCache != nil {
+		if err := s.tokenCache.Delete(ctx, hash); err != nil {
+			log.Printf("[TokenCache] failed to invalidate cache for hash=%s...: %v", hash[:8], err)
+		}
+	}
+}
+
+// invalidateTokenCacheByHashes removes multiple tokens from cache.
+func (s *TokenService) invalidateTokenCacheByHashes(ctx context.Context, hashes []string) {
+	for _, h := range hashes {
+		s.invalidateTokenCache(ctx, h)
 	}
 }
 

@@ -29,11 +29,20 @@ func (s *TokenService) revokeTokenFamilyWithAudit(
 		}
 	}
 
+	// Collect hashes before revocation for cache invalidation
+	var hashesToInvalidate []string
+	if s.tokenCache != nil {
+		hashesToInvalidate, _ = s.store.GetActiveTokenHashesByFamilyID(familyID)
+	}
+
 	revokedCount, err := s.store.RevokeTokenFamily(familyID)
 	if err != nil {
 		log.Printf("[Token] Failed to revoke token family %s: %v", familyID, err)
 		return
 	}
+
+	// Invalidate cached tokens in the revoked family
+	s.invalidateTokenCacheByHashes(ctx, hashesToInvalidate)
 
 	// Record family revocation event
 	if revokedCount > 0 {
@@ -154,12 +163,13 @@ func (s *TokenService) RefreshAccessToken(
 		}
 	}
 
+	rotated := s.config.EnableTokenRotation && newRefreshToken != nil
 	if err := s.store.RunInTransaction(func(tx core.Store) error {
 		if err := tx.CreateAccessToken(newAccessToken); err != nil {
 			return fmt.Errorf("failed to save new access token: %w", err)
 		}
 
-		if s.config.EnableTokenRotation && newRefreshToken != nil {
+		if rotated {
 			if err := tx.CreateAccessToken(newRefreshToken); err != nil {
 				return fmt.Errorf("failed to save new refresh token: %w", err)
 			}
@@ -179,6 +189,11 @@ func (s *TokenService) RefreshAccessToken(
 		return nil, nil, err
 	}
 
+	// Invalidate cache after transaction commits successfully
+	if rotated {
+		s.invalidateTokenCache(ctx, refreshToken.TokenHash)
+	}
+
 	// Fixed mode: return original refresh token with RawToken restored
 	if newRefreshToken == nil {
 		refreshToken.RawToken = refreshTokenString
@@ -191,12 +206,11 @@ func (s *TokenService) RefreshAccessToken(
 	// Log token refresh
 	if s.auditService != nil {
 		providerName := s.tokenProvider.Name()
-		rotated := s.config.EnableTokenRotation && refreshResult.RefreshToken != nil
 		details := models.AuditDetails{
 			"client_id":           newAccessToken.ClientID,
 			"scopes":              newAccessToken.Scopes,
 			"token_provider":      providerName,
-			"rotation_enabled":    rotated,
+			"rotation_enabled":    s.config.EnableTokenRotation,
 			"new_access_token_id": newAccessToken.ID,
 		}
 

@@ -547,6 +547,21 @@ func (mr *MockTokenReaderMockRecorder) GetAccessTokenByID(tokenID any) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccessTokenByID", reflect.TypeOf((*MockTokenReader)(nil).GetAccessTokenByID), tokenID)
 }
 
+// GetActiveTokenHashesByFamilyID mocks base method.
+func (m *MockTokenReader) GetActiveTokenHashesByFamilyID(familyID string) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetActiveTokenHashesByFamilyID", familyID)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetActiveTokenHashesByFamilyID indicates an expected call of GetActiveTokenHashesByFamilyID.
+func (mr *MockTokenReaderMockRecorder) GetActiveTokenHashesByFamilyID(familyID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetActiveTokenHashesByFamilyID", reflect.TypeOf((*MockTokenReader)(nil).GetActiveTokenHashesByFamilyID), familyID)
+}
+
 // GetTokensByCategoryAndStatus mocks base method.
 func (m *MockTokenReader) GetTokensByCategoryAndStatus(userID, category, status string) ([]models.AccessToken, error) {
 	m.ctrl.T.Helper()
@@ -1642,6 +1657,21 @@ func (m *MockStore) GetAccessTokenByID(tokenID string) (*models.AccessToken, err
 func (mr *MockStoreMockRecorder) GetAccessTokenByID(tokenID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccessTokenByID", reflect.TypeOf((*MockStore)(nil).GetAccessTokenByID), tokenID)
+}
+
+// GetActiveTokenHashesByFamilyID mocks base method.
+func (m *MockStore) GetActiveTokenHashesByFamilyID(familyID string) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetActiveTokenHashesByFamilyID", familyID)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetActiveTokenHashesByFamilyID indicates an expected call of GetActiveTokenHashesByFamilyID.
+func (mr *MockStoreMockRecorder) GetActiveTokenHashesByFamilyID(familyID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetActiveTokenHashesByFamilyID", reflect.TypeOf((*MockStore)(nil).GetActiveTokenHashesByFamilyID), familyID)
 }
 
 // GetAuditLogStats mocks base method.
