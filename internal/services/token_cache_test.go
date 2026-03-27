@@ -161,8 +161,8 @@ func TestValidateToken_CacheInvalidatedOnDisable(t *testing.T) {
 	assert.Error(t, err, "cache should be invalidated after disable")
 }
 
-func TestValidateToken_NilCache(t *testing.T) {
-	// Test that everything works when cache is nil (disabled)
+func TestValidateToken_NoopCache(t *testing.T) {
+	// Test that everything works when cache is a no-op (disabled)
 	s := setupTestStore(t)
 	cfg := &config.Config{
 		JWTExpiration:                    1 * time.Hour,
@@ -174,7 +174,8 @@ func TestValidateToken_NilCache(t *testing.T) {
 	require.NoError(t, err)
 	deviceService := NewDeviceService(s, cfg, nil, metrics.NewNoopMetrics())
 	svc := NewTokenService(
-		s, cfg, deviceService, localProvider, nil, metrics.NewNoopMetrics(), nil,
+		s, cfg, deviceService, localProvider, nil, metrics.NewNoopMetrics(),
+		cache.NewNoopCache[models.AccessToken](),
 	)
 
 	ctx := context.Background()

@@ -80,42 +80,38 @@ func (s *TokenService) getAccessTokenByHash(
 	ctx context.Context,
 	hash string,
 ) (*models.AccessToken, error) {
-	if s.tokenCache != nil {
-		tok, err := s.tokenCache.GetWithFetch(ctx, hash, s.config.TokenCacheTTL,
-			func(ctx context.Context, key string) (models.AccessToken, error) {
-				t, err := s.store.GetAccessTokenByHash(key)
-				if err != nil {
-					return models.AccessToken{}, err
-				}
-				return *t, nil
-			},
-		)
-		if err == nil {
-			return &tok, nil
-		}
-		// If the fetch function itself returned a DB error (e.g. record not found),
-		// propagate it. Otherwise, the cache backend failed — fall back to DB.
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, err
-		}
-		log.Printf("[TokenCache] cache lookup failed, falling back to DB: %v", err)
+	tok, err := s.tokenCache.GetWithFetch(ctx, hash, s.config.TokenCacheTTL,
+		func(ctx context.Context, key string) (models.AccessToken, error) {
+			t, err := s.store.GetAccessTokenByHash(key)
+			if err != nil {
+				return models.AccessToken{}, err
+			}
+			return *t, nil
+		},
+	)
+	if err == nil {
+		return &tok, nil
 	}
+	// If the fetch function itself returned a DB error (e.g. record not found),
+	// propagate it. Otherwise, the cache backend failed — fall back to DB.
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+	log.Printf("[TokenCache] cache lookup failed, falling back to DB: %v", err)
 	return s.store.GetAccessTokenByHash(hash)
 }
 
 // invalidateTokenCache removes a token from cache by its hash.
 func (s *TokenService) invalidateTokenCache(ctx context.Context, hash string) {
-	if s.tokenCache != nil {
-		if err := s.tokenCache.Delete(ctx, hash); err != nil {
-			hashPrefix := hash
-			if len(hashPrefix) > 8 {
-				hashPrefix = hashPrefix[:8]
-			}
-			log.Printf(
-				"[TokenCache] failed to invalidate cache for hash=%s...: %v",
-				hashPrefix, err,
-			)
+	if err := s.tokenCache.Delete(ctx, hash); err != nil {
+		hashPrefix := hash
+		if len(hashPrefix) > 8 {
+			hashPrefix = hashPrefix[:8]
 		}
+		log.Printf(
+			"[TokenCache] failed to invalidate cache for hash=%s...: %v",
+			hashPrefix, err,
+		)
 	}
 }
 

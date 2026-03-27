@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-authgate/authgate/internal/cache"
 	"github.com/go-authgate/authgate/internal/config"
 	"github.com/go-authgate/authgate/internal/core"
 	"github.com/go-authgate/authgate/internal/metrics"
@@ -61,7 +62,7 @@ func newCCTokenService(t *testing.T) (*TokenService, *store.Store) {
 		localProvider,
 		nil,
 		metrics.NewNoopMetrics(),
-		nil,
+		cache.NewNoopCache[models.AccessToken](),
 	)
 	return svc, s
 }

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-authgate/authgate/internal/cache"
 	"github.com/go-authgate/authgate/internal/config"
 	"github.com/go-authgate/authgate/internal/metrics"
 	"github.com/go-authgate/authgate/internal/models"
@@ -29,7 +30,7 @@ func createTestTokenService(t *testing.T, s *store.Store, cfg *config.Config) *T
 		localProvider,
 		nil,
 		metrics.NewNoopMetrics(),
-		nil,
+		cache.NewNoopCache[models.AccessToken](),
 	)
 }
 
