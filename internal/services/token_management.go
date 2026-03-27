@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"log"
 
 	"github.com/go-authgate/authgate/internal/models"
 	"github.com/go-authgate/authgate/internal/util"
@@ -12,14 +13,22 @@ import (
 
 // RevokeToken revokes a token by its JWT string
 func (s *TokenService) RevokeToken(tokenString string) error {
+	hash := util.SHA256Hex(tokenString)
+
 	// Get the token from database
-	tok, err := s.store.GetAccessTokenByHash(util.SHA256Hex(tokenString))
+	tok, err := s.store.GetAccessTokenByHash(hash)
 	if err != nil {
 		return errors.New("token not found")
 	}
 
 	// Delete the token
-	return s.store.RevokeToken(tok.ID)
+	if err := s.store.RevokeToken(tok.ID); err != nil {
+		return err
+	}
+
+	s.invalidateTokenCache(context.Background(), hash)
+
+	return nil
 }
 
 // RevokeTokenByID revokes a token by its ID
@@ -49,6 +58,8 @@ func (s *TokenService) RevokeTokenByID(ctx context.Context, tokenID, actorUserID
 		return err
 	}
 
+	s.invalidateTokenCache(ctx, tok.TokenHash)
+
 	// Record revocation
 	s.metrics.RecordTokenRevoked(tok.TokenCategory, "user_request")
 
@@ -75,7 +86,32 @@ func (s *TokenService) RevokeTokenByID(ctx context.Context, tokenID, actorUserID
 
 // RevokeAllUserTokens revokes all tokens for a user
 func (s *TokenService) RevokeAllUserTokens(userID string) error {
-	return s.store.RevokeTokensByUserID(userID)
+	// Collect hashes before deletion so we can invalidate the cache,
+	// but only invalidate if revocation succeeds.
+	var hashes []string
+	if s.tokenCache != nil {
+		if tokens, err := s.store.GetTokensByUserID(userID); err == nil {
+			hashes = make([]string, 0, len(tokens))
+			for _, t := range tokens {
+				hashes = append(hashes, t.TokenHash)
+			}
+		} else {
+			log.Printf(
+				"[TokenCache] failed to collect user token hashes for invalidation user=%s: %v",
+				userID, err,
+			)
+		}
+	}
+
+	if err := s.store.RevokeTokensByUserID(userID); err != nil {
+		return err
+	}
+
+	if len(hashes) > 0 {
+		s.invalidateTokenCacheByHashes(context.Background(), hashes)
+	}
+
+	return nil
 }
 
 // updateTokenStatusWithAudit is a helper function to update token status and log audit events
@@ -123,6 +159,8 @@ func (s *TokenService) updateTokenStatusWithAudit(
 		}
 		return err
 	}
+
+	s.invalidateTokenCache(ctx, tok.TokenHash)
 
 	// Log success
 	if s.auditService != nil {
@@ -173,5 +211,17 @@ func (s *TokenService) EnableToken(ctx context.Context, tokenID, actorUserID str
 
 // RevokeTokenByStatus permanently revokes a token (uses status update, not deletion)
 func (s *TokenService) RevokeTokenByStatus(tokenID string) error {
-	return s.store.UpdateTokenStatus(tokenID, models.TokenStatusRevoked)
+	// Look up token hash for cache invalidation before revoking
+	tok, err := s.store.GetAccessTokenByID(tokenID)
+	if err != nil {
+		return err
+	}
+
+	if err := s.store.UpdateTokenStatus(tokenID, models.TokenStatusRevoked); err != nil {
+		return err
+	}
+
+	s.invalidateTokenCache(context.Background(), tok.TokenHash)
+
+	return nil
 }

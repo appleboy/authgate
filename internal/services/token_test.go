@@ -29,6 +29,7 @@ func createTestTokenService(t *testing.T, s *store.Store, cfg *config.Config) *T
 		localProvider,
 		nil,
 		metrics.NewNoopMetrics(),
+		nil,
 	)
 }
 

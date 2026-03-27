@@ -77,6 +77,7 @@ type TokenReader interface {
 		params types.PaginationParams,
 	) ([]models.AccessToken, types.PaginationResult, error)
 	GetTokensByCategoryAndStatus(userID, category, status string) ([]models.AccessToken, error)
+	GetActiveTokenHashesByFamilyID(familyID string) ([]string, error)
 }
 
 // TokenWriter groups token mutation operations.

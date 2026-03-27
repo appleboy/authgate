@@ -176,6 +176,13 @@ type Config struct {
 	ClientCountCacheClientTTL   time.Duration // CLIENT_COUNT_CACHE_CLIENT_TTL for redis-aside (default: 10m)
 	ClientCountCacheSizePerConn int           // CLIENT_COUNT_CACHE_SIZE_PER_CONN for redis-aside in MB (default: 32MB)
 
+	// Token Cache settings (reduces DB queries for token verification)
+	TokenCacheEnabled     bool          // TOKEN_CACHE_ENABLED: enable token verification cache (default: false)
+	TokenCacheType        string        // TOKEN_CACHE_TYPE: memory|redis|redis-aside (default: memory)
+	TokenCacheTTL         time.Duration // TOKEN_CACHE_TTL: cache lifetime (default: 5m)
+	TokenCacheClientTTL   time.Duration // TOKEN_CACHE_CLIENT_TTL: redis-aside client-side TTL (default: 30s)
+	TokenCacheSizePerConn int           // TOKEN_CACHE_SIZE_PER_CONN: redis-aside size in MB (default: 32MB)
+
 	// Dynamic Client Registration (RFC 7591)
 	EnableDynamicClientRegistration    bool   // Enable POST /oauth/register endpoint (default: false)
 	DynamicClientRegistrationRateLimit int    // Requests per minute for /oauth/register (default: 5)
@@ -371,6 +378,13 @@ func Load() *Config {
 			32,
 		), // 32MB default
 
+		// Token Cache settings
+		TokenCacheEnabled:     getEnvBool("TOKEN_CACHE_ENABLED", false),
+		TokenCacheType:        getEnv("TOKEN_CACHE_TYPE", CacheTypeMemory),
+		TokenCacheTTL:         getEnvDuration("TOKEN_CACHE_TTL", 5*time.Minute),
+		TokenCacheClientTTL:   getEnvDuration("TOKEN_CACHE_CLIENT_TTL", 30*time.Second),
+		TokenCacheSizePerConn: getEnvInt("TOKEN_CACHE_SIZE_PER_CONN", 32), // 32MB default
+
 		// Dynamic Client Registration (RFC 7591)
 		EnableDynamicClientRegistration:    getEnvBool("ENABLE_DYNAMIC_CLIENT_REGISTRATION", false),
 		DynamicClientRegistrationRateLimit: getEnvInt("DYNAMIC_CLIENT_REGISTRATION_RATE_LIMIT", 5),
@@ -544,6 +558,26 @@ func (c *Config) Validate() error {
 			"CLIENT_COUNT_CACHE_TTL must be a positive duration (got %s)",
 			c.ClientCountCacheTTL,
 		)
+	}
+
+	// Token cache validation (only when enabled)
+	if c.TokenCacheEnabled {
+		if err := validateCacheType("TOKEN_CACHE_TYPE", c.TokenCacheType, c.RedisAddr); err != nil {
+			return err
+		}
+		if c.TokenCacheTTL <= 0 {
+			return fmt.Errorf(
+				"TOKEN_CACHE_TTL must be a positive duration when TOKEN_CACHE_ENABLED=true (got %s)",
+				c.TokenCacheTTL,
+			)
+		}
+		if c.TokenCacheType == CacheTypeRedisAside && c.TokenCacheClientTTL <= 0 {
+			return fmt.Errorf(
+				"TOKEN_CACHE_CLIENT_TTL must be a positive duration when TOKEN_CACHE_TYPE=%q (got %s)",
+				CacheTypeRedisAside,
+				c.TokenCacheClientTTL,
+			)
+		}
 	}
 
 	// SESSION_REMEMBER_ME_MAX_AGE must be positive when remember-me is enabled.

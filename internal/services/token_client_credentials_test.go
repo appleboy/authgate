@@ -61,6 +61,7 @@ func newCCTokenService(t *testing.T) (*TokenService, *store.Store) {
 		localProvider,
 		nil,
 		metrics.NewNoopMetrics(),
+		nil,
 	)
 	return svc, s
 }

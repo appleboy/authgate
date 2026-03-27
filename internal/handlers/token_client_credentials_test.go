@@ -46,7 +46,7 @@ func setupCCTestEnv(t *testing.T) (*gin.Engine, *store.Store) {
 	auditSvc := services.NewAuditService(s, false, 0)
 	deviceSvc := services.NewDeviceService(s, cfg, auditSvc, metrics.NewNoopMetrics())
 	tokenSvc := services.NewTokenService(
-		s, cfg, deviceSvc, localProvider, auditSvc, metrics.NewNoopMetrics(),
+		s, cfg, deviceSvc, localProvider, auditSvc, metrics.NewNoopMetrics(), nil,
 	)
 	authzSvc := services.NewAuthorizationService(s, cfg, auditSvc)
 	handler := NewTokenHandler(tokenSvc, authzSvc, cfg)

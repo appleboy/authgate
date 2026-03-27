@@ -262,6 +262,18 @@ func addClientCountCacheCleanupJob(
 	addNamedCacheShutdownJob(m, "client count cache", clientCountCache.Close, cfg.CacheCloseTimeout)
 }
 
+// addTokenCacheCleanupJob adds token cache cleanup on shutdown
+func addTokenCacheCleanupJob(
+	m *graceful.Manager,
+	tokenCache core.Cache[models.AccessToken],
+	cfg *config.Config,
+) {
+	if tokenCache == nil {
+		return
+	}
+	addNamedCacheShutdownJob(m, "token cache", tokenCache.Close, cfg.CacheCloseTimeout)
+}
+
 // addExpiredTokenCleanupJob adds a periodic job that purges expired access tokens
 // and device codes from the database to prevent unbounded table growth.
 func addExpiredTokenCleanupJob(m *graceful.Manager, db *store.Store, cfg *config.Config) {
