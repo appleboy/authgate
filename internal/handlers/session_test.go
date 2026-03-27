@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-authgate/authgate/internal/cache"
 	"github.com/go-authgate/authgate/internal/config"
 	"github.com/go-authgate/authgate/internal/metrics"
 	"github.com/go-authgate/authgate/internal/models"
@@ -41,7 +42,8 @@ func setupSessionServices(t *testing.T) (*store.Store, *services.TokenService) {
 	auditSvc := services.NewAuditService(s, false, 0)
 	deviceSvc := services.NewDeviceService(s, cfg, auditSvc, metrics.NewNoopMetrics())
 	tokenSvc := services.NewTokenService(
-		s, cfg, deviceSvc, localProvider, auditSvc, metrics.NewNoopMetrics(), nil,
+		s, cfg, deviceSvc, localProvider, auditSvc, metrics.NewNoopMetrics(),
+		cache.NewNoopCache[models.AccessToken](),
 	)
 
 	return s, tokenSvc

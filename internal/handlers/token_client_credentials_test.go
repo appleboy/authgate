@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-authgate/authgate/internal/cache"
 	"github.com/go-authgate/authgate/internal/config"
 	"github.com/go-authgate/authgate/internal/core"
 	"github.com/go-authgate/authgate/internal/metrics"
@@ -46,7 +47,8 @@ func setupCCTestEnv(t *testing.T) (*gin.Engine, *store.Store) {
 	auditSvc := services.NewAuditService(s, false, 0)
 	deviceSvc := services.NewDeviceService(s, cfg, auditSvc, metrics.NewNoopMetrics())
 	tokenSvc := services.NewTokenService(
-		s, cfg, deviceSvc, localProvider, auditSvc, metrics.NewNoopMetrics(), nil,
+		s, cfg, deviceSvc, localProvider, auditSvc, metrics.NewNoopMetrics(),
+		cache.NewNoopCache[models.AccessToken](),
 	)
 	authzSvc := services.NewAuthorizationService(s, cfg, auditSvc)
 	handler := NewTokenHandler(tokenSvc, authzSvc, cfg)

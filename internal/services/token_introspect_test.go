@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-authgate/authgate/internal/cache"
 	"github.com/go-authgate/authgate/internal/config"
 	"github.com/go-authgate/authgate/internal/metrics"
 	"github.com/go-authgate/authgate/internal/models"
@@ -28,7 +29,8 @@ func newIntrospectTokenService(t *testing.T) (*TokenService, *store.Store) {
 	}
 	localProvider, err := token.NewLocalTokenProvider(cfg)
 	require.NoError(t, err)
-	svc := NewTokenService(s, cfg, nil, localProvider, nil, metrics.NewNoopMetrics(), nil)
+	svc := NewTokenService(s, cfg, nil, localProvider, nil, metrics.NewNoopMetrics(),
+		cache.NewNoopCache[models.AccessToken]())
 	return svc, s
 }
 

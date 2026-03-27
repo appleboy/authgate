@@ -119,7 +119,8 @@ func initializeTokenCache(
 	cfg *config.Config,
 ) (core.Cache[models.AccessToken], func() error, error) {
 	if !cfg.TokenCacheEnabled {
-		return nil, nil, nil
+		noop := cache.NewNoopCache[models.AccessToken]()
+		return noop, noop.Close, nil
 	}
 	return initializeCache[models.AccessToken](ctx, cfg, cacheOpts{
 		cacheType:   cfg.TokenCacheType,
