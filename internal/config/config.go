@@ -28,6 +28,13 @@ const (
 	CacheTypeRedisAside = "redis-aside"
 )
 
+// JWT signing algorithm constants.
+const (
+	AlgHS256 = "HS256"
+	AlgRS256 = "RS256"
+	AlgES256 = "ES256"
+)
+
 type Config struct {
 	// Server settings
 	ServerAddr string
@@ -235,7 +242,7 @@ func Load() *Config {
 			getEnv("ENVIRONMENT", "") == "production",
 		JWTSecret:           getEnv("JWT_SECRET", "your-256-bit-secret-change-in-production"),
 		JWTExpiration:       getEnvDuration("JWT_EXPIRATION", 10*time.Hour),
-		JWTSigningAlgorithm: getEnv("JWT_SIGNING_ALGORITHM", "HS256"),
+		JWTSigningAlgorithm: getEnv("JWT_SIGNING_ALGORITHM", AlgHS256),
 		JWTPrivateKeyPath:   getEnv("JWT_PRIVATE_KEY_PATH", ""),
 		JWTKeyID:            getEnv("JWT_KEY_ID", ""),
 		JWTExpirationJitter: getEnvDuration("JWT_EXPIRATION_JITTER", 30*time.Minute),
@@ -513,11 +520,19 @@ func (c *Config) Validate() error {
 		)
 	}
 
+	// Validate JWT secret minimum length for HS256
+	if (c.JWTSigningAlgorithm == "" || c.JWTSigningAlgorithm == AlgHS256) && len(c.JWTSecret) < 32 {
+		return fmt.Errorf(
+			"JWT_SECRET must be at least 32 bytes for HS256 (got %d bytes)",
+			len(c.JWTSecret),
+		)
+	}
+
 	// Validate JWT signing algorithm
 	switch c.JWTSigningAlgorithm {
-	case "", "HS256":
+	case "", AlgHS256:
 		// default, no key file required
-	case "RS256", "ES256":
+	case AlgRS256, AlgES256:
 		if c.JWTPrivateKeyPath == "" {
 			return fmt.Errorf(
 				"JWT_PRIVATE_KEY_PATH is required when JWT_SIGNING_ALGORITHM=%s",
@@ -607,6 +622,12 @@ func (c *Config) Validate() error {
 	if c.SessionRememberMeEnabled && c.SessionRememberMeMaxAge <= 0 {
 		return fmt.Errorf(
 			"SESSION_REMEMBER_ME_MAX_AGE must be a positive value when SESSION_REMEMBER_ME_ENABLED=true (got %d)",
+			c.SessionRememberMeMaxAge,
+		)
+	}
+	if c.SessionRememberMeEnabled && c.SessionRememberMeMaxAge > 2592000 {
+		return fmt.Errorf(
+			"SESSION_REMEMBER_ME_MAX_AGE exceeds 30-day gorilla/sessions limit (got %d, max 2592000)",
 			c.SessionRememberMeMaxAge,
 		)
 	}

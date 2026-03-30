@@ -16,18 +16,26 @@ import (
 )
 
 const (
-	// https://datatracker.ietf.org/doc/html/rfc8628#section-3.4
-	GrantTypeDeviceCode = "urn:ietf:params:oauth:grant-type:device_code"
-	// GrantTypeDeviceCodeShort is the informal alias accepted by RFC 7591 registrations.
-	GrantTypeDeviceCodeShort = "device_code"
-	// https://datatracker.ietf.org/doc/html/rfc6749#section-6
-	GrantTypeRefreshToken = "refresh_token"
-	// https://datatracker.ietf.org/doc/html/rfc6749#section-4.1
+	// Grant type URNs (RFC 6749, RFC 8628)
+	GrantTypeDeviceCode        = "urn:ietf:params:oauth:grant-type:device_code"
+	GrantTypeDeviceCodeShort   = "device_code"
+	GrantTypeRefreshToken      = "refresh_token"
 	GrantTypeAuthorizationCode = "authorization_code"
-	// https://datatracker.ietf.org/doc/html/rfc6749#section-4.4
 	GrantTypeClientCredentials = "client_credentials"
-	// errInvalidGrant is reused across authorization code grant error paths
-	errInvalidGrant = "invalid_grant"
+
+	// OAuth 2.0 error codes (RFC 6749 §5.2, RFC 8628 §3.5)
+	errInvalidGrant         = "invalid_grant"
+	errInvalidRequest       = "invalid_request"
+	errInvalidClient        = "invalid_client"
+	errInvalidScope         = "invalid_scope"
+	errUnsupportedGrant     = "unsupported_grant_type"
+	errAuthorizationPending = "authorization_pending"
+	errSlowDown             = "slow_down"
+	errExpiredToken         = "expired_token"
+	errAccessDenied         = "access_denied"
+	errServerError          = "server_error"
+	errMissingToken         = "missing_token"
+	errInvalidToken         = "invalid_token"
 )
 
 type TokenHandler struct {
@@ -99,7 +107,7 @@ func (h *TokenHandler) Token(c *gin.Context) {
 		respondOAuthError(
 			c,
 			http.StatusBadRequest,
-			"unsupported_grant_type",
+			errUnsupportedGrant,
 			"Supported grant types: device_code, refresh_token, authorization_code, client_credentials",
 		)
 	}
@@ -114,7 +122,7 @@ func (h *TokenHandler) handleDeviceCodeGrant(c *gin.Context) {
 		respondOAuthError(
 			c,
 			http.StatusBadRequest,
-			"invalid_request",
+			errInvalidRequest,
 			"device_code and client_id are required",
 		)
 		return
@@ -128,19 +136,19 @@ func (h *TokenHandler) handleDeviceCodeGrant(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrAuthorizationPending):
-			respondOAuthError(c, http.StatusBadRequest, "authorization_pending", "")
+			respondOAuthError(c, http.StatusBadRequest, errAuthorizationPending, "")
 		case errors.Is(err, services.ErrSlowDown):
-			respondOAuthError(c, http.StatusBadRequest, "slow_down", "")
+			respondOAuthError(c, http.StatusBadRequest, errSlowDown, "")
 		case errors.Is(err, services.ErrExpiredToken):
-			respondOAuthError(c, http.StatusBadRequest, "expired_token", "")
+			respondOAuthError(c, http.StatusBadRequest, errExpiredToken, "")
 		case errors.Is(err, services.ErrAccessDenied):
-			respondOAuthError(c, http.StatusBadRequest, "access_denied", "")
+			respondOAuthError(c, http.StatusBadRequest, errAccessDenied, "")
 		default:
 			log.Printf("[token] device code exchange error: %v", err)
 			respondOAuthError(
 				c,
 				http.StatusInternalServerError,
-				"server_error",
+				errServerError,
 				"An internal error occurred",
 			)
 		}
@@ -162,7 +170,7 @@ func (h *TokenHandler) handleRefreshTokenGrant(c *gin.Context) {
 		respondOAuthError(
 			c,
 			http.StatusBadRequest,
-			"invalid_request",
+			errInvalidRequest,
 			"refresh_token and client_id are required",
 		)
 		return
@@ -183,7 +191,7 @@ func (h *TokenHandler) handleRefreshTokenGrant(c *gin.Context) {
 			respondOAuthError(
 				c,
 				http.StatusBadRequest,
-				"invalid_grant",
+				errInvalidGrant,
 				"Refresh token is invalid or expired",
 			)
 		case errors.Is(err, services.ErrAccessDenied):
@@ -192,21 +200,21 @@ func (h *TokenHandler) handleRefreshTokenGrant(c *gin.Context) {
 			respondOAuthError(
 				c,
 				http.StatusUnauthorized,
-				"invalid_client",
+				errInvalidClient,
 				"Client authentication failed",
 			)
 		case errors.Is(err, token.ErrInvalidScope):
 			respondOAuthError(
 				c,
 				http.StatusBadRequest,
-				"invalid_scope",
+				errInvalidScope,
 				"Requested scope exceeds original grant",
 			)
 		default:
 			respondOAuthError(
 				c,
 				http.StatusInternalServerError,
-				"server_error",
+				errServerError,
 				"Token refresh failed",
 			)
 		}
@@ -232,7 +240,7 @@ func (h *TokenHandler) handleRefreshTokenGrant(c *gin.Context) {
 func (h *TokenHandler) TokenInfo(c *gin.Context) {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {
-		respondOAuthError(c, http.StatusUnauthorized, "missing_token", "")
+		respondOAuthError(c, http.StatusUnauthorized, errMissingToken, "")
 		return
 	}
 
@@ -243,7 +251,7 @@ func (h *TokenHandler) TokenInfo(c *gin.Context) {
 		respondOAuthError(
 			c,
 			http.StatusUnauthorized,
-			"invalid_token",
+			errInvalidToken,
 			"Token is invalid or expired",
 		)
 		return
@@ -288,7 +296,7 @@ func (h *TokenHandler) Introspect(c *gin.Context) {
 		respondOAuthError(
 			c,
 			http.StatusUnauthorized,
-			"invalid_client",
+			errInvalidClient,
 			"Client authentication required",
 		)
 		return
@@ -300,7 +308,7 @@ func (h *TokenHandler) Introspect(c *gin.Context) {
 		respondOAuthError(
 			c,
 			http.StatusUnauthorized,
-			"invalid_client",
+			errInvalidClient,
 			"Client authentication failed",
 		)
 		return
@@ -312,7 +320,7 @@ func (h *TokenHandler) Introspect(c *gin.Context) {
 		respondOAuthError(
 			c,
 			http.StatusBadRequest,
-			"invalid_request",
+			errInvalidRequest,
 			"token parameter is required",
 		)
 		return
@@ -370,7 +378,7 @@ func (h *TokenHandler) Revoke(c *gin.Context) {
 		respondOAuthError(
 			c,
 			http.StatusBadRequest,
-			"invalid_request",
+			errInvalidRequest,
 			"token parameter is required",
 		)
 		return
@@ -406,7 +414,7 @@ func (h *TokenHandler) handleClientCredentialsGrant(c *gin.Context) {
 		respondOAuthError(
 			c,
 			http.StatusUnauthorized,
-			"invalid_client",
+			errInvalidClient,
 			"Client authentication required: use HTTP Basic Auth or provide client_id and client_secret in the request body",
 		)
 		return
@@ -429,7 +437,7 @@ func (h *TokenHandler) handleClientCredentialsGrant(c *gin.Context) {
 			respondOAuthError(
 				c,
 				http.StatusUnauthorized,
-				"invalid_client",
+				errInvalidClient,
 				"Client authentication failed",
 			)
 		case errors.Is(err, services.ErrClientCredentialsFlowDisabled):
@@ -439,14 +447,14 @@ func (h *TokenHandler) handleClientCredentialsGrant(c *gin.Context) {
 			respondOAuthError(
 				c,
 				http.StatusBadRequest,
-				"invalid_scope",
+				errInvalidScope,
 				"Requested scope exceeds client permissions or contains restricted scopes (openid, offline_access are not permitted)",
 			)
 		default:
 			respondOAuthError(
 				c,
 				http.StatusInternalServerError,
-				"server_error",
+				errServerError,
 				"Token issuance failed",
 			)
 		}
@@ -469,7 +477,7 @@ func (h *TokenHandler) handleAuthorizationCodeGrant(c *gin.Context) {
 		respondOAuthError(
 			c,
 			http.StatusBadRequest,
-			"invalid_request",
+			errInvalidRequest,
 			"code, redirect_uri, and client_id are required",
 		)
 		return
@@ -508,7 +516,7 @@ func (h *TokenHandler) handleAuthorizationCodeGrant(c *gin.Context) {
 		respondOAuthError(
 			c,
 			http.StatusInternalServerError,
-			"server_error",
+			errServerError,
 			"Failed to issue tokens",
 		)
 		return

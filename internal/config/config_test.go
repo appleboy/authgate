@@ -12,6 +12,7 @@ import (
 // Tests override specific fields to trigger the validation they want to test.
 func validBaseConfig() Config {
 	return Config{
+		JWTSecret:            "test-secret-that-is-at-least-32b",
 		JWTExpiration:        time.Hour,
 		RateLimitStore:       RateLimitStoreMemory,
 		MetricsCacheType:     CacheTypeMemory,
@@ -581,6 +582,77 @@ func TestAuthCodeFlowConfigDefaults(t *testing.T) {
 	assert.Equal(t, 10*time.Minute, cfg.AuthCodeExpiration)
 	assert.False(t, cfg.PKCERequired)
 	assert.True(t, cfg.ConsentRemember)
+}
+
+func TestConfig_Validate_JWTSecretMinLength(t *testing.T) {
+	tests := []struct {
+		name        string
+		secret      string
+		algorithm   string
+		expectError bool
+	}{
+		{
+			name:        "HS256 with 32-byte secret passes",
+			secret:      "test-secret-that-is-at-least-32b",
+			algorithm:   "HS256",
+			expectError: false,
+		},
+		{
+			name:        "HS256 with short secret fails",
+			secret:      "short",
+			algorithm:   "HS256",
+			expectError: true,
+		},
+		{
+			name:        "empty algorithm (default HS256) with short secret fails",
+			secret:      "short",
+			algorithm:   "",
+			expectError: true,
+		},
+		{
+			name:        "RS256 with short secret is OK (uses key file, not secret)",
+			secret:      "short",
+			algorithm:   "RS256",
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validBaseConfig()
+			cfg.JWTSecret = tt.secret
+			cfg.JWTSigningAlgorithm = tt.algorithm
+			if tt.algorithm == "RS256" || tt.algorithm == "ES256" {
+				cfg.JWTPrivateKeyPath = "/tmp/fake.pem"
+			}
+			err := cfg.Validate()
+			if tt.expectError {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "JWT_SECRET must be at least 32 bytes")
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestConfig_Validate_SessionRememberMeMaxAge(t *testing.T) {
+	t.Run("exceeds 30-day limit", func(t *testing.T) {
+		cfg := validBaseConfig()
+		cfg.SessionRememberMeEnabled = true
+		cfg.SessionRememberMeMaxAge = 2592001
+		err := cfg.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "exceeds 30-day gorilla/sessions limit")
+	})
+
+	t.Run("exactly 30 days passes", func(t *testing.T) {
+		cfg := validBaseConfig()
+		cfg.SessionRememberMeEnabled = true
+		cfg.SessionRememberMeMaxAge = 2592000
+		err := cfg.Validate()
+		require.NoError(t, err)
+	})
 }
 
 func TestAuthCodeFlowConfigFields(t *testing.T) {

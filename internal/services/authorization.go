@@ -113,8 +113,7 @@ func (s *AuthorizationService) ValidateAuthorizationRequest(
 			return nil, ErrPKCERequired
 		}
 	}
-	if codeChallengeMethod != "" && codeChallengeMethod != "S256" &&
-		codeChallengeMethod != "plain" {
+	if codeChallengeMethod != "" && codeChallengeMethod != "S256" {
 		return nil, ErrInvalidAuthCodeRequest
 	}
 	// Global PKCE enforcement
