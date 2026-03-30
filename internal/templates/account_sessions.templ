@@ -18,60 +18,53 @@ templ AccountSessions(props SessionsPageProps) {
 						<h1 class="sessions-title">Active Sessions</h1>
 						<p class="sessions-subtitle">Manage devices that have access to your account</p>
 					</div>
-					<!-- Search and Filters -->
-					<div class="search-section">
-						<form method="GET" action="/account/sessions" class="search-grid">
+					<!-- Unified Search & Filter Toolbar -->
+					<div class="sf-toolbar">
+						<!-- Row 1: Search + Page Size -->
+						<form method="GET" action="/account/sessions" class="sf-search-row">
 							<input type="hidden" name="status" value={ props.StatusFilter }/>
 							<input type="hidden" name="category" value={ props.CategoryFilter }/>
-							<div>
-								<label for="search" class="search-label">Search</label>
-								<div class="search-input-wrapper">
-									<span class="search-icon">
-										@SearchIcon()
-									</span>
-									<input
-										type="text"
-										id="search"
-										name="search"
-										class="search-input"
-										placeholder="Search by client name or scopes..."
-										value={ props.Search }
-										data-debounce-search
-									/>
+							<div class="sf-search-field">
+								<span class="search-icon">
+									@SearchIcon()
+								</span>
+								<input
+									type="text"
+									id="search"
+									name="search"
+									class="search-input"
+									placeholder="Search by client name or scopes..."
+									value={ props.Search }
+									data-debounce-search
+								/>
+							</div>
+							<select name="page_size" id="page_size" class="page-size-select" onchange="this.form.submit()">
+								<option value="10" selected?={ props.PageSize == 10 }>10 items</option>
+								<option value="20" selected?={ props.PageSize == 20 }>20 items</option>
+								<option value="50" selected?={ props.PageSize == 50 }>50 items</option>
+							</select>
+							<button type="submit" class="search-btn">Search</button>
+							<a href="/account/sessions" class="clear-btn">Clear</a>
+						</form>
+						<!-- Row 2: Filter Segments -->
+						<div class="sf-filters-row">
+							<div class="sf-group">
+								<span class="sf-group-label">Status</span>
+								<div class="sf-segmented">
+									@SessionsFilterTab(buildSessionsFilterURL("", props.CategoryFilter), "All", props.StatusFilter == "", "")
+									@SessionsFilterTab(buildSessionsFilterURL("active", props.CategoryFilter), "Active", props.StatusFilter == "active", "dot-active")
+									@SessionsFilterTab(buildSessionsFilterURL("disabled", props.CategoryFilter), "Disabled", props.StatusFilter == "disabled", "dot-disabled")
+									@SessionsFilterTab(buildSessionsFilterURL("revoked", props.CategoryFilter), "Revoked", props.StatusFilter == "revoked", "dot-revoked")
 								</div>
 							</div>
-							<div>
-								<label for="page_size" class="search-label">Items per page</label>
-								<select name="page_size" id="page_size" class="page-size-select" onchange="this.form.submit()">
-									<option value="10" selected?={ props.PageSize == 10 }>10 items</option>
-									<option value="20" selected?={ props.PageSize == 20 }>20 items</option>
-									<option value="50" selected?={ props.PageSize == 50 }>50 items</option>
-								</select>
-							</div>
-							<div class="search-buttons">
-								<button type="submit" class="search-btn">Search</button>
-								<a href="/account/sessions" class="clear-btn">Clear</a>
-							</div>
-						</form>
-					</div>
-					<!-- Filter Bar -->
-					<div class="sf-bar">
-						<div class="sf-group">
-							<span class="sf-group-label">Status</span>
-							<div class="sf-segmented">
-								@SessionsFilterTab(buildSessionsFilterURL("", props.CategoryFilter), "All", props.StatusFilter == "", "")
-								@SessionsFilterTab(buildSessionsFilterURL("active", props.CategoryFilter), "Active", props.StatusFilter == "active", "dot-active")
-								@SessionsFilterTab(buildSessionsFilterURL("disabled", props.CategoryFilter), "Disabled", props.StatusFilter == "disabled", "dot-disabled")
-								@SessionsFilterTab(buildSessionsFilterURL("revoked", props.CategoryFilter), "Revoked", props.StatusFilter == "revoked", "dot-revoked")
-							</div>
-						</div>
-						<div class="sf-divider"></div>
-						<div class="sf-group">
-							<span class="sf-group-label">Token Type</span>
-							<div class="sf-segmented">
-								@SessionsFilterTab(buildSessionsFilterURL(props.StatusFilter, ""), "All", props.CategoryFilter == "", "")
-								@SessionsFilterTab(buildSessionsFilterURL(props.StatusFilter, "access"), "Access", props.CategoryFilter == "access", "dot-access")
-								@SessionsFilterTab(buildSessionsFilterURL(props.StatusFilter, "refresh"), "Refresh", props.CategoryFilter == "refresh", "dot-refresh")
+							<div class="sf-divider"></div>
+							<div class="sf-group">
+								<span class="sf-group-label">Type</span>
+								<div class="sf-segmented">
+									@SessionsFilterTab(buildSessionsFilterURL(props.StatusFilter, ""), "All", props.CategoryFilter == "", "")
+									@SessionsFilterTab(buildSessionsFilterURL(props.StatusFilter, "access"), "Access", props.CategoryFilter == "access", "dot-access")
+									@SessionsFilterTab(buildSessionsFilterURL(props.StatusFilter, "refresh"), "Refresh", props.CategoryFilter == "refresh", "dot-refresh")
+								</div>
 							</div>
 						</div>
 					</div>
