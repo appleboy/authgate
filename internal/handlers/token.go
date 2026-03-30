@@ -36,6 +36,7 @@ const (
 	errServerError          = "server_error"
 	errMissingToken         = "missing_token"
 	errInvalidToken         = "invalid_token"
+	errUnauthorizedClient   = "unauthorized_client"
 )
 
 type TokenHandler struct {
@@ -441,7 +442,7 @@ func (h *TokenHandler) handleClientCredentialsGrant(c *gin.Context) {
 				"Client authentication failed",
 			)
 		case errors.Is(err, services.ErrClientCredentialsFlowDisabled):
-			respondOAuthError(c, http.StatusBadRequest, "unauthorized_client",
+			respondOAuthError(c, http.StatusBadRequest, errUnauthorizedClient,
 				"Client credentials flow is not enabled for this client")
 		case errors.Is(err, token.ErrInvalidScope):
 			respondOAuthError(
@@ -491,7 +492,7 @@ func (h *TokenHandler) handleAuthorizationCodeGrant(c *gin.Context) {
 	if err != nil {
 		errCode := errInvalidGrant
 		if errors.Is(err, services.ErrUnauthorizedClient) {
-			errCode = "unauthorized_client"
+			errCode = errUnauthorizedClient
 		}
 		respondOAuthError(c, http.StatusBadRequest, errCode, err.Error())
 		return

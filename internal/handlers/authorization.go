@@ -131,7 +131,7 @@ func (h *AuthorizationHandler) HandleAuthorize(c *gin.Context) {
 			c,
 			redirectURI,
 			state,
-			"access_denied",
+			errAccessDenied,
 			"User denied the authorization request",
 		)
 		return
@@ -156,7 +156,7 @@ func (h *AuthorizationHandler) HandleAuthorize(c *gin.Context) {
 		req.Client.ClientID,
 		req.Scopes,
 	); err != nil {
-		h.redirectWithError(c, redirectURI, state, "server_error", "Failed to save authorization")
+		h.redirectWithError(c, redirectURI, state, errServerError, "Failed to save authorization")
 		return
 	}
 
@@ -187,7 +187,7 @@ func (h *AuthorizationHandler) issueCodeAndRedirect(
 			c,
 			redirectURI,
 			state,
-			"server_error",
+			errServerError,
 			"Failed to generate authorization code",
 		)
 		return
@@ -347,11 +347,11 @@ func (h *AuthorizationHandler) validateStateAndNonce(
 func oauthErrorCode(err error) string {
 	switch {
 	case errors.Is(err, services.ErrUnauthorizedClient):
-		return "unauthorized_client"
+		return errUnauthorizedClient
 	case errors.Is(err, services.ErrUnsupportedResponseType):
 		return "unsupported_response_type"
 	case errors.Is(err, services.ErrInvalidAuthCodeScope):
-		return "invalid_scope"
+		return errInvalidScope
 	default:
 		return errInvalidRequest
 	}

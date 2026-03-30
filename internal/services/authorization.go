@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -346,7 +347,8 @@ func (s *AuthorizationService) RevokeUserAuthorization(
 	hashes, err := s.store.GetActiveTokenHashesByAuthorizationID(revoked.ID)
 	if err != nil {
 		log.Printf(
-			"[TokenCache] failed to collect token hashes for authorization=%d: %v",
+			"[TokenCache] WARNING: failed to collect token hashes for authorization=%d, "+
+				"revoked tokens may remain cached until TTL expires: %v",
 			revoked.ID,
 			err,
 		)
@@ -427,7 +429,11 @@ func (s *AuthorizationService) RevokeAllApplicationTokens(
 ) (int64, error) {
 	hashes, err := s.store.GetActiveTokenHashesByClientID(clientID)
 	if err != nil {
-		log.Printf("[TokenCache] failed to collect token hashes for client=%s: %v", clientID, err)
+		log.Printf(
+			"[TokenCache] WARNING: failed to collect token hashes for client=%s, "+
+				"revoked tokens may remain cached until TTL expires: %v",
+			clientID, err,
+		)
 	}
 
 	revokedCount, err := s.store.RevokeAllActiveTokensByClientID(clientID)
@@ -521,9 +527,9 @@ func verifyPKCE(codeChallenge, method, codeVerifier string) bool {
 	case "S256":
 		sum := sha256.Sum256([]byte(codeVerifier))
 		computed := base64.RawURLEncoding.EncodeToString(sum[:])
-		return computed == codeChallenge
-	case "PLAIN", "":
-		return codeVerifier == codeChallenge
+		return subtle.ConstantTimeCompare([]byte(computed), []byte(codeChallenge)) == 1
+	case "":
+		return subtle.ConstantTimeCompare([]byte(codeVerifier), []byte(codeChallenge)) == 1
 	default:
 		return false
 	}
