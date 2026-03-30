@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-authgate/authgate/internal/models"
 	"github.com/go-authgate/authgate/internal/services"
 	"github.com/go-authgate/authgate/internal/store"
 )
@@ -52,9 +53,9 @@ templ AccountSessions(props SessionsPageProps) {
 								<span class="sf-group-label">Status</span>
 								<div class="sf-segmented">
 									@SessionsFilterTab(buildSessionsFilterURL("", props.CategoryFilter), "All", props.StatusFilter == "", "")
-									@SessionsFilterTab(buildSessionsFilterURL("active", props.CategoryFilter), "Active", props.StatusFilter == "active", "dot-active")
-									@SessionsFilterTab(buildSessionsFilterURL("disabled", props.CategoryFilter), "Disabled", props.StatusFilter == "disabled", "dot-disabled")
-									@SessionsFilterTab(buildSessionsFilterURL("revoked", props.CategoryFilter), "Revoked", props.StatusFilter == "revoked", "dot-revoked")
+									@SessionsFilterTab(buildSessionsFilterURL(models.TokenStatusActive, props.CategoryFilter), "Active", props.StatusFilter == models.TokenStatusActive, "dot-active")
+									@SessionsFilterTab(buildSessionsFilterURL(models.TokenStatusDisabled, props.CategoryFilter), "Disabled", props.StatusFilter == models.TokenStatusDisabled, "dot-disabled")
+									@SessionsFilterTab(buildSessionsFilterURL(models.TokenStatusRevoked, props.CategoryFilter), "Revoked", props.StatusFilter == models.TokenStatusRevoked, "dot-revoked")
 								</div>
 							</div>
 							<div class="sf-divider"></div>
@@ -62,8 +63,8 @@ templ AccountSessions(props SessionsPageProps) {
 								<span class="sf-group-label">Type</span>
 								<div class="sf-segmented">
 									@SessionsFilterTab(buildSessionsFilterURL(props.StatusFilter, ""), "All", props.CategoryFilter == "", "")
-									@SessionsFilterTab(buildSessionsFilterURL(props.StatusFilter, "access"), "Access", props.CategoryFilter == "access", "dot-access")
-									@SessionsFilterTab(buildSessionsFilterURL(props.StatusFilter, "refresh"), "Refresh", props.CategoryFilter == "refresh", "dot-refresh")
+									@SessionsFilterTab(buildSessionsFilterURL(props.StatusFilter, models.TokenCategoryAccess), "Access", props.CategoryFilter == models.TokenCategoryAccess, "dot-access")
+									@SessionsFilterTab(buildSessionsFilterURL(props.StatusFilter, models.TokenCategoryRefresh), "Refresh", props.CategoryFilter == models.TokenCategoryRefresh, "dot-refresh")
 								</div>
 							</div>
 						</div>
@@ -111,20 +112,20 @@ templ AccountSessions(props SessionsPageProps) {
 						@SessionsPagination(props.Pagination, props.PageSize, props.Search, props.StatusFilter, props.CategoryFilter)
 					} else {
 						<div class="empty-state">
-							if props.Search != "" || props.StatusFilter != "" || props.CategoryFilter != "" {
+							if props.HasActiveFilters() {
 								@EmptyStateSearch()
 							} else {
 								@EmptyStateSessions()
 							}
 							<h3 class="empty-title">
-								if props.Search != "" || props.StatusFilter != "" || props.CategoryFilter != "" {
+								if props.HasActiveFilters() {
 									No sessions found
 								} else {
 									No Active Sessions
 								}
 							</h3>
 							<p class="empty-text">
-								if props.Search != "" || props.StatusFilter != "" || props.CategoryFilter != "" {
+								if props.HasActiveFilters() {
 									Try adjusting your search terms or filters, or clear all filters.
 								} else {
 									You don't have any active sessions. Authorize a device to see it here.

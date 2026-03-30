@@ -99,6 +99,11 @@ type SessionsPageProps struct {
 	CategoryFilter string
 }
 
+// HasActiveFilters returns true if any search or filter is applied.
+func (p SessionsPageProps) HasActiveFilters() bool {
+	return p.Search != "" || p.StatusFilter != "" || p.CategoryFilter != ""
+}
+
 // ClientsPageProps contains properties for the admin clients page
 type ClientsPageProps struct {
 	BaseProps

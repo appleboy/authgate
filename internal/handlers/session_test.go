@@ -49,6 +49,21 @@ func setupSessionServices(t *testing.T) (*store.Store, *services.TokenService) {
 	return s, tokenSvc
 }
 
+func createTestOAuthApp(t *testing.T, s *store.Store, clientID, clientName string) {
+	t.Helper()
+	client := &models.OAuthApplication{
+		ClientID:         clientID,
+		ClientSecret:     "secret",
+		ClientName:       clientName,
+		UserID:           uuid.New().String(),
+		Scopes:           "read",
+		GrantTypes:       "device_code",
+		EnableDeviceFlow: true,
+		Status:           models.ClientStatusActive,
+	}
+	require.NoError(t, s.CreateClient(client))
+}
+
 func createTestToken(t *testing.T, s *store.Store, userID, clientID string) *models.AccessToken {
 	t.Helper()
 	tok := &models.AccessToken{
@@ -186,18 +201,7 @@ func TestListSessions(t *testing.T) {
 		userID := uuid.New().String()
 		clientID := uuid.New().String()
 
-		// Create a client and token
-		client := &models.OAuthApplication{
-			ClientID:         clientID,
-			ClientSecret:     "secret",
-			ClientName:       "Test App",
-			UserID:           uuid.New().String(),
-			Scopes:           "read",
-			GrantTypes:       "device_code",
-			EnableDeviceFlow: true,
-			Status:           models.ClientStatusActive,
-		}
-		require.NoError(t, s.CreateClient(client))
+		createTestOAuthApp(t, s, clientID, "Test App")
 		createTestToken(t, s, userID, clientID)
 
 		handler := NewSessionHandler(tokenSvc)
@@ -216,17 +220,7 @@ func TestListSessions(t *testing.T) {
 		userID := uuid.New().String()
 		clientID := uuid.New().String()
 
-		client := &models.OAuthApplication{
-			ClientID:         clientID,
-			ClientSecret:     "secret",
-			ClientName:       "Status App",
-			UserID:           uuid.New().String(),
-			Scopes:           "read",
-			GrantTypes:       "device_code",
-			EnableDeviceFlow: true,
-			Status:           models.ClientStatusActive,
-		}
-		require.NoError(t, s.CreateClient(client))
+		createTestOAuthApp(t, s, clientID, "Status App")
 
 		// Create an active and a disabled token
 		activeTok := createTestToken(t, s, userID, clientID)
@@ -253,17 +247,7 @@ func TestListSessions(t *testing.T) {
 		userID := uuid.New().String()
 		clientID := uuid.New().String()
 
-		client := &models.OAuthApplication{
-			ClientID:         clientID,
-			ClientSecret:     "secret",
-			ClientName:       "Category App",
-			UserID:           uuid.New().String(),
-			Scopes:           "read",
-			GrantTypes:       "device_code",
-			EnableDeviceFlow: true,
-			Status:           models.ClientStatusActive,
-		}
-		require.NoError(t, s.CreateClient(client))
+		createTestOAuthApp(t, s, clientID, "Category App")
 
 		// Create an access and a refresh token
 		accessTok := createTestToken(t, s, userID, clientID)
@@ -298,18 +282,7 @@ func TestListSessions(t *testing.T) {
 		userID := uuid.New().String()
 		clientID := uuid.New().String()
 
-		client := &models.OAuthApplication{
-			ClientID:         clientID,
-			ClientSecret:     "secret",
-			ClientName:       "Combined App",
-			UserID:           uuid.New().String(),
-			Scopes:           "read",
-			GrantTypes:       "device_code",
-			EnableDeviceFlow: true,
-			Status:           models.ClientStatusActive,
-		}
-		require.NoError(t, s.CreateClient(client))
-
+		createTestOAuthApp(t, s, clientID, "Combined App")
 		createTestToken(t, s, userID, clientID)
 
 		handler := NewSessionHandler(tokenSvc)
