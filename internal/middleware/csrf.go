@@ -59,7 +59,10 @@ func CSRFMiddleware() gin.HandlerFunc {
 
 			// Validate token using constant-time comparison
 			tokenStr, _ := token.(string)
-			if submittedToken == "" || subtle.ConstantTimeCompare([]byte(submittedToken), []byte(tokenStr)) != 1 {
+			tokenMatch := subtle.ConstantTimeCompare(
+				[]byte(submittedToken), []byte(tokenStr),
+			)
+			if submittedToken == "" || tokenMatch != 1 {
 				templates.RenderTempl(
 					c,
 					http.StatusForbidden,
