@@ -168,6 +168,17 @@ func TestValidateAuthorizationRequest_PublicClientRequiresPKCE(t *testing.T) {
 	assert.ErrorIs(t, err, ErrPKCERequired)
 }
 
+func TestValidateAuthorizationRequest_PKCEPlainRejected(t *testing.T) {
+	svc := createTestAuthorizationService(t)
+	client := createAuthCodeFlowClient(t, svc, "public")
+
+	// "plain" method must be rejected (only S256 is accepted)
+	_, err := svc.ValidateAuthorizationRequest(
+		client.ClientID, "https://app.example.com/callback", "code", "read", "plain", "",
+	)
+	assert.ErrorIs(t, err, ErrInvalidAuthCodeRequest)
+}
+
 func TestValidateAuthorizationRequest_PublicClientWithPKCE(t *testing.T) {
 	svc := createTestAuthorizationService(t)
 	client := createAuthCodeFlowClient(t, svc, "public")

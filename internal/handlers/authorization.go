@@ -50,25 +50,7 @@ func (h *AuthorizationHandler) ShowAuthorizePage(c *gin.Context) {
 	codeChallenge := c.Query("code_challenge")
 	codeChallengeMethod := c.Query("code_challenge_method")
 
-	if len(state) > maxStateLength {
-		h.redirectWithError(
-			c,
-			redirectURI,
-			"",
-			errInvalidRequest,
-			"state parameter exceeds maximum length",
-		)
-		return
-	}
-
-	if len(nonce) > maxNonceLength {
-		h.redirectWithError(
-			c,
-			redirectURI,
-			state,
-			errInvalidRequest,
-			"nonce parameter exceeds maximum length",
-		)
+	if !h.validateStateAndNonce(c, redirectURI, state, nonce) {
 		return
 	}
 
@@ -94,7 +76,7 @@ func (h *AuthorizationHandler) ShowAuthorizePage(c *gin.Context) {
 	// requested scopes, skip the consent page and issue a code immediately.
 	if h.config.ConsentRemember {
 		existing, _ := h.authorizationService.GetUserAuthorization(userIDStr, req.Client.ID)
-		if existing != nil && scopesAreCovered(existing.Scopes, req.Scopes) {
+		if existing != nil && util.IsScopeSubset(existing.Scopes, req.Scopes) {
 			h.issueCodeAndRedirect(
 				c,
 				req,
@@ -139,25 +121,7 @@ func (h *AuthorizationHandler) HandleAuthorize(c *gin.Context) {
 	codeChallenge := c.PostForm("code_challenge")
 	codeChallengeMethod := c.PostForm("code_challenge_method")
 
-	if len(state) > maxStateLength {
-		h.redirectWithError(
-			c,
-			redirectURI,
-			"",
-			errInvalidRequest,
-			"state parameter exceeds maximum length",
-		)
-		return
-	}
-
-	if len(nonce) > maxNonceLength {
-		h.redirectWithError(
-			c,
-			redirectURI,
-			state,
-			errInvalidRequest,
-			"nonce parameter exceeds maximum length",
-		)
+	if !h.validateStateAndNonce(c, redirectURI, state, nonce) {
 		return
 	}
 
@@ -346,10 +310,38 @@ func (h *AuthorizationHandler) RevokeAuthorization(c *gin.Context) {
 // ============================================================
 
 const (
-	errInvalidRequest = "invalid_request"
-	maxStateLength    = 1024
-	maxNonceLength    = 1024
+	maxStateLength = 1024
+	maxNonceLength = 1024
 )
+
+// validateStateAndNonce checks that state and nonce parameters don't exceed maximum lengths.
+// Returns true if validation passes, false if an error redirect was sent.
+func (h *AuthorizationHandler) validateStateAndNonce(
+	c *gin.Context,
+	redirectURI, state, nonce string,
+) bool {
+	if len(state) > maxStateLength {
+		h.redirectWithError(
+			c,
+			redirectURI,
+			"",
+			errInvalidRequest,
+			"state parameter exceeds maximum length",
+		)
+		return false
+	}
+	if len(nonce) > maxNonceLength {
+		h.redirectWithError(
+			c,
+			redirectURI,
+			state,
+			errInvalidRequest,
+			"nonce parameter exceeds maximum length",
+		)
+		return false
+	}
+	return true
+}
 
 // oauthErrorCode maps service errors to RFC 6749 error codes.
 func oauthErrorCode(err error) string {
@@ -363,15 +355,4 @@ func oauthErrorCode(err error) string {
 	default:
 		return errInvalidRequest
 	}
-}
-
-// scopesAreCovered returns true when all scopes in requested are present in granted.
-func scopesAreCovered(grantedScopes, requestedScopes string) bool {
-	granted := util.ScopeSet(grantedScopes)
-	for s := range strings.FieldsSeq(requestedScopes) {
-		if !granted[s] {
-			return false
-		}
-	}
-	return true
 }

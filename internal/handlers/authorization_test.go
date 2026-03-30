@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/go-authgate/authgate/internal/services"
+	"github.com/go-authgate/authgate/internal/util"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -56,43 +57,43 @@ func TestOauthErrorCode_DefaultsToInvalidRequest(t *testing.T) {
 }
 
 // ============================================================
-// scopesAreCovered
+// util.IsScopeSubset (formerly scopesAreCovered)
 // ============================================================
 
 func TestScopesAreCovered_ExactMatch(t *testing.T) {
-	assert.True(t, scopesAreCovered("read write", "read write"))
+	assert.True(t, util.IsScopeSubset("read write", "read write"))
 }
 
 func TestScopesAreCovered_SubsetOfGranted(t *testing.T) {
-	assert.True(t, scopesAreCovered("read write admin", "read"))
-	assert.True(t, scopesAreCovered("read write admin", "read write"))
+	assert.True(t, util.IsScopeSubset("read write admin", "read"))
+	assert.True(t, util.IsScopeSubset("read write admin", "read write"))
 }
 
 func TestScopesAreCovered_RequestedExceedsGranted(t *testing.T) {
-	assert.False(t, scopesAreCovered("read", "read write"))
-	assert.False(t, scopesAreCovered("read write", "read write admin"))
+	assert.False(t, util.IsScopeSubset("read", "read write"))
+	assert.False(t, util.IsScopeSubset("read write", "read write admin"))
 }
 
 func TestScopesAreCovered_EmptyRequestedScopes(t *testing.T) {
 	// No scopes requested → trivially covered
-	assert.True(t, scopesAreCovered("read write", ""))
+	assert.True(t, util.IsScopeSubset("read write", ""))
 }
 
 func TestScopesAreCovered_EmptyGrantedScopes(t *testing.T) {
 	// Nothing granted but something requested → not covered
-	assert.False(t, scopesAreCovered("", "read"))
+	assert.False(t, util.IsScopeSubset("", "read"))
 }
 
 func TestScopesAreCovered_BothEmpty(t *testing.T) {
-	assert.True(t, scopesAreCovered("", ""))
+	assert.True(t, util.IsScopeSubset("", ""))
 }
 
 func TestScopesAreCovered_DuplicateTokensInRequest(t *testing.T) {
 	// Duplicate tokens should still pass if the scope is granted
-	assert.True(t, scopesAreCovered("read write", "read read"))
+	assert.True(t, util.IsScopeSubset("read write", "read read"))
 }
 
 func TestScopesAreCovered_ExtraWhitespace(t *testing.T) {
 	// strings.Fields handles extra whitespace
-	assert.True(t, scopesAreCovered("read  write", "read"))
+	assert.True(t, util.IsScopeSubset("read  write", "read"))
 }

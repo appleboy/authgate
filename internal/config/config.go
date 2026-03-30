@@ -513,6 +513,14 @@ func (c *Config) Validate() error {
 		)
 	}
 
+	// Validate JWT secret minimum length for HS256
+	if (c.JWTSigningAlgorithm == "" || c.JWTSigningAlgorithm == "HS256") && len(c.JWTSecret) < 32 {
+		return fmt.Errorf(
+			"JWT_SECRET must be at least 32 bytes for HS256 (got %d bytes)",
+			len(c.JWTSecret),
+		)
+	}
+
 	// Validate JWT signing algorithm
 	switch c.JWTSigningAlgorithm {
 	case "", "HS256":
@@ -607,6 +615,12 @@ func (c *Config) Validate() error {
 	if c.SessionRememberMeEnabled && c.SessionRememberMeMaxAge <= 0 {
 		return fmt.Errorf(
 			"SESSION_REMEMBER_ME_MAX_AGE must be a positive value when SESSION_REMEMBER_ME_ENABLED=true (got %d)",
+			c.SessionRememberMeMaxAge,
+		)
+	}
+	if c.SessionRememberMeEnabled && c.SessionRememberMeMaxAge > 2592000 {
+		return fmt.Errorf(
+			"SESSION_REMEMBER_ME_MAX_AGE exceeds 30-day gorilla/sessions limit (got %d, max 2592000)",
 			c.SessionRememberMeMaxAge,
 		)
 	}

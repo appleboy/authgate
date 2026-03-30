@@ -43,27 +43,22 @@ func (t *AccessToken) IsExpired() bool {
 	return time.Now().After(t.ExpiresAt)
 }
 
-// IsActive returns true if token status is 'active'
 func (t *AccessToken) IsActive() bool {
 	return t.Status == TokenStatusActive
 }
 
-// IsRevoked returns true if token status is 'revoked'
 func (t *AccessToken) IsRevoked() bool {
 	return t.Status == TokenStatusRevoked
 }
 
-// IsDisabled returns true if token status is 'disabled'
 func (t *AccessToken) IsDisabled() bool {
 	return t.Status == TokenStatusDisabled
 }
 
-// IsAccessToken returns true if token category is 'access'
 func (t *AccessToken) IsAccessToken() bool {
 	return t.TokenCategory == TokenCategoryAccess
 }
 
-// IsRefreshToken returns true if token category is 'refresh'
 func (t *AccessToken) IsRefreshToken() bool {
 	return t.TokenCategory == TokenCategoryRefresh
 }

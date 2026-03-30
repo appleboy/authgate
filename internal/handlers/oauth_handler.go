@@ -146,7 +146,9 @@ func (h *OAuthHandler) OAuthCallback(c *gin.Context) {
 		return
 	}
 
-	if state != savedState.(string) || provider != savedProvider.(string) {
+	savedStateStr, ok1 := savedState.(string)
+	savedProviderStr, ok2 := savedProvider.(string)
+	if !ok1 || !ok2 || state != savedStateStr || provider != savedProviderStr {
 		renderErrorPage(
 			c,
 			http.StatusBadRequest,
