@@ -554,10 +554,11 @@ func TestVerifyPKCE_S256(t *testing.T) {
 	assert.False(t, verifyPKCE(challenge, "S256", ""))
 }
 
-func TestVerifyPKCE_Plain(t *testing.T) {
+func TestVerifyPKCE_PlainMethodRejected(t *testing.T) {
 	challenge := "my-plain-verifier"
-	assert.True(t, verifyPKCE(challenge, "plain", challenge))
-	assert.False(t, verifyPKCE(challenge, "plain", "other"))
+	// "plain" method is now rejected (only S256 accepted)
+	assert.False(t, verifyPKCE(challenge, "plain", challenge))
+	assert.False(t, verifyPKCE(challenge, "PLAIN", challenge))
 }
 
 func TestVerifyPKCE_EmptyMethod(t *testing.T) {

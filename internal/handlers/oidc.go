@@ -144,7 +144,7 @@ func (h *OIDCHandler) UserInfo(c *gin.Context) {
 	if !strings.HasPrefix(authHeader, "Bearer ") {
 		c.Header("WWW-Authenticate", `Bearer error="invalid_token"`)
 		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":             "invalid_token",
+			"error":             errInvalidToken,
 			"error_description": "Bearer token required",
 		})
 		return
@@ -156,7 +156,7 @@ func (h *OIDCHandler) UserInfo(c *gin.Context) {
 	if err != nil {
 		c.Header("WWW-Authenticate", `Bearer error="invalid_token"`)
 		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":             "invalid_token",
+			"error":             errInvalidToken,
 			"error_description": err.Error(),
 		})
 		return
@@ -166,7 +166,7 @@ func (h *OIDCHandler) UserInfo(c *gin.Context) {
 	if err != nil {
 		c.Header("WWW-Authenticate", `Bearer error="invalid_token"`)
 		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":             "invalid_token",
+			"error":             errInvalidToken,
 			"error_description": "User not found",
 		})
 		return

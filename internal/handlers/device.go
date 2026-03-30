@@ -92,7 +92,7 @@ func (h *DeviceHandler) DeviceCodeRequest(c *gin.Context) {
 	}
 
 	if clientID == "" {
-		respondOAuthError(c, http.StatusBadRequest, "invalid_request", "client_id is required")
+		respondOAuthError(c, http.StatusBadRequest, errInvalidRequest, "client_id is required")
 		return
 	}
 
@@ -108,23 +108,23 @@ func (h *DeviceHandler) DeviceCodeRequest(c *gin.Context) {
 	dc, err := h.deviceService.GenerateDeviceCode(c.Request.Context(), clientID, scope)
 	if err != nil {
 		if errors.Is(err, services.ErrInvalidClient) {
-			respondOAuthError(c, http.StatusBadRequest, "invalid_client", "Unknown client_id")
+			respondOAuthError(c, http.StatusBadRequest, errInvalidClient, "Unknown client_id")
 			return
 		}
 		if errors.Is(err, services.ErrClientInactive) {
-			respondOAuthError(c, http.StatusBadRequest, "invalid_client", "Client is inactive")
+			respondOAuthError(c, http.StatusBadRequest, errInvalidClient, "Client is inactive")
 			return
 		}
 		if errors.Is(err, services.ErrDeviceFlowNotEnabled) {
 			respondOAuthError(
 				c,
 				http.StatusBadRequest,
-				"unauthorized_client",
+				errUnauthorizedClient,
 				"Device authorization flow is not enabled for this client",
 			)
 			return
 		}
-		respondOAuthError(c, http.StatusInternalServerError, "server_error", err.Error())
+		respondOAuthError(c, http.StatusInternalServerError, errServerError, err.Error())
 		return
 	}
 

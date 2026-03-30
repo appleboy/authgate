@@ -58,7 +58,19 @@ func CSRFMiddleware() gin.HandlerFunc {
 			}
 
 			// Validate token using constant-time comparison
-			tokenStr, _ := token.(string)
+			tokenStr, ok := token.(string)
+			if !ok {
+				log.Printf("[CSRF] session token has unexpected type %T", token)
+				templates.RenderTempl(
+					c,
+					http.StatusForbidden,
+					templates.ErrorPage(templates.ErrorPageProps{
+						Error: "CSRF token validation failed. Please refresh the page and try again.",
+					}),
+				)
+				c.Abort()
+				return
+			}
 			tokenMatch := subtle.ConstantTimeCompare(
 				[]byte(submittedToken), []byte(tokenStr),
 			)

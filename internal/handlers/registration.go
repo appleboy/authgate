@@ -188,7 +188,7 @@ func (h *RegistrationHandler) Register(c *gin.Context) {
 			respondOAuthError(
 				c,
 				http.StatusInternalServerError,
-				"server_error",
+				errServerError,
 				"Failed to register client",
 			)
 		}
@@ -259,7 +259,7 @@ func validateRegistrationToken(c *gin.Context, expected string) bool {
 		respondOAuthError(
 			c,
 			http.StatusUnauthorized,
-			"invalid_token",
+			errInvalidToken,
 			"An initial access token is required for client registration",
 		)
 		return false
@@ -270,7 +270,7 @@ func validateRegistrationToken(c *gin.Context, expected string) bool {
 		respondOAuthError(
 			c,
 			http.StatusUnauthorized,
-			"invalid_token",
+			errInvalidToken,
 			"The initial access token is invalid",
 		)
 		return false
