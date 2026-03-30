@@ -338,6 +338,42 @@
   background-clip: text;
 }
 
+/* Sessions filter bar */
+[data-theme="dark"] .sf-segmented {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--color-border);
+}
+
+[data-theme="dark"] .sf-item--active {
+  background: var(--color-bg-tertiary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .sf-dot.dot-active {
+  background: #34d399;
+  box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.25);
+}
+
+[data-theme="dark"] .sf-dot.dot-disabled {
+  background: #FBBF24;
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.25);
+}
+
+[data-theme="dark"] .sf-dot.dot-revoked {
+  background: #f87171;
+  box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.25);
+}
+
+[data-theme="dark"] .sf-dot.dot-access {
+  background: #34d399;
+  box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.25);
+}
+
+[data-theme="dark"] .sf-dot.dot-refresh {
+  background: #58a6ff;
+  box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.25);
+}
+
 /* Admin clients inline-styled tabs */
 [data-theme="dark"] .admin-secret-info-box {
   background: var(--color-bg-secondary);

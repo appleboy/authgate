@@ -54,23 +54,25 @@ templ AccountSessions(props SessionsPageProps) {
 							</div>
 						</form>
 					</div>
-					<!-- Status Filter Tabs -->
-					<div class="sessions-filter-group">
-						<span class="sessions-filter-label">Status</span>
-						<div class="status-filter-tabs">
-							@SessionsFilterTab(buildSessionsFilterURL("", props.CategoryFilter), "All", props.StatusFilter == "")
-							@SessionsFilterTab(buildSessionsFilterURL("active", props.CategoryFilter), "Active", props.StatusFilter == "active")
-							@SessionsFilterTab(buildSessionsFilterURL("disabled", props.CategoryFilter), "Disabled", props.StatusFilter == "disabled")
-							@SessionsFilterTab(buildSessionsFilterURL("revoked", props.CategoryFilter), "Revoked", props.StatusFilter == "revoked")
+					<!-- Filter Bar -->
+					<div class="sf-bar">
+						<div class="sf-group">
+							<span class="sf-group-label">Status</span>
+							<div class="sf-segmented">
+								@SessionsFilterTab(buildSessionsFilterURL("", props.CategoryFilter), "All", props.StatusFilter == "", "")
+								@SessionsFilterTab(buildSessionsFilterURL("active", props.CategoryFilter), "Active", props.StatusFilter == "active", "dot-active")
+								@SessionsFilterTab(buildSessionsFilterURL("disabled", props.CategoryFilter), "Disabled", props.StatusFilter == "disabled", "dot-disabled")
+								@SessionsFilterTab(buildSessionsFilterURL("revoked", props.CategoryFilter), "Revoked", props.StatusFilter == "revoked", "dot-revoked")
+							</div>
 						</div>
-					</div>
-					<!-- Token Type Filter Tabs -->
-					<div class="sessions-filter-group">
-						<span class="sessions-filter-label">Token Type</span>
-						<div class="status-filter-tabs">
-							@SessionsFilterTab(buildSessionsFilterURL(props.StatusFilter, ""), "All", props.CategoryFilter == "")
-							@SessionsFilterTab(buildSessionsFilterURL(props.StatusFilter, "access"), "Access Token", props.CategoryFilter == "access")
-							@SessionsFilterTab(buildSessionsFilterURL(props.StatusFilter, "refresh"), "Refresh Token", props.CategoryFilter == "refresh")
+						<div class="sf-divider"></div>
+						<div class="sf-group">
+							<span class="sf-group-label">Token Type</span>
+							<div class="sf-segmented">
+								@SessionsFilterTab(buildSessionsFilterURL(props.StatusFilter, ""), "All", props.CategoryFilter == "", "")
+								@SessionsFilterTab(buildSessionsFilterURL(props.StatusFilter, "access"), "Access", props.CategoryFilter == "access", "dot-access")
+								@SessionsFilterTab(buildSessionsFilterURL(props.StatusFilter, "refresh"), "Refresh", props.CategoryFilter == "refresh", "dot-refresh")
+							</div>
 						</div>
 					</div>
 					if len(props.Sessions) > 0 {
@@ -276,11 +278,14 @@ func buildSessionsPaginationURL(page, pageSize int, search, status, category str
 	return url
 }
 
-templ SessionsFilterTab(href, label string, isActive bool) {
+templ SessionsFilterTab(href, label string, isActive bool, dotClass string) {
 	<a
 		href={ templ.URL(href) }
-		class={ templ.Classes("status-filter-tab", templ.KV("status-filter-tab--active", isActive)) }
+		class={ templ.Classes("sf-item", templ.KV("sf-item--active", isActive)) }
 	>
+		if dotClass != "" {
+			<span class={ "sf-dot " + dotClass }></span>
+		}
 		{ label }
 	</a>
 }
