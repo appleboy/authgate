@@ -1,7 +1,9 @@
 package middleware
 
 import (
+	"crypto/subtle"
 	"encoding/base64"
+	"log"
 	"net/http"
 
 	"github.com/go-authgate/authgate/internal/templates"
@@ -28,11 +30,12 @@ func CSRFMiddleware() gin.HandlerFunc {
 			token = generateCSRFToken()
 			session.Set(csrfTokenKey, token)
 			if err := session.Save(); err != nil {
+				log.Printf("[CSRF] failed to save token to session: %v", err)
 				templates.RenderTempl(
 					c,
 					http.StatusInternalServerError,
 					templates.ErrorPage(templates.ErrorPageProps{
-						Error: "Failed to save CSRF token: " + err.Error(),
+						Error: "Session error. Please refresh the page and try again.",
 					}),
 				)
 				c.Abort()
@@ -54,8 +57,9 @@ func CSRFMiddleware() gin.HandlerFunc {
 				submittedToken = c.GetHeader(csrfHeaderField)
 			}
 
-			// Validate token
-			if submittedToken == "" || submittedToken != token {
+			// Validate token using constant-time comparison
+			tokenStr, _ := token.(string)
+			if submittedToken == "" || subtle.ConstantTimeCompare([]byte(submittedToken), []byte(tokenStr)) != 1 {
 				templates.RenderTempl(
 					c,
 					http.StatusForbidden,
