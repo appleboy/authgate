@@ -14,6 +14,32 @@ type BaseProps struct {
 	CSRFToken string
 }
 
+// SfSearchRowProps configures the shared search & filter toolbar search row.
+type SfSearchRowProps struct {
+	Action          string            // form GET target (e.g. "/account/sessions")
+	Search          string            // current search value
+	PageSize        int               // current page size
+	PageSizeOptions []int             // e.g. [10,20,50]; nil defaults to [10,20,50]
+	Placeholder     string            // search input placeholder text
+	ClearHref       string            // href for the Clear button
+	HiddenFields    map[string]string // extra hidden inputs to preserve filter state
+	SearchLabel     string            // submit button text; defaults to "Search"
+}
+
+func (p SfSearchRowProps) pageSizeOptions() []int {
+	if len(p.PageSizeOptions) > 0 {
+		return p.PageSizeOptions
+	}
+	return []int{10, 20, 50}
+}
+
+func (p SfSearchRowProps) searchLabel() string {
+	if p.SearchLabel != "" {
+		return p.SearchLabel
+	}
+	return "Search"
+}
+
 // NavbarProps contains properties for the navigation bar
 type NavbarProps struct {
 	Username            string

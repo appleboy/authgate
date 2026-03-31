@@ -22,7 +22,15 @@ templ MyApps(props MyAppsPageProps) {
 							Register New App
 						</a>
 					</div>
-					@ClientsSearchBar("/apps", props.Search, props.PageSize)
+					@SfToolbar() {
+						@SfSearchRow(SfSearchRowProps{
+							Action:      "/apps",
+							Search:      props.Search,
+							PageSize:    props.PageSize,
+							Placeholder: "Search by name, client ID, or description...",
+							ClearHref:   "/apps",
+						})
+					}
 					if len(props.Apps) > 0 {
 						<div class="admin-clients-table-wrapper">
 							<table class="admin-clients-table">

@@ -30,42 +30,31 @@ templ AdminAuditLogs(props AuditLogsPageProps) {
 						</div>
 					}
 				</div>
-				<!-- Filters Form -->
-				<div class="audit-filters-section">
+				<!-- Filters -->
+				@SfToolbar() {
 					<form method="GET" action="/admin/audit">
-						<!-- Search Bar -->
-						<div class="search-grid">
-							<div class="search-group">
-								<label class="search-label">Search</label>
-								<div class="search-input-wrapper">
-									<span class="search-icon">
-										@SearchIcon()
-									</span>
-									<input
-										type="text"
-										name="search"
-										class="search-input search-input-sm"
-										placeholder="Search action, resource, username..."
-										value={ props.Search }
-										data-debounce-search
-									/>
-								</div>
+						<div class="sf-search-row">
+							<div class="sf-search-field">
+								<span class="search-icon">
+									@SearchIcon()
+								</span>
+								<input
+									type="text"
+									name="search"
+									class="search-input"
+									placeholder="Search action, resource, username..."
+									value={ props.Search }
+									data-debounce-search
+								/>
 							</div>
-							<div class="search-group">
-								<label class="search-label">Items Per Page</label>
-								<select name="page_size" class="page-size-select" onchange="this.form.submit()">
-									<option value="20" selected?={ props.PageSize == 20 }>20 items</option>
-									<option value="50" selected?={ props.PageSize == 50 }>50 items</option>
-									<option value="100" selected?={ props.PageSize == 100 }>100 items</option>
-								</select>
-							</div>
-							<div class="search-buttons">
-								<button type="submit" class="audit-btn audit-btn-primary">
-									Apply Filters
-								</button>
-								<a href="/admin/audit" class="audit-btn audit-btn-secondary">
-									Clear
-								</a>
+							<select name="page_size" class="page-size-select" onchange="this.form.submit()">
+								<option value="20" selected?={ props.PageSize == 20 }>20 items</option>
+								<option value="50" selected?={ props.PageSize == 50 }>50 items</option>
+								<option value="100" selected?={ props.PageSize == 100 }>100 items</option>
+							</select>
+							<button type="submit" class="search-btn">Apply Filters</button>
+							<a href="/admin/audit" class="clear-btn">Clear</a>
+							<div class="sf-extra-buttons">
 								<a href={ templ.URL("/admin/audit/export?" + props.QueryString) } class="audit-btn audit-btn-export">
 									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
 									<span>Export CSV</span>
@@ -90,53 +79,53 @@ templ AdminAuditLogs(props AuditLogsPageProps) {
 						</div>
 						<!-- Advanced Filters -->
 						<div class="audit-advanced-filters" id="audit-advanced-filters">
-						<div class="audit-filter-group">
-							<label class="search-label">Event Type</label>
-							<select name="event_type" class="audit-filter-select">
-								<option value="">All Events</option>
-								<option value="AUTHENTICATION_SUCCESS" selected?={ props.EventType == "AUTHENTICATION_SUCCESS" }>Auth Success</option>
-								<option value="AUTHENTICATION_FAILURE" selected?={ props.EventType == "AUTHENTICATION_FAILURE" }>Auth Failure</option>
-								<option value="OAUTH_AUTHENTICATION" selected?={ props.EventType == "OAUTH_AUTHENTICATION" }>OAuth Auth</option>
-								<option value="LOGOUT" selected?={ props.EventType == "LOGOUT" }>Logout</option>
-								<option value="ACCESS_TOKEN_ISSUED" selected?={ props.EventType == "ACCESS_TOKEN_ISSUED" }>Token Issued</option>
-								<option value="TOKEN_REFRESHED" selected?={ props.EventType == "TOKEN_REFRESHED" }>Token Refreshed</option>
-								<option value="TOKEN_REVOKED" selected?={ props.EventType == "TOKEN_REVOKED" }>Token Revoked</option>
-								<option value="TOKEN_DISABLED" selected?={ props.EventType == "TOKEN_DISABLED" }>Token Disabled</option>
-								<option value="TOKEN_ENABLED" selected?={ props.EventType == "TOKEN_ENABLED" }>Token Enabled</option>
-								<option value="DEVICE_CODE_GENERATED" selected?={ props.EventType == "DEVICE_CODE_GENERATED" }>Device Code Generated</option>
-								<option value="DEVICE_CODE_AUTHORIZED" selected?={ props.EventType == "DEVICE_CODE_AUTHORIZED" }>Device Code Authorized</option>
-								<option value="CLIENT_CREATED" selected?={ props.EventType == "CLIENT_CREATED" }>Client Created</option>
-								<option value="CLIENT_UPDATED" selected?={ props.EventType == "CLIENT_UPDATED" }>Client Updated</option>
-								<option value="CLIENT_DELETED" selected?={ props.EventType == "CLIENT_DELETED" }>Client Deleted</option>
-								<option value="CLIENT_SECRET_REGENERATED" selected?={ props.EventType == "CLIENT_SECRET_REGENERATED" }>Secret Regenerated</option>
-								<option value="RATE_LIMIT_EXCEEDED" selected?={ props.EventType == "RATE_LIMIT_EXCEEDED" }>Rate Limit Exceeded</option>
-							</select>
+							<div class="audit-filter-group">
+								<label class="search-label">Event Type</label>
+								<select name="event_type" class="audit-filter-select">
+									<option value="">All Events</option>
+									<option value="AUTHENTICATION_SUCCESS" selected?={ props.EventType == "AUTHENTICATION_SUCCESS" }>Auth Success</option>
+									<option value="AUTHENTICATION_FAILURE" selected?={ props.EventType == "AUTHENTICATION_FAILURE" }>Auth Failure</option>
+									<option value="OAUTH_AUTHENTICATION" selected?={ props.EventType == "OAUTH_AUTHENTICATION" }>OAuth Auth</option>
+									<option value="LOGOUT" selected?={ props.EventType == "LOGOUT" }>Logout</option>
+									<option value="ACCESS_TOKEN_ISSUED" selected?={ props.EventType == "ACCESS_TOKEN_ISSUED" }>Token Issued</option>
+									<option value="TOKEN_REFRESHED" selected?={ props.EventType == "TOKEN_REFRESHED" }>Token Refreshed</option>
+									<option value="TOKEN_REVOKED" selected?={ props.EventType == "TOKEN_REVOKED" }>Token Revoked</option>
+									<option value="TOKEN_DISABLED" selected?={ props.EventType == "TOKEN_DISABLED" }>Token Disabled</option>
+									<option value="TOKEN_ENABLED" selected?={ props.EventType == "TOKEN_ENABLED" }>Token Enabled</option>
+									<option value="DEVICE_CODE_GENERATED" selected?={ props.EventType == "DEVICE_CODE_GENERATED" }>Device Code Generated</option>
+									<option value="DEVICE_CODE_AUTHORIZED" selected?={ props.EventType == "DEVICE_CODE_AUTHORIZED" }>Device Code Authorized</option>
+									<option value="CLIENT_CREATED" selected?={ props.EventType == "CLIENT_CREATED" }>Client Created</option>
+									<option value="CLIENT_UPDATED" selected?={ props.EventType == "CLIENT_UPDATED" }>Client Updated</option>
+									<option value="CLIENT_DELETED" selected?={ props.EventType == "CLIENT_DELETED" }>Client Deleted</option>
+									<option value="CLIENT_SECRET_REGENERATED" selected?={ props.EventType == "CLIENT_SECRET_REGENERATED" }>Secret Regenerated</option>
+									<option value="RATE_LIMIT_EXCEEDED" selected?={ props.EventType == "RATE_LIMIT_EXCEEDED" }>Rate Limit Exceeded</option>
+								</select>
+							</div>
+							<div class="audit-filter-group">
+								<label class="search-label">Severity</label>
+								<select name="severity" class="audit-filter-select">
+									<option value="">All</option>
+									<option value="INFO" selected?={ props.Severity == "INFO" }>Info</option>
+									<option value="WARNING" selected?={ props.Severity == "WARNING" }>Warning</option>
+									<option value="ERROR" selected?={ props.Severity == "ERROR" }>Error</option>
+									<option value="CRITICAL" selected?={ props.Severity == "CRITICAL" }>Critical</option>
+								</select>
+							</div>
+							<div class="audit-filter-group">
+								<label class="search-label">Status</label>
+								<select name="success" class="audit-filter-select">
+									<option value="">All</option>
+									<option value="true" selected?={ props.Success == "true" }>Success</option>
+									<option value="false" selected?={ props.Success == "false" }>Failed</option>
+								</select>
+							</div>
+							<div class="audit-filter-group">
+								<label class="search-label">Actor IP</label>
+								<input type="text" name="actor_ip" class="audit-filter-input" placeholder="e.g., 192.168.1.1" value={ props.ActorIP }/>
+							</div>
 						</div>
-						<div class="audit-filter-group">
-							<label class="search-label">Severity</label>
-							<select name="severity" class="audit-filter-select">
-								<option value="">All</option>
-								<option value="INFO" selected?={ props.Severity == "INFO" }>Info</option>
-								<option value="WARNING" selected?={ props.Severity == "WARNING" }>Warning</option>
-								<option value="ERROR" selected?={ props.Severity == "ERROR" }>Error</option>
-								<option value="CRITICAL" selected?={ props.Severity == "CRITICAL" }>Critical</option>
-							</select>
-						</div>
-						<div class="audit-filter-group">
-							<label class="search-label">Status</label>
-							<select name="success" class="audit-filter-select">
-								<option value="">All</option>
-								<option value="true" selected?={ props.Success == "true" }>Success</option>
-								<option value="false" selected?={ props.Success == "false" }>Failed</option>
-							</select>
-						</div>
-						<div class="audit-filter-group">
-							<label class="search-label">Actor IP</label>
-							<input type="text" name="actor_ip" class="audit-filter-input" placeholder="e.g., 192.168.1.1" value={ props.ActorIP }/>
-						</div>
-					</div>
 					</form>
-				</div>
+				}
 				<!-- Table -->
 				if len(props.Logs) > 0 {
 					<div class="audit-table-wrapper">

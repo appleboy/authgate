@@ -21,42 +21,6 @@ templ ClientStatusBadge(status string) {
 	}
 }
 
-// ClientsSearchBar renders the search/filter form shared by /apps and /admin/clients.
-// action is the form GET target (e.g. "/apps" or "/admin/clients").
-templ ClientsSearchBar(action, search string, pageSize int) {
-	<div class="search-section">
-		<form method="GET" action={ templ.URL(action) } class="search-grid">
-			<div class="search-group">
-				<label for="search" class="search-label">Search</label>
-				<div class="search-input-wrapper">
-					<span class="search-icon">@SearchIcon()</span>
-					<input
-						type="text"
-						id="search"
-						name="search"
-						class="search-input"
-						placeholder="Search by name, client ID, or description..."
-						value={ search }
-					data-debounce-search
-					/>
-				</div>
-			</div>
-			<div class="search-group">
-				<label for="page_size" class="search-label">Items per page</label>
-				<select name="page_size" id="page_size" class="page-size-select" onchange="this.form.submit()">
-					<option value="10" selected?={ pageSize == 10 }>10 items</option>
-					<option value="20" selected?={ pageSize == 20 }>20 items</option>
-					<option value="50" selected?={ pageSize == 50 }>50 items</option>
-				</select>
-			</div>
-			<div class="search-buttons">
-				<button type="submit" class="search-btn">Search</button>
-				<a href={ templ.URL(action) } class="clear-btn">Clear</a>
-			</div>
-		</form>
-	</div>
-}
-
 // buildClientPaginationURL builds a URL for pagination links.
 // baseURL is the base path without page/page_size params (e.g. "/apps", "/admin/clients").
 func buildClientPaginationURL(baseURL string, page, pageSize int, search string) string {
