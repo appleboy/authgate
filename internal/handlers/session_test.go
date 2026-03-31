@@ -49,6 +49,21 @@ func setupSessionServices(t *testing.T) (*store.Store, *services.TokenService) {
 	return s, tokenSvc
 }
 
+func createTestOAuthApp(t *testing.T, s *store.Store, clientID, clientName string) {
+	t.Helper()
+	client := &models.OAuthApplication{
+		ClientID:         clientID,
+		ClientSecret:     "secret",
+		ClientName:       clientName,
+		UserID:           uuid.New().String(),
+		Scopes:           "read",
+		GrantTypes:       "device_code",
+		EnableDeviceFlow: true,
+		Status:           models.ClientStatusActive,
+	}
+	require.NoError(t, s.CreateClient(client))
+}
+
 func createTestToken(t *testing.T, s *store.Store, userID, clientID string) *models.AccessToken {
 	t.Helper()
 	tok := &models.AccessToken{
@@ -71,9 +86,11 @@ func newSessionRouter(handler *SessionHandler, userID string) *gin.Engine {
 	if userID != "" {
 		r.Use(func(c *gin.Context) {
 			c.Set("user_id", userID)
+			c.Set("user", &models.User{Username: "testuser"})
 			c.Next()
 		})
 	}
+	r.GET("/account/sessions", handler.ListSessions)
 	r.POST("/account/sessions/:id/revoke", handler.RevokeSession)
 	r.POST("/account/sessions/:id/disable", handler.DisableSession)
 	r.POST("/account/sessions/:id/enable", handler.EnableSession)
@@ -176,4 +193,123 @@ func TestRevokeAllSessions(t *testing.T) {
 	tokens, err := s.GetTokensByUserID(userID)
 	require.NoError(t, err)
 	assert.Empty(t, tokens)
+}
+
+func TestListSessions(t *testing.T) {
+	t.Run("DefaultNoFilters", func(t *testing.T) {
+		s, tokenSvc := setupSessionServices(t)
+		userID := uuid.New().String()
+		clientID := uuid.New().String()
+
+		createTestOAuthApp(t, s, clientID, "Test App")
+		createTestToken(t, s, userID, clientID)
+
+		handler := NewSessionHandler(tokenSvc)
+		r := newSessionRouter(handler, userID)
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodGet, "/account/sessions", nil)
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Contains(t, w.Body.String(), "Test App")
+	})
+
+	t.Run("WithStatusFilter", func(t *testing.T) {
+		s, tokenSvc := setupSessionServices(t)
+		userID := uuid.New().String()
+		clientID := uuid.New().String()
+
+		createTestOAuthApp(t, s, clientID, "Status App")
+
+		// Create an active and a disabled token
+		activeTok := createTestToken(t, s, userID, clientID)
+		disabledTok := createTestToken(t, s, userID, clientID)
+		require.NoError(t, s.UpdateTokenStatus(disabledTok.ID, models.TokenStatusDisabled))
+
+		handler := NewSessionHandler(tokenSvc)
+		r := newSessionRouter(handler, userID)
+
+		// Filter by disabled status
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodGet, "/account/sessions?status=disabled", nil)
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		body := w.Body.String()
+		// The disabled token should be present, the active one should not
+		assert.Contains(t, body, disabledTok.ID)
+		assert.NotContains(t, body, activeTok.ID)
+	})
+
+	t.Run("WithCategoryFilter", func(t *testing.T) {
+		s, tokenSvc := setupSessionServices(t)
+		userID := uuid.New().String()
+		clientID := uuid.New().String()
+
+		createTestOAuthApp(t, s, clientID, "Category App")
+
+		// Create an access and a refresh token
+		accessTok := createTestToken(t, s, userID, clientID)
+		refreshTok := &models.AccessToken{
+			ID:            uuid.New().String(),
+			TokenHash:     util.SHA256Hex(uuid.New().String()),
+			TokenCategory: models.TokenCategoryRefresh,
+			Status:        models.TokenStatusActive,
+			UserID:        userID,
+			ClientID:      clientID,
+			Scopes:        "email profile",
+			ExpiresAt:     time.Now().Add(1 * time.Hour),
+		}
+		require.NoError(t, s.CreateAccessToken(refreshTok))
+
+		handler := NewSessionHandler(tokenSvc)
+		r := newSessionRouter(handler, userID)
+
+		// Filter by refresh category
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodGet, "/account/sessions?category=refresh", nil)
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		body := w.Body.String()
+		assert.Contains(t, body, refreshTok.ID)
+		assert.NotContains(t, body, accessTok.ID)
+	})
+
+	t.Run("CombinedFiltersAndSearch", func(t *testing.T) {
+		s, tokenSvc := setupSessionServices(t)
+		userID := uuid.New().String()
+		clientID := uuid.New().String()
+
+		createTestOAuthApp(t, s, clientID, "Combined App")
+		createTestToken(t, s, userID, clientID)
+
+		handler := NewSessionHandler(tokenSvc)
+		r := newSessionRouter(handler, userID)
+
+		// Combine all filter params
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(
+			http.MethodGet,
+			"/account/sessions?status=active&category=access&search=Combined",
+			nil,
+		)
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Contains(t, w.Body.String(), "Combined App")
+	})
+
+	t.Run("Unauthenticated", func(t *testing.T) {
+		_, tokenSvc := setupSessionServices(t)
+		handler := NewSessionHandler(tokenSvc)
+		r := newSessionRouter(handler, "")
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodGet, "/account/sessions", nil)
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
 }

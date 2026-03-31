@@ -4,10 +4,23 @@ import (
 	"net/http"
 
 	"github.com/go-authgate/authgate/internal/middleware"
+	"github.com/go-authgate/authgate/internal/models"
 	"github.com/go-authgate/authgate/internal/services"
 	"github.com/go-authgate/authgate/internal/templates"
 
 	"github.com/gin-gonic/gin"
+)
+
+var (
+	validTokenStatuses = map[string]bool{
+		models.TokenStatusActive:   true,
+		models.TokenStatusDisabled: true,
+		models.TokenStatusRevoked:  true,
+	}
+	validTokenCategories = map[string]bool{
+		models.TokenCategoryAccess:  true,
+		models.TokenCategoryRefresh: true,
+	}
 )
 
 type SessionHandler struct {
@@ -29,6 +42,12 @@ func (h *SessionHandler) ListSessions(c *gin.Context) {
 	}
 
 	params := parsePaginationParams(c)
+	if s := c.Query("status"); validTokenStatuses[s] {
+		params.StatusFilter = s
+	}
+	if cat := c.Query("category"); validTokenCategories[cat] {
+		params.CategoryFilter = cat
+	}
 
 	// Get paginated tokens
 	tokens, pagination, err := h.tokenService.GetUserTokensWithClientPaginated(
@@ -44,12 +63,14 @@ func (h *SessionHandler) ListSessions(c *gin.Context) {
 	user := getUserFromContext(c)
 
 	templates.RenderTempl(c, http.StatusOK, templates.AccountSessions(templates.SessionsPageProps{
-		BaseProps:   templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
-		NavbarProps: buildNavbarProps(c, user, "sessions"),
-		Sessions:    tokens,
-		Pagination:  pagination,
-		Search:      params.Search,
-		PageSize:    params.PageSize,
+		BaseProps:      templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
+		NavbarProps:    buildNavbarProps(c, user, "sessions"),
+		Sessions:       tokens,
+		Pagination:     pagination,
+		Search:         params.Search,
+		PageSize:       params.PageSize,
+		StatusFilter:   params.StatusFilter,
+		CategoryFilter: params.CategoryFilter,
 	}))
 }
 

@@ -91,10 +91,17 @@ type DevicePageProps struct {
 type SessionsPageProps struct {
 	BaseProps
 	NavbarProps
-	Sessions   []services.TokenWithClient
-	Pagination store.PaginationResult
-	Search     string
-	PageSize   int
+	Sessions       []services.TokenWithClient
+	Pagination     store.PaginationResult
+	Search         string
+	PageSize       int
+	StatusFilter   string
+	CategoryFilter string
+}
+
+// HasActiveFilters returns true if any search or filter is applied.
+func (p SessionsPageProps) HasActiveFilters() bool {
+	return p.Search != "" || p.StatusFilter != "" || p.CategoryFilter != ""
 }
 
 // ClientsPageProps contains properties for the admin clients page

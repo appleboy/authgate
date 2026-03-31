@@ -2,8 +2,10 @@ package templates
 
 import (
 	"fmt"
+	"net/url"
 	"time"
 
+	"github.com/go-authgate/authgate/internal/models"
 	"github.com/go-authgate/authgate/internal/services"
 	"github.com/go-authgate/authgate/internal/store"
 )
@@ -18,43 +20,59 @@ templ AccountSessions(props SessionsPageProps) {
 						<h1 class="sessions-title">Active Sessions</h1>
 						<p class="sessions-subtitle">Manage devices that have access to your account</p>
 					</div>
-					<!-- Search and Filters -->
-					<div class="search-section">
-						<form method="GET" action="/account/sessions" class="search-grid">
-							<div>
-								<label for="search" class="search-label">Search</label>
-								<div class="search-input-wrapper">
-									<span class="search-icon">
-										@SearchIcon()
-									</span>
-									<input
-										type="text"
-										id="search"
-										name="search"
-										class="search-input"
-										placeholder="Search by client name or scopes..."
-										value={ props.Search }
-										data-debounce-search
-									/>
+					<!-- Unified Search & Filter Toolbar -->
+					<div class="sf-toolbar">
+						<!-- Row 1: Search + Page Size -->
+						<form method="GET" action="/account/sessions" class="sf-search-row">
+							<input type="hidden" name="status" value={ props.StatusFilter }/>
+							<input type="hidden" name="category" value={ props.CategoryFilter }/>
+							<div class="sf-search-field">
+								<span class="search-icon">
+									@SearchIcon()
+								</span>
+								<input
+									type="text"
+									id="search"
+									name="search"
+									class="search-input"
+									placeholder="Search by client name or scopes..."
+									value={ props.Search }
+									data-debounce-search
+								/>
+							</div>
+							<select name="page_size" id="page_size" class="page-size-select" onchange="this.form.submit()">
+								<option value="10" selected?={ props.PageSize == 10 }>10 items</option>
+								<option value="20" selected?={ props.PageSize == 20 }>20 items</option>
+								<option value="50" selected?={ props.PageSize == 50 }>50 items</option>
+							</select>
+							<button type="submit" class="search-btn">Search</button>
+							<a href="/account/sessions" class="clear-btn">Clear</a>
+						</form>
+						<!-- Row 2: Filter Segments -->
+						<div class="sf-filters-row">
+							<div class="sf-group">
+								<span class="sf-group-label">Status</span>
+								<div class="sf-segmented">
+									@SessionsFilterTab(buildSessionsFilterURL("", props.CategoryFilter), "All", props.StatusFilter == "", "")
+									@SessionsFilterTab(buildSessionsFilterURL(models.TokenStatusActive, props.CategoryFilter), "Active", props.StatusFilter == models.TokenStatusActive, "dot-active")
+									@SessionsFilterTab(buildSessionsFilterURL(models.TokenStatusDisabled, props.CategoryFilter), "Disabled", props.StatusFilter == models.TokenStatusDisabled, "dot-disabled")
+									@SessionsFilterTab(buildSessionsFilterURL(models.TokenStatusRevoked, props.CategoryFilter), "Revoked", props.StatusFilter == models.TokenStatusRevoked, "dot-revoked")
 								</div>
 							</div>
-							<div>
-								<label for="page_size" class="search-label">Items per page</label>
-								<select name="page_size" id="page_size" class="page-size-select" onchange="this.form.submit()">
-									<option value="10" selected?={ props.PageSize == 10 }>10 items</option>
-									<option value="20" selected?={ props.PageSize == 20 }>20 items</option>
-									<option value="50" selected?={ props.PageSize == 50 }>50 items</option>
-								</select>
+							<div class="sf-divider"></div>
+							<div class="sf-group">
+								<span class="sf-group-label">Type</span>
+								<div class="sf-segmented">
+									@SessionsFilterTab(buildSessionsFilterURL(props.StatusFilter, ""), "All", props.CategoryFilter == "", "")
+									@SessionsFilterTab(buildSessionsFilterURL(props.StatusFilter, models.TokenCategoryAccess), "Access", props.CategoryFilter == models.TokenCategoryAccess, "dot-access")
+									@SessionsFilterTab(buildSessionsFilterURL(props.StatusFilter, models.TokenCategoryRefresh), "Refresh", props.CategoryFilter == models.TokenCategoryRefresh, "dot-refresh")
+								</div>
 							</div>
-							<div class="search-buttons">
-								<button type="submit" class="search-btn">Search</button>
-								<a href="/account/sessions" class="clear-btn">Clear</a>
-							</div>
-						</form>
+						</div>
 					</div>
 					if len(props.Sessions) > 0 {
 						<div class="sessions-list-header">
-							<h3 class="sessions-count">{ fmt.Sprintf("%d", len(props.Sessions)) } Active Sessions</h3>
+							<h3 class="sessions-count">{ fmt.Sprintf("%d", props.Pagination.Total) } Sessions</h3>
 							<form method="POST" action="/account/sessions/revoke-all" class="form-inline">
 								<input type="hidden" name="csrf_token" value={ props.CSRFToken }/>
 								<button
@@ -92,24 +110,24 @@ templ AccountSessions(props SessionsPageProps) {
 							</table>
 						</div>
 						<!-- Pagination Controls -->
-						@SessionsPagination(props.Pagination, props.PageSize, props.Search)
+						@SessionsPagination(props.Pagination, props.PageSize, props.Search, props.StatusFilter, props.CategoryFilter)
 					} else {
 						<div class="empty-state">
-							if props.Search != "" {
+							if props.HasActiveFilters() {
 								@EmptyStateSearch()
 							} else {
 								@EmptyStateSessions()
 							}
 							<h3 class="empty-title">
-								if props.Search != "" {
+								if props.HasActiveFilters() {
 									No sessions found
 								} else {
 									No Active Sessions
 								}
 							</h3>
 							<p class="empty-text">
-								if props.Search != "" {
-									Try adjusting your search terms or clear the filter.
+								if props.HasActiveFilters() {
+									Try adjusting your search terms or filters, or clear all filters.
 								} else {
 									You don't have any active sessions. Authorize a device to see it here.
 								}
@@ -228,15 +246,46 @@ templ SessionTableRow(session services.TokenWithClient, csrfToken string) {
 	</tr>
 }
 
-func buildSessionsPaginationURL(page, pageSize int, search string) string {
-	searchParam := ""
-	if search != "" {
-		searchParam = "&search=" + search
+func buildSessionsFilterURL(status, category string) string {
+	u := "/account/sessions"
+	sep := "?"
+	if status != "" {
+		u += sep + "status=" + url.QueryEscape(status)
+		sep = "&"
 	}
-	return fmt.Sprintf("/account/sessions?page=%d&page_size=%d%s", page, pageSize, searchParam)
+	if category != "" {
+		u += sep + "category=" + url.QueryEscape(category)
+	}
+	return u
 }
 
-templ SessionsPagination(pagination store.PaginationResult, pageSize int, search string) {
+func buildSessionsPaginationURL(page, pageSize int, search, status, category string) string {
+	u := fmt.Sprintf("/account/sessions?page=%d&page_size=%d", page, pageSize)
+	if search != "" {
+		u += "&search=" + url.QueryEscape(search)
+	}
+	if status != "" {
+		u += "&status=" + url.QueryEscape(status)
+	}
+	if category != "" {
+		u += "&category=" + url.QueryEscape(category)
+	}
+	return u
+}
+
+templ SessionsFilterTab(href, label string, isActive bool, dotClass string) {
+	<a
+		href={ templ.URL(href) }
+		class={ templ.Classes("sf-item", templ.KV("sf-item--active", isActive)) }
+	>
+		if dotClass != "" {
+			<span class={ "sf-dot " + dotClass }></span>
+		}
+		{ label }
+	</a>
+}
+
+templ SessionsPagination(pagination store.PaginationResult, pageSize int, search, status, category string) {
 	<div class="sessions-pagination">
 		<div class="sessions-pagination-info">
 			<span>Showing</span>
@@ -246,7 +295,7 @@ templ SessionsPagination(pagination store.PaginationResult, pageSize int, search
 		<div class="sessions-pagination-controls">
 			if pagination.HasPrev {
 				<a
-					href={ templ.URL(buildSessionsPaginationURL(pagination.PrevPage, pageSize, search)) }
+					href={ templ.URL(buildSessionsPaginationURL(pagination.PrevPage, pageSize, search, status, category)) }
 					class="sessions-pagination-btn"
 				>
 					<span>&larr;</span>
@@ -263,7 +312,7 @@ templ SessionsPagination(pagination store.PaginationResult, pageSize int, search
 			</span>
 			if pagination.HasNext {
 				<a
-					href={ templ.URL(buildSessionsPaginationURL(pagination.NextPage, pageSize, search)) }
+					href={ templ.URL(buildSessionsPaginationURL(pagination.NextPage, pageSize, search, status, category)) }
 					class="sessions-pagination-btn"
 				>
 					<span>Next</span>
