@@ -51,40 +51,6 @@
   color: white;
 }
 
-/* Status filter tabs */
-.status-filter-tabs {
-  display: flex;
-  gap: var(--space-2);
-  margin-bottom: var(--space-4);
-  border-bottom: 1px solid var(--color-border);
-  padding-bottom: var(--space-3);
-}
-
-.status-filter-tab {
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  text-decoration: none;
-  color: var(--color-text-secondary);
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-
-.status-filter-tab:hover {
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-primary);
-}
-
-.status-filter-tab--active {
-  background: var(--color-primary);
-  color: #fff;
-}
-
-.status-filter-tab--active:hover {
-  background: var(--color-primary-dark);
-  color: #fff;
-}
-
 /* Client type badges */
 .client-type-badge {
   font-size: var(--text-xs);

@@ -1,0 +1,66 @@
+package templates
+
+import (
+	"fmt"
+	"sort"
+)
+
+// SfToolbar renders the shared search & filter toolbar container.
+// Callers pass SfSearchRow and optional filter rows as children.
+templ SfToolbar() {
+	<div class="sf-toolbar">
+		{ children... }
+	</div>
+}
+
+// SfSearchRow renders the search input + page size dropdown + action buttons row.
+templ SfSearchRow(props SfSearchRowProps) {
+	<form method="GET" action={ templ.URL(props.Action) } class="sf-search-row">
+		for _, k := range sortedKeys(props.HiddenFields) {
+			<input type="hidden" name={ k } value={ props.HiddenFields[k] }/>
+		}
+		<div class="sf-search-field">
+			<span class="search-icon">
+				@SearchIcon()
+			</span>
+			<input
+				type="text"
+				id="search"
+				name="search"
+				class="search-input"
+				placeholder={ props.Placeholder }
+				value={ props.Search }
+				data-debounce-search
+			/>
+		</div>
+		<select name="page_size" id="page_size" class="page-size-select" onchange="this.form.submit()">
+			for _, size := range props.pageSizeOptions() {
+				<option value={ fmt.Sprintf("%d", size) } selected?={ props.PageSize == size }>{ fmt.Sprintf("%d items", size) }</option>
+			}
+		</select>
+		<button type="submit" class="search-btn">{ props.searchLabel() }</button>
+		<a href={ templ.URL(props.ClearHref) } class="clear-btn">Clear</a>
+	</form>
+}
+
+func sortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// SfFilterTab renders a single segmented filter tab item.
+templ SfFilterTab(href, label string, isActive bool, dotClass string) {
+	<a
+		href={ templ.URL(href) }
+		class={ templ.Classes("sf-item", templ.KV("sf-item--active", isActive)) }
+	>
+		if dotClass != "" {
+			<span class={ templ.Classes("sf-dot", dotClass) }></span>
+		}
+		{ label }
+	</a>
+}

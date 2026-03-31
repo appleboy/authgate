@@ -31,14 +31,26 @@ templ AdminClients(props ClientsPageProps) {
 						</a>
 					</div>
 					@Alert(props.Success, AlertSuccess)
-					<!-- Status Filter Tabs -->
-					<div class="status-filter-tabs">
-						@AdminClientsStatusTab("/admin/clients", "All", props.StatusFilter == "")
-						@AdminClientsStatusTab("/admin/clients?status=pending", "Pending", props.StatusFilter == models.ClientStatusPending)
-						@AdminClientsStatusTab("/admin/clients?status=active", "Active", props.StatusFilter == models.ClientStatusActive)
-						@AdminClientsStatusTab("/admin/clients?status=inactive", "Inactive", props.StatusFilter == models.ClientStatusInactive)
-					</div>
-					@ClientsSearchBar("/admin/clients", props.Search, props.PageSize)
+					@SfToolbar() {
+						@SfSearchRow(SfSearchRowProps{
+							Action:      "/admin/clients",
+							Search:      props.Search,
+							PageSize:    props.PageSize,
+							Placeholder: "Search by name, client ID, or description...",
+							ClearHref:   "/admin/clients",
+						})
+						<div class="sf-filters-row">
+							<div class="sf-group">
+								<span class="sf-group-label">Status</span>
+								<div class="sf-segmented">
+									@SfFilterTab("/admin/clients", "All", props.StatusFilter == "", "")
+									@SfFilterTab("/admin/clients?status=pending", "Pending", props.StatusFilter == models.ClientStatusPending, "dot-pending")
+									@SfFilterTab("/admin/clients?status=active", "Active", props.StatusFilter == models.ClientStatusActive, "dot-active")
+									@SfFilterTab("/admin/clients?status=inactive", "Inactive", props.StatusFilter == models.ClientStatusInactive, "dot-inactive")
+								</div>
+							</div>
+						</div>
+					}
 					if len(props.Clients) > 0 {
 						<div class="admin-clients-table-wrapper">
 							<table class="admin-clients-table">
@@ -224,12 +236,3 @@ templ ClientTableRow(client services.ClientWithCreator, csrfToken string) {
 	</tr>
 }
 
-// AdminClientsStatusTab renders a filter tab for the admin clients list.
-templ AdminClientsStatusTab(href, label string, isActive bool) {
-	<a
-		href={ templ.URL(href) }
-		class={ templ.Classes("status-filter-tab", templ.KV("status-filter-tab--active", isActive)) }
-	>
-		{ label }
-	</a>
-}
