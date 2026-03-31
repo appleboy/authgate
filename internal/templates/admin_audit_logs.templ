@@ -2,6 +2,8 @@ package templates
 
 import (
 	"fmt"
+	"net/url"
+
 	"github.com/go-authgate/authgate/internal/models"
 )
 
@@ -322,23 +324,23 @@ templ AuditLogRow(log *models.AuditLog) {
 }
 
 func buildAuditPaginationURL(page, pageSize int, search, eventType, severity, success, actorIP string) string {
-	url := fmt.Sprintf("/admin/audit?page=%d&page_size=%d", page, pageSize)
+	u := fmt.Sprintf("/admin/audit?page=%d&page_size=%d", page, pageSize)
 	if search != "" {
-		url += "&search=" + search
+		u += "&search=" + url.QueryEscape(search)
 	}
 	if eventType != "" {
-		url += "&event_type=" + eventType
+		u += "&event_type=" + url.QueryEscape(eventType)
 	}
 	if severity != "" {
-		url += "&severity=" + severity
+		u += "&severity=" + url.QueryEscape(severity)
 	}
 	if success != "" {
-		url += "&success=" + success
+		u += "&success=" + url.QueryEscape(success)
 	}
 	if actorIP != "" {
-		url += "&actor_ip=" + actorIP
+		u += "&actor_ip=" + url.QueryEscape(actorIP)
 	}
-	return url
+	return u
 }
 
 templ AuditLogsPagination(props AuditLogsPageProps) {

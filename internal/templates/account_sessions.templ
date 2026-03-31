@@ -2,6 +2,7 @@ package templates
 
 import (
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/go-authgate/authgate/internal/models"
@@ -246,30 +247,30 @@ templ SessionTableRow(session services.TokenWithClient, csrfToken string) {
 }
 
 func buildSessionsFilterURL(status, category string) string {
-	url := "/account/sessions"
+	u := "/account/sessions"
 	sep := "?"
 	if status != "" {
-		url += sep + "status=" + status
+		u += sep + "status=" + url.QueryEscape(status)
 		sep = "&"
 	}
 	if category != "" {
-		url += sep + "category=" + category
+		u += sep + "category=" + url.QueryEscape(category)
 	}
-	return url
+	return u
 }
 
 func buildSessionsPaginationURL(page, pageSize int, search, status, category string) string {
-	url := fmt.Sprintf("/account/sessions?page=%d&page_size=%d", page, pageSize)
+	u := fmt.Sprintf("/account/sessions?page=%d&page_size=%d", page, pageSize)
 	if search != "" {
-		url += "&search=" + search
+		u += "&search=" + url.QueryEscape(search)
 	}
 	if status != "" {
-		url += "&status=" + status
+		u += "&status=" + url.QueryEscape(status)
 	}
 	if category != "" {
-		url += "&category=" + category
+		u += "&category=" + url.QueryEscape(category)
 	}
-	return url
+	return u
 }
 
 templ SessionsFilterTab(href, label string, isActive bool, dotClass string) {

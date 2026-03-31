@@ -2,6 +2,7 @@ package templates
 
 import (
 	"fmt"
+	"net/url"
 
 	"github.com/go-authgate/authgate/internal/models"
 	"github.com/go-authgate/authgate/internal/store"
@@ -59,11 +60,11 @@ templ ClientsSearchBar(action, search string, pageSize int) {
 // buildClientPaginationURL builds a URL for pagination links.
 // baseURL is the base path without page/page_size params (e.g. "/apps", "/admin/clients").
 func buildClientPaginationURL(baseURL string, page, pageSize int, search string) string {
-	url := fmt.Sprintf("%s?page=%d&page_size=%d", baseURL, page, pageSize)
+	u := fmt.Sprintf("%s?page=%d&page_size=%d", baseURL, page, pageSize)
 	if search != "" {
-		url += "&search=" + search
+		u += "&search=" + url.QueryEscape(search)
 	}
-	return url
+	return u
 }
 
 // ClientsListPagination renders prev/next pagination shared by /apps and /admin/clients.
