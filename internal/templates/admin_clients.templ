@@ -163,9 +163,7 @@ templ ClientTableRow(client services.ClientWithCreator, csrfToken string) {
 			</div>
 		</td>
 		<td data-label="Client ID">
-			<div class="client-id client-id-box">
-				{ client.ClientID }
-			</div>
+			@CopyableValue(client.ClientID, "Client ID", CopyableValueCompact)
 		</td>
 		<td data-label="Grant Types">
 			<code class="grant-types-code">

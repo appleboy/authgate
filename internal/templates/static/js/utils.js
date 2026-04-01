@@ -357,6 +357,31 @@ function initRelativeTime() {
 }
 
 /**
+ * Initialize copyable value buttons (event delegation)
+ */
+function initCopyableValues() {
+  document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.copyable-value-btn');
+    if (!btn) return;
+
+    var value = btn.getAttribute('data-copy-value');
+    if (!value) return;
+
+    copyToClipboard(value);
+
+    // Visual feedback: swap icons via CSS class
+    btn.classList.add('copyable-value-btn--copied');
+
+    // Clear any existing timer on this button
+    if (btn._copyTimer) clearTimeout(btn._copyTimer);
+
+    btn._copyTimer = setTimeout(function() {
+      btn.classList.remove('copyable-value-btn--copied');
+    }, 1500);
+  });
+}
+
+/**
  * Initialize search clear buttons
  */
 function initSearchClear() {
@@ -398,7 +423,8 @@ export {
   toggleFilters,
   initCollapsibleFilters,
   initRelativeTime,
-  initSearchClear
+  initSearchClear,
+  initCopyableValues
 };
 
 /**
@@ -419,6 +445,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Search clear buttons
   initSearchClear();
+
+  // Copyable value buttons
+  initCopyableValues();
 
   // Keyboard shortcuts
   document.addEventListener('keydown', function(e) {

@@ -1,6 +1,7 @@
 @import "./base.css";
 @import "./components/alerts.css";
 @import "./components/breadcrumbs.css";
+@import "./components/copyable-value.css";
 @import "./components/dark-mode.css";
 @import "./components/forms.css";
 @import "./components/modal.css";

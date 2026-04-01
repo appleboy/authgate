@@ -101,7 +101,7 @@ templ MyAppTableRow(app models.OAuthApplication) {
 			</div>
 		</td>
 		<td data-label="Client ID">
-			<div class="client-id client-id-box">{ app.ClientID }</div>
+			@CopyableValue(app.ClientID, "Client ID", CopyableValueCompact)
 		</td>
 		<td data-label="Grant Types">
 			<code class="grant-types-code">{ app.GrantTypes }</code>

@@ -1,0 +1,117 @@
+/* ============================================
+   Copyable Value Component
+   Inline monospaced value with copy-to-clipboard button
+   ============================================ */
+
+.copyable-value {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  max-width: 100%;
+  line-height: 1.4;
+}
+
+.copyable-value-text {
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: all;
+  /* Reset browser <code> defaults */
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+.copyable-value-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: background-color var(--transition-fast),
+              border-color var(--transition-fast),
+              color var(--transition-fast);
+}
+
+.copyable-value-btn:hover {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.copyable-value-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.copyable-value-btn--copied {
+  color: var(--color-success);
+}
+
+.copyable-value-btn--copied:hover {
+  color: var(--color-success);
+}
+
+/* Check icon hidden by default, shown when copied */
+.copyable-icon-check {
+  display: none;
+}
+
+.copyable-value-btn--copied .copyable-icon-copy {
+  display: none;
+}
+
+.copyable-value-btn--copied .copyable-icon-check {
+  display: block;
+}
+
+/* Compact variant for table rows */
+.copyable-value--compact {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+  max-width: 220px;
+}
+
+.copyable-value--compact .copyable-value-btn {
+  width: 20px;
+  height: 20px;
+}
+
+.copyable-value--compact .copyable-icon {
+  width: 12px;
+  height: 12px;
+}
+
+/* Dark mode */
+[data-theme="dark"] .copyable-value {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-border);
+}
+
+[data-theme="dark"] .copyable-value-btn:hover {
+  background: var(--color-bg-secondary);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .copyable-value-btn {
+    transition: none;
+  }
+}
