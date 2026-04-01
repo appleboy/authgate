@@ -366,7 +366,10 @@ function initRelativeTime() {
  */
 function initCopyableValues() {
   document.addEventListener('click', function(e) {
-    var btn = e.target.closest('.copyable-value-btn');
+    var target = e.target;
+    if (!target || typeof target.closest !== 'function') return;
+
+    var btn = target.closest('.copyable-value-btn');
     if (!btn) return;
 
     var value = btn.getAttribute('data-copy-value');

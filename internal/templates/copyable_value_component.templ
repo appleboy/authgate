@@ -11,7 +11,7 @@ const (
 
 // CopyableValue renders a monospaced value with an inline copy-to-clipboard button.
 templ CopyableValue(value string, label string, size CopyableValueSize) {
-	<span class={ "copyable-value", templ.KV("copyable-value--compact", size == CopyableValueCompact), templ.KV("copyable-value--wrap", size == CopyableValueWrap) }>
+	<span class={ templ.Classes("copyable-value", templ.KV("copyable-value--compact", size == CopyableValueCompact), templ.KV("copyable-value--wrap", size == CopyableValueWrap)) }>
 		<code class="copyable-value-text">{ value }</code>
 		<button
 			type="button"
