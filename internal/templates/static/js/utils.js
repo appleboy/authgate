@@ -23,11 +23,13 @@ function formatRelativeTime(timestamp) {
  */
 function copyToClipboard(text) {
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(function() {
+    return navigator.clipboard.writeText(text).then(function() {
       showNotification('Copied to clipboard!', 'success');
+      return true;
     }).catch(function(err) {
       console.error('Failed to copy:', err);
       showNotification('Failed to copy', 'error');
+      return false;
     });
   } else {
     var textarea = document.createElement('textarea');
@@ -37,15 +39,21 @@ function copyToClipboard(text) {
     document.body.appendChild(textarea);
     textarea.select();
 
+    var success = false;
     try {
-      document.execCommand('copy');
-      showNotification('Copied to clipboard!', 'success');
+      success = document.execCommand('copy');
+      if (success) {
+        showNotification('Copied to clipboard!', 'success');
+      } else {
+        showNotification('Failed to copy', 'error');
+      }
     } catch (err) {
       console.error('Failed to copy:', err);
       showNotification('Failed to copy', 'error');
     }
 
     document.body.removeChild(textarea);
+    return Promise.resolve(success);
   }
 }
 
@@ -357,6 +365,37 @@ function initRelativeTime() {
 }
 
 /**
+ * Initialize copyable value buttons (event delegation)
+ */
+function initCopyableValues() {
+  document.addEventListener('click', function(e) {
+    var target = e.target;
+    if (!target || typeof target.closest !== 'function') return;
+
+    var btn = target.closest('.copyable-value-btn');
+    if (!btn) return;
+
+    var wrapper = btn.closest('.copyable-value');
+    var textEl = wrapper && wrapper.querySelector('.copyable-value-text');
+    if (!textEl) return;
+
+    var value = textEl.textContent;
+
+    copyToClipboard(value).then(function(success) {
+      if (!success) return;
+
+      btn.classList.add('copyable-value-btn--copied');
+
+      if (btn._copyTimer) clearTimeout(btn._copyTimer);
+
+      btn._copyTimer = setTimeout(function() {
+        btn.classList.remove('copyable-value-btn--copied');
+      }, 1500);
+    });
+  });
+}
+
+/**
  * Initialize search clear buttons
  */
 function initSearchClear() {
@@ -398,7 +437,8 @@ export {
   toggleFilters,
   initCollapsibleFilters,
   initRelativeTime,
-  initSearchClear
+  initSearchClear,
+  initCopyableValues
 };
 
 /**
@@ -419,6 +459,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Search clear buttons
   initSearchClear();
+
+  // Copyable value buttons
+  initCopyableValues();
 
   // Keyboard shortcuts
   document.addEventListener('keydown', function(e) {

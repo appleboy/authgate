@@ -21,7 +21,7 @@ templ UserAppCreated(props UserClientCreatedPageProps) {
 						<div class="admin-detail-row">
 							<div class="admin-detail-label">Client ID</div>
 							<div class="admin-detail-value">
-								<code class="client-id-box">{ props.Client.ClientID }</code>
+								@CopyableValue(props.Client.ClientID, "Client ID", CopyableValueDefault)
 							</div>
 						</div>
 						if props.PlainSecret != "" {
@@ -32,7 +32,7 @@ templ UserAppCreated(props UserClientCreatedPageProps) {
 										<p style="margin:0 0 var(--space-2);color:var(--color-danger);font-weight:600;">
 											⚠️ This secret is shown only once. Copy it now.
 										</p>
-										<code class="client-id-box" style="word-break:break-all;">{ props.PlainSecret }</code>
+										@CopyableValue(props.PlainSecret, "Client Secret", CopyableValueWrap)
 									</div>
 								</div>
 							</div>

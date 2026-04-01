@@ -38,7 +38,9 @@ templ UserAppDetail(props UserClientDetailPageProps) {
 					<div class="admin-detail-section">
 						<div class="admin-detail-row">
 							<div class="admin-detail-label">Client ID</div>
-							<div class="admin-detail-value">{ props.Client.ClientID }</div>
+							<div class="admin-detail-value">
+								@CopyableValue(props.Client.ClientID, "Client ID", CopyableValueDefault)
+							</div>
 						</div>
 						<div class="admin-detail-row">
 							<div class="admin-detail-label">App Name</div>
