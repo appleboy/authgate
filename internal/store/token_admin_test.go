@@ -107,6 +107,25 @@ func TestGetTokensPaginated(t *testing.T) {
 		assert.Len(t, tokens, 6)
 	})
 
+	t.Run("search combined with status and category filters", func(t *testing.T) {
+		params := NewPaginationParams(1, 10, "tokenadmin")
+		params.StatusFilter = models.TokenStatusActive
+		params.CategoryFilter = models.TokenCategoryRefresh
+		tokens, pagination, err := store.GetTokensPaginated(params)
+		require.NoError(t, err)
+		assert.Len(t, tokens, 1) // only the active refresh token for tokenadmin
+		assert.Equal(t, int64(1), pagination.Total)
+	})
+
+	t.Run("search combined with category filter no match", func(t *testing.T) {
+		params := NewPaginationParams(1, 10, "nonexistent")
+		params.CategoryFilter = models.TokenCategoryAccess
+		tokens, pagination, err := store.GetTokensPaginated(params)
+		require.NoError(t, err)
+		assert.Empty(t, tokens)
+		assert.Equal(t, int64(0), pagination.Total)
+	})
+
 	t.Run("search no match", func(t *testing.T) {
 		params := NewPaginationParams(1, 10, "nonexistent")
 		tokens, pagination, err := store.GetTokensPaginated(params)
