@@ -379,6 +379,7 @@ type UserPasswordResetPageProps struct {
 	NavbarProps
 	TargetUser  *models.User
 	NewPassword string
+	Warning     string // non-fatal warning (e.g. token revocation failure)
 }
 
 // AuditLogsPageProps contains properties for the audit logs page

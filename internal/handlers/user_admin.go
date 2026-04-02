@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/go-authgate/authgate/internal/middleware"
+	"github.com/go-authgate/authgate/internal/models"
 	"github.com/go-authgate/authgate/internal/services"
 	"github.com/go-authgate/authgate/internal/templates"
 )
@@ -21,6 +22,22 @@ type UserAdminHandler struct {
 // NewUserAdminHandler creates a new UserAdminHandler.
 func NewUserAdminHandler(us *services.UserService, ts *services.TokenService) *UserAdminHandler {
 	return &UserAdminHandler{userService: us, tokenService: ts}
+}
+
+// adminGetUser fetches a user by ID and renders the appropriate error page on failure.
+// Returns the user and true on success, or nil and false after rendering an error.
+func (h *UserAdminHandler) adminGetUser(c *gin.Context) (*models.User, bool) {
+	user, err := h.userService.AdminGetUserByID(c.Param("id"))
+	if err != nil {
+		if errors.Is(err, services.ErrUserNotFound) {
+			renderErrorPage(c, http.StatusNotFound, "User not found")
+		} else {
+			renderErrorPage(c, http.StatusInternalServerError, "Failed to load user")
+		}
+		return nil, false
+	}
+	user.PasswordHash = ""
+	return user, true
 }
 
 // ShowUsersPage renders the paginated user list.
@@ -77,12 +94,10 @@ func (h *UserAdminHandler) ViewUser(c *gin.Context) {
 		return
 	}
 
-	targetUser, err := h.userService.AdminGetUserByID(c.Param("id"))
-	if err != nil {
-		renderErrorPage(c, http.StatusNotFound, "User not found")
+	targetUser, ok := h.adminGetUser(c)
+	if !ok {
 		return
 	}
-	targetUser.PasswordHash = ""
 
 	stats, err := h.userService.GetUserStats(targetUser.ID)
 	if err != nil {
@@ -127,12 +142,10 @@ func (h *UserAdminHandler) ShowEditUserPage(c *gin.Context) {
 		return
 	}
 
-	targetUser, err := h.userService.AdminGetUserByID(c.Param("id"))
-	if err != nil {
-		renderErrorPage(c, http.StatusNotFound, "User not found")
+	targetUser, ok := h.adminGetUser(c)
+	if !ok {
 		return
 	}
-	targetUser.PasswordHash = ""
 
 	templates.RenderTempl(c, http.StatusOK, templates.AdminUserForm(templates.UserFormPageProps{
 		BaseProps:   templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
@@ -150,12 +163,10 @@ func (h *UserAdminHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 
-	targetUser, err := h.userService.AdminGetUserByID(c.Param("id"))
-	if err != nil {
-		renderErrorPage(c, http.StatusNotFound, "User not found")
+	targetUser, ok := h.adminGetUser(c)
+	if !ok {
 		return
 	}
-	targetUser.PasswordHash = ""
 
 	req := services.UpdateUserProfileRequest{
 		FullName: c.PostForm("full_name"),
@@ -206,12 +217,10 @@ func (h *UserAdminHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 
-	targetUser, err := h.userService.AdminGetUserByID(c.Param("id"))
-	if err != nil {
-		renderErrorPage(c, http.StatusNotFound, "User not found")
+	targetUser, ok := h.adminGetUser(c)
+	if !ok {
 		return
 	}
-	targetUser.PasswordHash = ""
 
 	newPassword, err := h.userService.ResetUserPassword(
 		c.Request.Context(),
@@ -233,13 +242,12 @@ func (h *UserAdminHandler) ResetPassword(c *gin.Context) {
 	}
 
 	// Revoke all tokens so the user must re-authenticate with the new password.
+	// If revocation fails, still show the password — the admin needs it to
+	// communicate the new credential. A warning is displayed instead.
+	var revokeWarning string
 	if err := h.tokenService.RevokeAllUserTokens(targetUser.ID); err != nil {
-		renderErrorPage(
-			c,
-			http.StatusInternalServerError,
-			"Password reset but failed to revoke existing tokens",
-		)
-		return
+		revokeWarning = "Warning: existing tokens could not be revoked. " +
+			"The user may still have active sessions with the old password."
 	}
 
 	c.Header("Cache-Control", "no-store, no-cache, must-revalidate, private")
@@ -253,6 +261,7 @@ func (h *UserAdminHandler) ResetPassword(c *gin.Context) {
 			NavbarProps: buildNavbarProps(c, currentUser, "users"),
 			TargetUser:  targetUser,
 			NewPassword: newPassword,
+			Warning:     revokeWarning,
 		}),
 	)
 }
