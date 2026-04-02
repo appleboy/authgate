@@ -719,7 +719,11 @@ func (s *UserService) UpdateUserProfile(
 	// Check email conflict
 	if req.Email != user.Email {
 		existing, lookupErr := s.store.GetUserByEmail(req.Email)
-		if lookupErr == nil && existing.ID != userID {
+		if lookupErr != nil {
+			if !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("failed to check email uniqueness: %w", lookupErr)
+			}
+		} else if existing.ID != userID {
 			return ErrEmailConflict
 		}
 	}
@@ -861,16 +865,21 @@ func (s *UserService) DeleteUserAdmin(
 		}
 	}
 
-	// Clean up user-related data (tokens are revoked by caller via TokenService
-	// to ensure token cache invalidation).
-	if err := s.store.DeleteOAuthConnectionsByUserID(userID); err != nil {
-		return fmt.Errorf("failed to delete user OAuth connections: %w", err)
-	}
-	if err := s.store.RevokeAllUserAuthorizationsByUserID(userID); err != nil {
-		return fmt.Errorf("failed to revoke user authorizations: %w", err)
-	}
-
-	if err := s.store.DeleteUser(userID); err != nil {
+	// Clean up user-related data inside a transaction so that all mutations
+	// either succeed or fail together. Tokens are revoked by the caller via
+	// TokenService to ensure token cache invalidation.
+	if err := s.store.RunInTransaction(func(tx core.Store) error {
+		if err := tx.DeleteOAuthConnectionsByUserID(userID); err != nil {
+			return fmt.Errorf("delete OAuth connections: %w", err)
+		}
+		if err := tx.RevokeAllUserAuthorizationsByUserID(userID); err != nil {
+			return fmt.Errorf("revoke authorizations: %w", err)
+		}
+		if err := tx.DeleteUser(userID); err != nil {
+			return fmt.Errorf("delete user: %w", err)
+		}
+		return nil
+	}); err != nil {
 		return fmt.Errorf("failed to delete user: %w", err)
 	}
 

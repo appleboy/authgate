@@ -68,6 +68,9 @@ func WriteCredentialsFile(dir, content string) (string, error) {
 // GenerateRandomPassword generates a random password of specified length.
 // Uses base64url encoding and truncates to length printable characters.
 func GenerateRandomPassword(length int) (string, error) {
+	if length <= 0 {
+		return "", fmt.Errorf("password length must be positive, got %d", length)
+	}
 	b, err := CryptoRandomBytes(length)
 	if err != nil {
 		return "", err

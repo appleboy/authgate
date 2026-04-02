@@ -82,6 +82,7 @@ func (h *UserAdminHandler) ViewUser(c *gin.Context) {
 		renderErrorPage(c, http.StatusNotFound, "User not found")
 		return
 	}
+	targetUser.PasswordHash = ""
 
 	stats, err := h.userService.GetUserStats(targetUser.ID)
 	if err != nil {
@@ -131,6 +132,7 @@ func (h *UserAdminHandler) ShowEditUserPage(c *gin.Context) {
 		renderErrorPage(c, http.StatusNotFound, "User not found")
 		return
 	}
+	targetUser.PasswordHash = ""
 
 	templates.RenderTempl(c, http.StatusOK, templates.AdminUserForm(templates.UserFormPageProps{
 		BaseProps:   templates.BaseProps{CSRFToken: middleware.GetCSRFToken(c)},
@@ -153,6 +155,7 @@ func (h *UserAdminHandler) UpdateUser(c *gin.Context) {
 		renderErrorPage(c, http.StatusNotFound, "User not found")
 		return
 	}
+	targetUser.PasswordHash = ""
 
 	req := services.UpdateUserProfileRequest{
 		FullName: c.PostForm("full_name"),
@@ -208,6 +211,7 @@ func (h *UserAdminHandler) ResetPassword(c *gin.Context) {
 		renderErrorPage(c, http.StatusNotFound, "User not found")
 		return
 	}
+	targetUser.PasswordHash = ""
 
 	newPassword, err := h.userService.ResetUserPassword(
 		c.Request.Context(),

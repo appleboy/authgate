@@ -49,6 +49,10 @@ templ AdminUsers(props UsersPageProps) {
 							PageSize:    props.PageSize,
 							Placeholder: "Search by username, email, or name...",
 							ClearHref:   "/admin/users",
+							HiddenFields: map[string]string{
+								"role":        props.RoleFilter,
+								"auth_source": props.AuthSourceFilter,
+							},
 						})
 						<div class="sf-filters-row">
 							<div class="sf-group">
@@ -119,7 +123,10 @@ templ AdminUsers(props UsersPageProps) {
 								</tbody>
 							</table>
 						</div>
-						@ClientsListPagination(props.Pagination, props.PageSize, props.Search, "/admin/users", "total users")
+						@ClientsListPagination(props.Pagination, props.PageSize, props.Search, "/admin/users", "total users", map[string]string{
+							"role":        props.RoleFilter,
+							"auth_source": props.AuthSourceFilter,
+						})
 					} else {
 						<div class="empty-state">
 							if props.Search != "" {
@@ -204,7 +211,7 @@ templ UserTableRow(u models.User, csrfToken string) {
 
 templ UserRoleBadge(role string) {
 	switch role {
-		case "admin":
+		case models.UserRoleAdmin:
 			<span class="status-badge" style="background:rgba(139,92,246,0.1);color:#7C3AED;border:1px solid rgba(139,92,246,0.3);">Admin</span>
 		default:
 			<span class="status-badge" style="background:rgba(59,130,246,0.1);color:#2563EB;border:1px solid rgba(59,130,246,0.3);">User</span>
@@ -213,7 +220,7 @@ templ UserRoleBadge(role string) {
 
 templ UserAuthSourceBadge(authSource string) {
 	switch authSource {
-		case "http_api":
+		case models.AuthSourceHTTPAPI:
 			<span class="status-badge" style="background:rgba(245,158,11,0.1);color:#D97706;border:1px solid rgba(245,158,11,0.3);">External</span>
 		default:
 			<span class="status-badge status-active">Local</span>
