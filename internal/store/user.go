@@ -235,7 +235,7 @@ func (s *Store) GetUserStatsByUserID(userID string) (int64, int64, int64, error)
 	var result struct {
 		ActiveTokenCount int64 `gorm:"column:active_token_count"`
 		OAuthConnCount   int64 `gorm:"column:oauth_conn_count"`
-		AuthorizationCnt int64 `gorm:"column:authorization_count"`
+		AuthorizationCount int64 `gorm:"column:authorization_count"`
 	}
 	err := s.db.Raw(`
 		SELECT
@@ -246,6 +246,6 @@ func (s *Store) GetUserStatsByUserID(userID string) (int64, int64, int64, error)
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	return result.ActiveTokenCount, result.OAuthConnCount, result.AuthorizationCnt, nil
+	return result.ActiveTokenCount, result.OAuthConnCount, result.AuthorizationCount, nil
 }
 
