@@ -839,8 +839,35 @@ func (s *UserService) ResetUserPassword(
 	return newPassword, nil
 }
 
-// DeleteUserAdmin deletes a user and revokes all their tokens. Admins cannot
-// delete their own account.
+// ValidateDeleteUser checks whether the user can be deleted without performing
+// the deletion. The caller can use this to run pre-deletion side effects (e.g.
+// token revocation) before committing the delete.
+func (s *UserService) ValidateDeleteUser(userID, actorUserID string) error {
+	if actorUserID == userID {
+		return ErrCannotDeleteSelf
+	}
+
+	user, err := s.AdminGetUserByID(userID)
+	if err != nil {
+		return err
+	}
+
+	if user.Role == models.UserRoleAdmin {
+		adminCount, countErr := s.store.CountUsersByRole(models.UserRoleAdmin)
+		if countErr != nil {
+			return fmt.Errorf("failed to count admins: %w", countErr)
+		}
+		if adminCount <= 1 {
+			return ErrCannotRemoveLastAdmin
+		}
+	}
+
+	return nil
+}
+
+// DeleteUserAdmin deletes a user and cleans up related data. Callers must
+// revoke tokens via TokenService before calling this method to ensure token
+// cache invalidation. Guards are re-checked for safety.
 func (s *UserService) DeleteUserAdmin(
 	ctx context.Context,
 	userID, actorUserID string,
@@ -854,7 +881,7 @@ func (s *UserService) DeleteUserAdmin(
 		return err
 	}
 
-	// Prevent deleting the last admin
+	// Re-check last-admin guard (defense in depth against races).
 	if user.Role == models.UserRoleAdmin {
 		adminCount, countErr := s.store.CountUsersByRole(models.UserRoleAdmin)
 		if countErr != nil {
@@ -865,9 +892,7 @@ func (s *UserService) DeleteUserAdmin(
 		}
 	}
 
-	// Clean up user-related data inside a transaction so that all mutations
-	// either succeed or fail together. Tokens are revoked by the caller via
-	// TokenService to ensure token cache invalidation.
+	// Clean up user-related data inside a transaction for atomicity.
 	if err := s.store.RunInTransaction(func(tx core.Store) error {
 		if err := tx.DeleteOAuthConnectionsByUserID(userID); err != nil {
 			return fmt.Errorf("delete OAuth connections: %w", err)

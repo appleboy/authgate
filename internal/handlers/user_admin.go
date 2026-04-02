@@ -276,11 +276,9 @@ func (h *UserAdminHandler) DeleteUser(c *gin.Context) {
 
 	userID := c.Param("id")
 
-	if err := h.userService.DeleteUserAdmin(
-		c.Request.Context(),
-		userID,
-		currentUser.ID,
-	); err != nil {
+	// Validate before any side effects so guards (self-delete, last-admin)
+	// reject the request without touching tokens.
+	if err := h.userService.ValidateDeleteUser(userID, currentUser.ID); err != nil {
 		msg := "Failed to delete user"
 		if errors.Is(err, services.ErrCannotDeleteSelf) ||
 			errors.Is(err, services.ErrCannotRemoveLastAdmin) ||
@@ -291,14 +289,23 @@ func (h *UserAdminHandler) DeleteUser(c *gin.Context) {
 		return
 	}
 
-	// Revoke tokens after successful deletion (invalidates token cache).
-	// Orphaned tokens are harmless — validation will fail since the user no longer exists.
+	// Revoke tokens before deletion so no active tokens survive the user
+	// being removed (ValidateToken does not check user existence).
 	if err := h.tokenService.RevokeAllUserTokens(userID); err != nil {
 		renderErrorPage(
 			c,
 			http.StatusInternalServerError,
-			"User deleted but failed to revoke tokens",
+			"Failed to revoke user tokens",
 		)
+		return
+	}
+
+	if err := h.userService.DeleteUserAdmin(
+		c.Request.Context(),
+		userID,
+		currentUser.ID,
+	); err != nil {
+		renderErrorPage(c, http.StatusInternalServerError, "Failed to delete user")
 		return
 	}
 

@@ -29,6 +29,8 @@ func parseGORMLogLevel(level string) logger.LogLevel {
 		return logger.Silent
 	case "error":
 		return logger.Error
+	case "warn":
+		return logger.Warn
 	case "info":
 		return logger.Info
 	default:
