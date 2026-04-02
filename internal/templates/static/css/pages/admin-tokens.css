@@ -1,0 +1,42 @@
+/* Admin Tokens */
+
+.token-user-link,
+.token-client-link {
+    color: var(--color-primary);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: var(--text-sm);
+    transition: color var(--transition-fast);
+}
+
+.token-user-link:hover,
+.token-client-link:hover {
+    color: var(--color-primary-dark);
+    text-decoration: underline;
+}
+
+.token-scopes {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-secondary);
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.token-expired .date-display-day,
+.token-expired .date-display-time {
+    color: var(--color-error);
+}
+
+/* Category filter dots */
+.sf-dot.dot-access {
+    background: #2563EB;
+}
+
+.sf-dot.dot-refresh {
+    background: #7C3AED;
+}

@@ -4,6 +4,8 @@ import (
 	"time"
 
 	"github.com/go-authgate/authgate/internal/models"
+
+	"gorm.io/gorm"
 )
 
 // Access Token operations (implements core.TokenReader + core.TokenWriter)
@@ -38,22 +40,50 @@ func (s *Store) GetTokensByUserID(userID string) ([]models.AccessToken, error) {
 	return tokens, nil
 }
 
-// GetTokensByUserIDPaginated returns paginated tokens for a user with search support
-func (s *Store) GetTokensByUserIDPaginated(
-	userID string,
+// applyTokenFilters adds status and category WHERE clauses to a token query.
+func applyTokenFilters(query *gorm.DB, params PaginationParams) *gorm.DB {
+	if params.StatusFilter != "" {
+		query = query.Where("status = ?", params.StatusFilter)
+	}
+	if params.CategoryFilter != "" {
+		query = query.Where("token_category = ?", params.CategoryFilter)
+	}
+	return query
+}
+
+// paginateTokens counts, paginates, and fetches tokens from a filtered query.
+func paginateTokens(
+	query *gorm.DB,
 	params PaginationParams,
 ) ([]models.AccessToken, PaginationResult, error) {
 	var tokens []models.AccessToken
 	var total int64
 
-	// Build base query
+	if err := query.Count(&total).Error; err != nil {
+		return nil, PaginationResult{}, err
+	}
+
+	pagination := CalculatePagination(total, params.Page, params.PageSize)
+
+	if err := query.Order("created_at DESC").
+		Limit(params.PageSize).
+		Offset(pagination.Offset()).
+		Find(&tokens).Error; err != nil {
+		return nil, PaginationResult{}, err
+	}
+
+	return tokens, pagination, nil
+}
+
+// GetTokensByUserIDPaginated returns paginated tokens for a user with search support.
+func (s *Store) GetTokensByUserIDPaginated(
+	userID string,
+	params PaginationParams,
+) ([]models.AccessToken, PaginationResult, error) {
 	query := s.db.Model(&models.AccessToken{}).Where("user_id = ?", userID)
 
-	// Apply search filter if provided (search in scopes or join with clients for client_name)
 	if params.Search != "" {
 		searchPattern := "%" + params.Search + "%"
-		// Search in scopes or client_id
-		// For client_name search, we'll need to join with oauth_applications
 		query = query.Where(
 			"scopes LIKE ? OR client_id IN (?)",
 			searchPattern,
@@ -63,33 +93,31 @@ func (s *Store) GetTokensByUserIDPaginated(
 		)
 	}
 
-	// Apply status filter if provided
-	if params.StatusFilter != "" {
-		query = query.Where("status = ?", params.StatusFilter)
+	return paginateTokens(applyTokenFilters(query, params), params)
+}
+
+// GetTokensPaginated returns paginated tokens across all users with search support.
+// Search additionally matches against username and email (via subquery).
+func (s *Store) GetTokensPaginated(
+	params PaginationParams,
+) ([]models.AccessToken, PaginationResult, error) {
+	query := s.db.Model(&models.AccessToken{})
+
+	if params.Search != "" {
+		searchPattern := "%" + params.Search + "%"
+		query = query.Where(
+			"scopes LIKE ? OR client_id IN (?) OR user_id IN (?)",
+			searchPattern,
+			s.db.Model(&models.OAuthApplication{}).
+				Select("client_id").
+				Where("client_name LIKE ?", searchPattern),
+			s.db.Model(&models.User{}).
+				Select("id").
+				Where("username LIKE ? OR email LIKE ?", searchPattern, searchPattern),
+		)
 	}
 
-	// Apply category filter if provided
-	if params.CategoryFilter != "" {
-		query = query.Where("token_category = ?", params.CategoryFilter)
-	}
-
-	// Count total records
-	if err := query.Count(&total).Error; err != nil {
-		return nil, PaginationResult{}, err
-	}
-
-	// Calculate pagination
-	pagination := CalculatePagination(total, params.Page, params.PageSize)
-
-	// Apply pagination and fetch results
-	if err := query.Order("created_at DESC").
-		Limit(params.PageSize).
-		Offset(pagination.Offset()).
-		Find(&tokens).Error; err != nil {
-		return nil, PaginationResult{}, err
-	}
-
-	return tokens, pagination, nil
+	return paginateTokens(applyTokenFilters(query, params), params)
 }
 
 func (s *Store) RevokeToken(tokenID string) error {

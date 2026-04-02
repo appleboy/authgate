@@ -42,9 +42,11 @@ templ Navbar(props *NavbarProps) {
 						}
 						if props.IsAdmin {
 							<div class="navbar-admin-divider" aria-hidden="true"></div>
-							@NavAdminDropdown(props.ActiveLink == "clients" || props.ActiveLink == "users" || props.ActiveLink == "audit") {
+							@NavAdminDropdown(props.ActiveLink == "dashboard" || props.ActiveLink == "clients" || props.ActiveLink == "users" || props.ActiveLink == "tokens" || props.ActiveLink == "audit") {
+								@NavDropdownItem("/admin", "Dashboard", props.ActiveLink == "dashboard", true, false)
 								@NavDropdownItemWithBadge("/admin/clients", "OAuth Clients", props.ActiveLink == "clients", props.PendingClientsCount)
 								@NavDropdownItem("/admin/users", "Users", props.ActiveLink == "users", true, false)
+								@NavDropdownItem("/admin/tokens", "Tokens", props.ActiveLink == "tokens", true, false)
 								@NavDropdownItem("/admin/audit", "Audit Logs", props.ActiveLink == "audit", true, false)
 							}
 						}

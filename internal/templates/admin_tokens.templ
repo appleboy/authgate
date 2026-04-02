@@ -1,0 +1,241 @@
+package templates
+
+import (
+	"fmt"
+	"net/url"
+	"time"
+
+	"github.com/go-authgate/authgate/internal/models"
+	"github.com/go-authgate/authgate/internal/services"
+)
+
+// tokenFilterURL builds a URL preserving both status and category filters.
+func tokenFilterURL(status, category string) string {
+	base := "/admin/tokens"
+	if status == "" && category == "" {
+		return base
+	}
+	sep := "?"
+	if status != "" {
+		base += sep + "status=" + url.QueryEscape(status)
+		sep = "&"
+	}
+	if category != "" {
+		base += sep + "category=" + url.QueryEscape(category)
+	}
+	return base
+}
+
+templ AdminTokens(props TokensPageProps) {
+	@Layout("Tokens", LayoutAdminNavbar, &props.NavbarProps) {
+		<link rel="stylesheet" href="/static/css/pages/admin-tokens.css"/>
+		<div class="main-content">
+			<div class="container">
+				<div class="card">
+					@Breadcrumb([]BreadcrumbItem{
+						{Label: "Admin", Href: "/admin"},
+						{Label: "Tokens", Href: ""},
+					})
+					<div class="admin-clients-header">
+						<h1 class="admin-clients-title">
+							<span class="admin-clients-title-icon">
+								<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+							</span>
+							<span>Access Tokens</span>
+						</h1>
+					</div>
+					@Alert(props.Success, AlertSuccess)
+					@SfToolbar() {
+						@SfSearchRow(SfSearchRowProps{
+							Action:      "/admin/tokens",
+							Search:      props.Search,
+							PageSize:    props.PageSize,
+							Placeholder: "Search by user, client, or scopes...",
+							ClearHref:   "/admin/tokens",
+							HiddenFields: map[string]string{
+								"status":   props.StatusFilter,
+								"category": props.CategoryFilter,
+							},
+						})
+						<div class="sf-filters-row">
+							<div class="sf-group">
+								<span class="sf-group-label">Status</span>
+								<div class="sf-segmented">
+									@SfFilterTab(tokenFilterURL("", props.CategoryFilter), "All", props.StatusFilter == "", "")
+									@SfFilterTab(tokenFilterURL(models.TokenStatusActive, props.CategoryFilter), "Active", props.StatusFilter == models.TokenStatusActive, "dot-active")
+									@SfFilterTab(tokenFilterURL(models.TokenStatusDisabled, props.CategoryFilter), "Disabled", props.StatusFilter == models.TokenStatusDisabled, "dot-disabled")
+									@SfFilterTab(tokenFilterURL(models.TokenStatusRevoked, props.CategoryFilter), "Revoked", props.StatusFilter == models.TokenStatusRevoked, "dot-revoked")
+								</div>
+							</div>
+							<div class="sf-group">
+								<span class="sf-group-label">Category</span>
+								<div class="sf-segmented">
+									@SfFilterTab(tokenFilterURL(props.StatusFilter, ""), "All", props.CategoryFilter == "", "")
+									@SfFilterTab(tokenFilterURL(props.StatusFilter, models.TokenCategoryAccess), "Access", props.CategoryFilter == models.TokenCategoryAccess, "dot-access")
+									@SfFilterTab(tokenFilterURL(props.StatusFilter, models.TokenCategoryRefresh), "Refresh", props.CategoryFilter == models.TokenCategoryRefresh, "dot-refresh")
+								</div>
+							</div>
+						</div>
+					}
+					if len(props.Tokens) > 0 {
+						<div class="admin-clients-table-wrapper">
+							<table class="admin-clients-table">
+								<caption class="sr-only">List of access tokens</caption>
+								<thead>
+									<tr>
+										<th><div class="table-header-with-icon"><span>Token ID</span></div></th>
+										<th><div class="table-header-with-icon"><span>User</span></div></th>
+										<th><div class="table-header-with-icon"><span>Client</span></div></th>
+										<th><div class="table-header-with-icon"><span>Category</span></div></th>
+										<th><div class="table-header-with-icon"><span>Status</span></div></th>
+										<th><div class="table-header-with-icon"><span>Scopes</span></div></th>
+										<th><div class="table-header-with-icon"><span>Created</span></div></th>
+										<th><div class="table-header-with-icon"><span>Expires</span></div></th>
+										<th class="col-actions"><div class="table-header-with-icon"><span>Actions</span></div></th>
+									</tr>
+								</thead>
+								<tbody>
+									for _, tok := range props.Tokens {
+										@TokenTableRow(tok, props.CSRFToken)
+									}
+								</tbody>
+							</table>
+						</div>
+						@ClientsListPagination(props.Pagination, props.PageSize, props.Search, "/admin/tokens", "total tokens", map[string]string{
+							"status":   props.StatusFilter,
+							"category": props.CategoryFilter,
+						})
+					} else {
+						<div class="empty-state">
+							if props.Search != "" || props.StatusFilter != "" || props.CategoryFilter != "" {
+								@EmptyStateSearch()
+								<h3 class="empty-title">No tokens found</h3>
+								<p class="empty-text">Try adjusting your search terms or clear the filters.</p>
+							} else {
+								<svg class="empty-icon-svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+								<h3 class="empty-title">No Tokens Yet</h3>
+								<p class="empty-text">Tokens will appear here once users authenticate via OAuth flows.</p>
+							}
+						</div>
+					}
+				</div>
+			</div>
+		</div>
+	}
+}
+
+templ TokenTableRow(tok services.TokenWithUser, csrfToken string) {
+	<tr>
+		<td data-label="Token ID">
+			@CopyableValue(tok.ID[:8], "Token ID prefix", CopyableValueCompact)
+		</td>
+		<td data-label="User">
+			<a href={ templ.URL("/admin/users/" + tok.UserID) } class="token-user-link">
+				{ tok.Username }
+			</a>
+		</td>
+		<td data-label="Client">
+			<a href={ templ.URL("/admin/clients/" + tok.ClientID) } class="token-client-link">
+				{ tok.ClientName }
+			</a>
+		</td>
+		<td data-label="Category">
+			@TokenCategoryBadge(tok.TokenCategory)
+		</td>
+		<td data-label="Status">
+			@TokenStatusBadge(tok.Status)
+		</td>
+		<td data-label="Scopes">
+			if tok.Scopes != "" {
+				<span class="token-scopes" title={ tok.Scopes }>{ tok.Scopes }</span>
+			} else {
+				<span style="color:var(--color-text-tertiary);font-style:italic;">-</span>
+			}
+		</td>
+		<td class="created-date-cell" data-label="Created">
+			<div class="date-display">
+				<span class="date-display-day">{ tok.CreatedAt.Format("2006-01-02") }</span>
+				<span class="date-display-time">{ tok.CreatedAt.Format("15:04") }</span>
+			</div>
+		</td>
+		<td class="created-date-cell" data-label="Expires">
+			<div class={ "date-display", templ.KV("token-expired", tok.ExpiresAt.Before(time.Now())) }>
+				<span class="date-display-day">{ tok.ExpiresAt.Format("2006-01-02") }</span>
+				<span class="date-display-time">{ tok.ExpiresAt.Format("15:04") }</span>
+			</div>
+		</td>
+		<td data-label="Actions">
+			<div class="actions">
+				if tok.Status == models.TokenStatusActive {
+					<form method="POST" action={ templ.URL(fmt.Sprintf("/admin/tokens/%s/disable", tok.ID)) } class="form-inline">
+						<input type="hidden" name="csrf_token" value={ csrfToken }/>
+						<button type="submit" class="btn btn-warning btn-small" title="Disable token">
+							Disable
+						</button>
+					</form>
+					<form
+						method="POST"
+						action={ templ.URL(fmt.Sprintf("/admin/tokens/%s/revoke", tok.ID)) }
+						class="form-inline"
+						data-confirm-title="Revoke Token?"
+						data-confirm-message="This will permanently revoke this token. The user will need to re-authenticate."
+						data-confirm-style="danger"
+						data-confirm-label="Revoke"
+					>
+						<input type="hidden" name="csrf_token" value={ csrfToken }/>
+						<button type="submit" class="btn btn-danger btn-small" title="Revoke token">
+							Revoke
+						</button>
+					</form>
+				} else if tok.Status == models.TokenStatusDisabled {
+					<form method="POST" action={ templ.URL(fmt.Sprintf("/admin/tokens/%s/enable", tok.ID)) } class="form-inline">
+						<input type="hidden" name="csrf_token" value={ csrfToken }/>
+						<button type="submit" class="btn btn-success btn-small" title="Enable token">
+							Enable
+						</button>
+					</form>
+					<form
+						method="POST"
+						action={ templ.URL(fmt.Sprintf("/admin/tokens/%s/revoke", tok.ID)) }
+						class="form-inline"
+						data-confirm-title="Revoke Token?"
+						data-confirm-message="This will permanently revoke this token. This action cannot be undone."
+						data-confirm-style="danger"
+						data-confirm-label="Revoke"
+					>
+						<input type="hidden" name="csrf_token" value={ csrfToken }/>
+						<button type="submit" class="btn btn-danger btn-small" title="Revoke token">
+							Revoke
+						</button>
+					</form>
+				} else {
+					<span style="color:var(--color-text-tertiary);font-size:var(--text-sm);">-</span>
+				}
+			</div>
+		</td>
+	</tr>
+}
+
+templ TokenCategoryBadge(category string) {
+	switch category {
+		case models.TokenCategoryAccess:
+			<span class="status-badge" style="background:rgba(59,130,246,0.1);color:#2563EB;border:1px solid rgba(59,130,246,0.3);">Access</span>
+		case models.TokenCategoryRefresh:
+			<span class="status-badge" style="background:rgba(139,92,246,0.1);color:#7C3AED;border:1px solid rgba(139,92,246,0.3);">Refresh</span>
+		default:
+			<span class="status-badge">{ category }</span>
+	}
+}
+
+templ TokenStatusBadge(status string) {
+	switch status {
+		case models.TokenStatusActive:
+			<span class="status-badge status-active">Active</span>
+		case models.TokenStatusDisabled:
+			<span class="status-badge" style="background:rgba(245,158,11,0.1);color:#D97706;border:1px solid rgba(245,158,11,0.3);">Disabled</span>
+		case models.TokenStatusRevoked:
+			<span class="status-badge" style="background:rgba(239,68,68,0.1);color:#DC2626;border:1px solid rgba(239,68,68,0.3);">Revoked</span>
+		default:
+			<span class="status-badge">{ status }</span>
+	}
+}

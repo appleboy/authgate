@@ -296,6 +296,10 @@ func setupAllRoutes(
 		injectPending,
 	)
 	{
+		// Dashboard
+		admin.GET("", h.dashboard.ShowDashboard)
+
+		// OAuth client management routes
 		admin.GET("/clients", h.client.ShowClientsPage)
 		admin.GET("/clients/new", h.client.ShowCreateClientPage)
 		admin.POST("/clients", h.client.CreateClient)
@@ -316,6 +320,12 @@ func setupAllRoutes(
 		admin.POST("/users/:id", h.userAdmin.UpdateUser)
 		admin.POST("/users/:id/reset-password", h.userAdmin.ResetPassword)
 		admin.POST("/users/:id/delete", h.userAdmin.DeleteUser)
+
+		// Token management routes
+		admin.GET("/tokens", h.tokenAdmin.ShowTokensPage)
+		admin.POST("/tokens/:id/revoke", h.tokenAdmin.RevokeToken)
+		admin.POST("/tokens/:id/disable", h.tokenAdmin.DisableToken)
+		admin.POST("/tokens/:id/enable", h.tokenAdmin.EnableToken)
 
 		// Audit log routes (HTML pages)
 		admin.GET("/audit", h.audit.ShowAuditLogsPage)

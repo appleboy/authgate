@@ -41,13 +41,7 @@ func (h *SessionHandler) ListSessions(c *gin.Context) {
 		return
 	}
 
-	params := parsePaginationParams(c)
-	if s := c.Query("status"); validTokenStatuses[s] {
-		params.StatusFilter = s
-	}
-	if cat := c.Query("category"); validTokenCategories[cat] {
-		params.CategoryFilter = cat
-	}
+	params := parseTokenPaginationParams(c)
 
 	// Get paginated tokens
 	tokens, pagination, err := h.tokenService.GetUserTokensWithClientPaginated(
