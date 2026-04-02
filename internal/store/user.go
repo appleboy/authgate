@@ -208,13 +208,9 @@ func (s *Store) ListUsersPaginated(
 	if err := query.Order("created_at DESC").
 		Limit(params.PageSize).
 		Offset(pagination.Offset()).
+		Omit("password_hash").
 		Find(&users).Error; err != nil {
 		return nil, PaginationResult{}, err
-	}
-
-	// Strip password hashes for security
-	for i := range users {
-		users[i].PasswordHash = ""
 	}
 
 	return users, pagination, nil
