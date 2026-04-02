@@ -12,7 +12,6 @@ func pluralize(n int64, singular, plural string) string {
 
 templ AdminDashboard(props DashboardPageProps) {
 	@Layout("Dashboard", LayoutAdminNavbar, &props.NavbarProps) {
-		<link rel="stylesheet" href="/static/css/pages/admin-dashboard.css"/>
 		<div class="main-content">
 			<div class="container">
 				<div class="card">
@@ -66,7 +65,7 @@ templ AdminDashboard(props DashboardPageProps) {
 							</div>
 							<div class="dashboard-metric-body">
 								<div class="dashboard-metric-value">{ fmt.Sprintf("%d", props.Stats.ActiveAccessTokens) }</div>
-								<div class="dashboard-metric-label">Active Tokens</div>
+								<div class="dashboard-metric-label">Active Access Tokens</div>
 								<div class="dashboard-metric-detail">
 									{ fmt.Sprintf("%d", props.Stats.ActiveRefreshTokens) } refresh tokens
 								</div>

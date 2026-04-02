@@ -16,8 +16,10 @@
 @import "./pages/account-sessions.css";
 @import "./pages/admin-audit-logs.css";
 @import "./pages/admin-clients.css";
+@import "./pages/admin-dashboard.css";
 @import "./pages/admin-forms.css";
 @import "./pages/admin-tables.css";
+@import "./pages/admin-tokens.css";
 @import "./pages/admin.css";
 @import "./pages/authorize.css";
 @import "./pages/device-auth.css";
