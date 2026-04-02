@@ -88,13 +88,8 @@ func (s *TokenService) RevokeTokenByID(ctx context.Context, tokenID, actorUserID
 func (s *TokenService) RevokeAllUserTokens(userID string) error {
 	// Collect hashes before deletion so we can invalidate the cache,
 	// but only invalidate if revocation succeeds.
-	var hashes []string
-	if tokens, err := s.store.GetTokensByUserID(userID); err == nil {
-		hashes = make([]string, 0, len(tokens))
-		for _, t := range tokens {
-			hashes = append(hashes, t.TokenHash)
-		}
-	} else {
+	hashes, err := s.store.GetTokenHashesByUserID(userID)
+	if err != nil {
 		log.Printf(
 			"[TokenCache] failed to collect user token hashes for invalidation user=%s: %v",
 			userID, err,

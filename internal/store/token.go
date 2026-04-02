@@ -158,6 +158,17 @@ func (s *Store) GetActiveTokenHashesByClientID(clientID string) ([]string, error
 	return hashes, err
 }
 
+// GetTokenHashesByUserID returns token hashes for all tokens belonging to a user (any status).
+// Unlike GetActiveTokenHashesBy*, this includes revoked/disabled tokens because the
+// caller (RevokeTokensByUserID) performs a hard DELETE regardless of status.
+func (s *Store) GetTokenHashesByUserID(userID string) ([]string, error) {
+	var hashes []string
+	err := s.db.Model(&models.AccessToken{}).
+		Where("user_id = ?", userID).
+		Pluck("token_hash", &hashes).Error
+	return hashes, err
+}
+
 // GetTokensByCategoryAndStatus returns tokens filtered by category and status
 func (s *Store) GetTokensByCategoryAndStatus(
 	userID, category, status string,

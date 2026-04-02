@@ -22,21 +22,23 @@ const (
 )
 
 type AccessToken struct {
-	ID              string `gorm:"primaryKey"`
-	TokenHash       string `gorm:"uniqueIndex;not null"`
-	RawToken        string `gorm:"-"` // In-memory only; never persisted to DB
-	TokenType       string `gorm:"not null;default:'Bearer'"`
-	TokenCategory   string `gorm:"not null;default:'access';index"` // 'access' or 'refresh'
-	Status          string `gorm:"not null;default:'active';index"` // 'active', 'disabled', 'revoked'
-	UserID          string `gorm:"not null;index"`
-	ClientID        string `gorm:"not null;index"`
-	Scopes          string `gorm:"not null"` // space-separated scopes
-	ExpiresAt       time.Time
+	ID        string `gorm:"primaryKey"`
+	TokenHash string `gorm:"uniqueIndex;not null"`
+	RawToken  string `gorm:"-"` // In-memory only; never persisted to DB
+	TokenType string `gorm:"not null;default:'Bearer'"`
+	// 'access' or 'refresh'
+	TokenCategory string `gorm:"not null;default:'access';index:idx_token_cat_status_exp,priority:1"`
+	// 'active', 'disabled', 'revoked'
+	Status          string    `gorm:"not null;default:'active';index:idx_token_client_status,priority:2;index:idx_token_family_status,priority:2;index:idx_token_auth_status,priority:2;index:idx_token_cat_status_exp,priority:2"`
+	UserID          string    `gorm:"not null;index"`
+	ClientID        string    `gorm:"not null;index:idx_token_client_status,priority:1"`
+	Scopes          string    `gorm:"not null"` // space-separated scopes
+	ExpiresAt       time.Time `gorm:"index;index:idx_token_cat_status_exp,priority:3"`
 	CreatedAt       time.Time
-	LastUsedAt      *time.Time `gorm:"index"`                     // Last time token was used (for refresh tokens)
-	ParentTokenID   string     `gorm:"index"`                     // Links access tokens to their refresh token
-	TokenFamilyID   string     `gorm:"index;default:'';not null"` // Stable root ID for rotation replay detection
-	AuthorizationID *uint      `gorm:"index"`                     // FK → UserAuthorization.ID (nil for device_code grants)
+	LastUsedAt      *time.Time `gorm:"index"`                                                        // Last time token was used (for refresh tokens)
+	ParentTokenID   string     `gorm:"index"`                                                        // Links access tokens to their refresh token
+	TokenFamilyID   string     `gorm:"index:idx_token_family_status,priority:1;default:'';not null"` // Stable root ID for rotation replay detection
+	AuthorizationID *uint      `gorm:"index:idx_token_auth_status,priority:1"`                       // FK → UserAuthorization.ID (nil for device_code grants)
 }
 
 func (t *AccessToken) IsExpired() bool {

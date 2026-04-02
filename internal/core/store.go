@@ -84,6 +84,7 @@ type TokenReader interface {
 	GetActiveTokenHashesByFamilyID(familyID string) ([]string, error)
 	GetActiveTokenHashesByAuthorizationID(authorizationID uint) ([]string, error)
 	GetActiveTokenHashesByClientID(clientID string) ([]string, error)
+	GetTokenHashesByUserID(userID string) ([]string, error)
 }
 
 // TokenWriter groups token mutation operations.
