@@ -2,6 +2,14 @@ package templates
 
 import "fmt"
 
+// pluralize returns singular or plural form based on count.
+func pluralize(n int64, singular, plural string) string {
+	if n == 1 {
+		return fmt.Sprintf("%d %s", n, singular)
+	}
+	return fmt.Sprintf("%d %s", n, plural)
+}
+
 templ AdminDashboard(props DashboardPageProps) {
 	@Layout("Dashboard", LayoutAdminNavbar, &props.NavbarProps) {
 		<link rel="stylesheet" href="/static/css/pages/admin-dashboard.css"/>
@@ -30,7 +38,7 @@ templ AdminDashboard(props DashboardPageProps) {
 								<div class="dashboard-metric-value">{ fmt.Sprintf("%d", props.Stats.TotalUsers) }</div>
 								<div class="dashboard-metric-label">Total Users</div>
 								<div class="dashboard-metric-detail">
-									{ fmt.Sprintf("%d", props.Stats.AdminUsers) } admin, { fmt.Sprintf("%d", props.Stats.RegularUsers) } user
+									{ pluralize(props.Stats.AdminUsers, "admin", "admins") }, { pluralize(props.Stats.RegularUsers, "user", "users") }
 								</div>
 							</div>
 							<a href="/admin/users" class="dashboard-metric-link" title="View Users">

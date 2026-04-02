@@ -168,7 +168,15 @@ templ TokenTableRow(tok services.TokenWithUser, csrfToken string) {
 		<td data-label="Actions">
 			<div class="actions">
 				if tok.Status == models.TokenStatusActive {
-					<form method="POST" action={ templ.URL(fmt.Sprintf("/admin/tokens/%s/disable", tok.ID)) } class="form-inline">
+					<form
+						method="POST"
+						action={ templ.URL(fmt.Sprintf("/admin/tokens/%s/disable", tok.ID)) }
+						class="form-inline"
+						data-confirm-title="Disable Token?"
+						data-confirm-message="This will temporarily disable the token. It can be re-enabled later."
+						data-confirm-style="warning"
+						data-confirm-label="Disable"
+					>
 						<input type="hidden" name="csrf_token" value={ csrfToken }/>
 						<button type="submit" class="btn btn-warning btn-small" title="Disable token">
 							Disable
@@ -189,7 +197,15 @@ templ TokenTableRow(tok services.TokenWithUser, csrfToken string) {
 						</button>
 					</form>
 				} else if tok.Status == models.TokenStatusDisabled {
-					<form method="POST" action={ templ.URL(fmt.Sprintf("/admin/tokens/%s/enable", tok.ID)) } class="form-inline">
+					<form
+						method="POST"
+						action={ templ.URL(fmt.Sprintf("/admin/tokens/%s/enable", tok.ID)) }
+						class="form-inline"
+						data-confirm-title="Enable Token?"
+						data-confirm-message="This will re-enable the token, restoring access for the token holder."
+						data-confirm-style="warning"
+						data-confirm-label="Enable"
+					>
 						<input type="hidden" name="csrf_token" value={ csrfToken }/>
 						<button type="submit" class="btn btn-success btn-small" title="Enable token">
 							Enable
