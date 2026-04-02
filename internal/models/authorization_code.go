@@ -27,7 +27,7 @@ type AuthorizationCode struct {
 	// OIDC (OpenID Connect Core 1.0 §3.1.2.1)
 	Nonce string `gorm:"default:''"` // nonce from authorization request (empty if not provided)
 
-	ExpiresAt time.Time
+	ExpiresAt time.Time  `gorm:"index"`
 	UsedAt    *time.Time // Set immediately upon exchange; prevents replay attacks
 	CreatedAt time.Time
 }

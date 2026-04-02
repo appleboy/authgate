@@ -652,6 +652,21 @@ func (mr *MockTokenReaderMockRecorder) GetActiveTokenHashesByFamilyID(familyID a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetActiveTokenHashesByFamilyID", reflect.TypeOf((*MockTokenReader)(nil).GetActiveTokenHashesByFamilyID), familyID)
 }
 
+// GetTokenHashesByUserID mocks base method.
+func (m *MockTokenReader) GetTokenHashesByUserID(userID string) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTokenHashesByUserID", userID)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTokenHashesByUserID indicates an expected call of GetTokenHashesByUserID.
+func (mr *MockTokenReaderMockRecorder) GetTokenHashesByUserID(userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTokenHashesByUserID", reflect.TypeOf((*MockTokenReader)(nil).GetTokenHashesByUserID), userID)
+}
+
 // GetTokensByCategoryAndStatus mocks base method.
 func (m *MockTokenReader) GetTokensByCategoryAndStatus(userID, category, status string) ([]models.AccessToken, error) {
 	m.ctrl.T.Helper()
@@ -2044,6 +2059,21 @@ func (m *MockStore) GetOAuthConnectionsByUserID(userID string) ([]models.OAuthCo
 func (mr *MockStoreMockRecorder) GetOAuthConnectionsByUserID(userID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOAuthConnectionsByUserID", reflect.TypeOf((*MockStore)(nil).GetOAuthConnectionsByUserID), userID)
+}
+
+// GetTokenHashesByUserID mocks base method.
+func (m *MockStore) GetTokenHashesByUserID(userID string) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTokenHashesByUserID", userID)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTokenHashesByUserID indicates an expected call of GetTokenHashesByUserID.
+func (mr *MockStoreMockRecorder) GetTokenHashesByUserID(userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTokenHashesByUserID", reflect.TypeOf((*MockStore)(nil).GetTokenHashesByUserID), userID)
 }
 
 // GetTokensByCategoryAndStatus mocks base method.
