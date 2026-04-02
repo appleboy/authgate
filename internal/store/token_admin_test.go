@@ -155,8 +155,7 @@ func TestGetDashboardCounts(t *testing.T) {
 
 	// Add a user, client, and token
 	user := &models.User{
-		ID: uuid.New().
-			String(),
+		ID:       uuid.New().String(),
 		Username: "dc_user",
 		Email:    "dc@test.com",
 		Role:     models.UserRoleUser,
@@ -164,8 +163,7 @@ func TestGetDashboardCounts(t *testing.T) {
 	require.NoError(t, store.CreateUser(user))
 
 	client := &models.OAuthApplication{
-		ClientID: uuid.New().
-			String(),
+		ClientID:   uuid.New().String(),
 		ClientName: "DCApp",
 		UserID:     user.ID,
 		Status:     models.ClientStatusPending,
@@ -173,9 +171,13 @@ func TestGetDashboardCounts(t *testing.T) {
 	require.NoError(t, store.CreateClient(client))
 
 	tok := &models.AccessToken{
-		ID: uuid.New().String(), TokenHash: uuid.New().String(),
-		TokenCategory: models.TokenCategoryAccess, Status: models.TokenStatusActive,
-		UserID: user.ID, ClientID: client.ClientID, ExpiresAt: time.Now().Add(1 * time.Hour),
+		ID:            uuid.New().String(),
+		TokenHash:     uuid.New().String(),
+		TokenCategory: models.TokenCategoryAccess,
+		Status:        models.TokenStatusActive,
+		UserID:        user.ID,
+		ClientID:      client.ClientID,
+		ExpiresAt:     time.Now().Add(1 * time.Hour),
 	}
 	require.NoError(t, store.CreateAccessToken(tok))
 

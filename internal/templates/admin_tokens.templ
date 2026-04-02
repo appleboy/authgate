@@ -135,8 +135,10 @@ templ AdminTokens(props TokensPageProps) {
 
 templ TokenTableRow(tok services.TokenWithUser, csrfToken string, now time.Time) {
 	<tr>
-		<td data-label="Token ID">
-			@CopyableValue(tokenIDPrefix(tok.ID), "Token ID prefix", CopyableValueCompact)
+		<td data-label="Token ID prefix">
+			<span title={ tok.ID }>
+				@CopyableValue(tokenIDPrefix(tok.ID), "Token ID prefix", CopyableValueCompact)
+			</span>
 		</td>
 		<td data-label="User">
 			<a href={ templ.URL("/admin/users/" + tok.UserID) } class="token-user-link">
