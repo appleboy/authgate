@@ -100,6 +100,9 @@ func addAuditServiceShutdownJob(
 	auditService core.AuditLogger,
 	cfg *config.Config,
 ) {
+	if !cfg.EnableAuditLogging {
+		return
+	}
 	m.AddShutdownJob(func() error {
 		log.Println("Shutting down audit service...")
 

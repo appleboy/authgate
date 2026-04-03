@@ -726,39 +726,37 @@ func (s *UserService) UpdateUserProfile(
 	s.InvalidateUserCache(userID)
 
 	// Audit logging
-	if s.auditService != nil {
-		s.auditService.Log(ctx, AuditLogEntry{
-			EventType:    models.EventUserUpdated,
-			Severity:     models.SeverityInfo,
+	s.auditService.Log(ctx, core.AuditLogEntry{
+		EventType:    models.EventUserUpdated,
+		Severity:     models.SeverityInfo,
+		ActorUserID:  actorUserID,
+		ResourceType: models.ResourceUser,
+		ResourceID:   userID,
+		ResourceName: user.Username,
+		Action:       "User profile updated by admin",
+		Details: models.AuditDetails{
+			"email":     req.Email,
+			"full_name": req.FullName,
+			"role":      req.Role,
+		},
+		Success: true,
+	})
+
+	if req.Role != "" && oldRole != req.Role {
+		s.auditService.Log(ctx, core.AuditLogEntry{
+			EventType:    models.EventUserRoleChanged,
+			Severity:     models.SeverityWarning,
 			ActorUserID:  actorUserID,
 			ResourceType: models.ResourceUser,
 			ResourceID:   userID,
 			ResourceName: user.Username,
-			Action:       "User profile updated by admin",
+			Action:       "User role changed by admin",
 			Details: models.AuditDetails{
-				"email":     req.Email,
-				"full_name": req.FullName,
-				"role":      req.Role,
+				"old_role": oldRole,
+				"new_role": req.Role,
 			},
 			Success: true,
 		})
-
-		if req.Role != "" && oldRole != req.Role {
-			s.auditService.Log(ctx, AuditLogEntry{
-				EventType:    models.EventUserRoleChanged,
-				Severity:     models.SeverityWarning,
-				ActorUserID:  actorUserID,
-				ResourceType: models.ResourceUser,
-				ResourceID:   userID,
-				ResourceName: user.Username,
-				Action:       "User role changed by admin",
-				Details: models.AuditDetails{
-					"old_role": oldRole,
-					"new_role": req.Role,
-				},
-				Success: true,
-			})
-		}
 	}
 
 	return nil
@@ -796,18 +794,16 @@ func (s *UserService) ResetUserPassword(
 
 	s.InvalidateUserCache(userID)
 
-	if s.auditService != nil {
-		s.auditService.Log(ctx, AuditLogEntry{
-			EventType:    models.EventUserPasswordReset,
-			Severity:     models.SeverityWarning,
-			ActorUserID:  actorUserID,
-			ResourceType: models.ResourceUser,
-			ResourceID:   userID,
-			ResourceName: user.Username,
-			Action:       "User password reset by admin",
-			Success:      true,
-		})
-	}
+	s.auditService.Log(ctx, core.AuditLogEntry{
+		EventType:    models.EventUserPasswordReset,
+		Severity:     models.SeverityWarning,
+		ActorUserID:  actorUserID,
+		ResourceType: models.ResourceUser,
+		ResourceID:   userID,
+		ResourceName: user.Username,
+		Action:       "User password reset by admin",
+		Success:      true,
+	})
 
 	return newPassword, nil
 }
@@ -883,24 +879,22 @@ func (s *UserService) DeleteUserAdmin(
 
 	s.InvalidateUserCache(userID)
 
-	if s.auditService != nil {
-		s.auditService.Log(ctx, AuditLogEntry{
-			EventType:    models.EventUserDeleted,
-			Severity:     models.SeverityWarning,
-			ActorUserID:  actorUserID,
-			ResourceType: models.ResourceUser,
-			ResourceID:   userID,
-			ResourceName: user.Username,
-			Action:       "User deleted by admin",
-			Details: models.AuditDetails{
-				"username":    user.Username,
-				"email":       user.Email,
-				"role":        user.Role,
-				"auth_source": user.AuthSource,
-			},
-			Success: true,
-		})
-	}
+	s.auditService.Log(ctx, core.AuditLogEntry{
+		EventType:    models.EventUserDeleted,
+		Severity:     models.SeverityWarning,
+		ActorUserID:  actorUserID,
+		ResourceType: models.ResourceUser,
+		ResourceID:   userID,
+		ResourceName: user.Username,
+		Action:       "User deleted by admin",
+		Details: models.AuditDetails{
+			"username":    user.Username,
+			"email":       user.Email,
+			"role":        user.Role,
+			"auth_source": user.AuthSource,
+		},
+		Success: true,
+	})
 
 	return nil
 }

@@ -28,6 +28,7 @@ type AuditLogEntry struct {
 }
 
 // AuditLogger defines the contract for audit logging operations.
+// Implementations must be safe for concurrent use by multiple goroutines.
 // Implementations include the real AuditService (buffered, database-backed)
 // and NoopAuditService (silent no-op for when auditing is disabled).
 type AuditLogger interface {

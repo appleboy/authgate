@@ -18,12 +18,12 @@ type DashboardStats struct {
 
 type DashboardService struct {
 	store        core.Store
-	auditService *AuditService
+	auditService core.AuditLogger
 }
 
 func NewDashboardService(
 	s core.Store,
-	auditService *AuditService,
+	auditService core.AuditLogger,
 ) *DashboardService {
 	return &DashboardService{
 		store:        s,
