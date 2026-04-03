@@ -102,7 +102,7 @@ func NewClientService(
 	countCacheTTL time.Duration,
 ) *ClientService {
 	if countCache == nil {
-		countCache = cache.NewMemoryCache[int64]()
+		countCache = cache.NewMemoryCache[int64](0) // 0 disables the reaper; no Close needed
 	}
 	if countCacheTTL <= 0 {
 		countCacheTTL = time.Hour

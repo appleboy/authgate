@@ -251,21 +251,24 @@ func TestMemoryCache_GetWithFetch_Singleflight(t *testing.T) {
 	defer c.Close()
 	ctx := context.Background()
 
-	// Block the single in-flight fetch until the other callers have had time
-	// to queue behind the shared singleflight result, then release it.
-	// This maximises singleflight contention and ensures only one invocation runs.
+	// Each goroutine signals started before calling GetWithFetch. Main waits
+	// for all signals, then releases the fetch. Any goroutine that hasn't
+	// called GetWithFetch yet will find the cached value on arrival, so
+	// fetchFunc is guaranteed to be invoked exactly once.
 	const goroutines = 20
-	ready := make(chan struct{})
+	started := make(chan struct{}, goroutines) // buffered so goroutines never block on send
+	release := make(chan struct{})
 	var fetchCount atomic.Int64
 	fetchFunc := func(ctx context.Context, key string) (int64, error) {
 		fetchCount.Add(1)
-		<-ready // wait until all goroutines are queued
+		<-release
 		return 42, nil
 	}
 
 	var wg sync.WaitGroup
 	for range goroutines {
 		wg.Go(func() {
+			started <- struct{}{}
 			val, err := c.GetWithFetch(ctx, "sf-key", time.Minute, fetchFunc)
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
@@ -276,9 +279,11 @@ func TestMemoryCache_GetWithFetch_Singleflight(t *testing.T) {
 		})
 	}
 
-	// Give goroutines time to pile up in singleflight, then unblock.
-	time.Sleep(10 * time.Millisecond)
-	close(ready)
+	// Drain all start signals before releasing, maximising contention.
+	for range goroutines {
+		<-started
+	}
+	close(release)
 	wg.Wait()
 
 	if n := fetchCount.Load(); n != 1 {
