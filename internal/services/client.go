@@ -16,6 +16,7 @@ import (
 	"github.com/go-authgate/authgate/internal/util"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 const pendingClientsCountCacheKey = "clients:pending_count"
@@ -458,8 +459,8 @@ func (s *ClientService) ListClientsPaginatedWithCreator(
 // GetClient returns a cached OAuth client by client_id.
 // The returned copy has ClientSecret cleared for defense-in-depth.
 // Use GetClientWithSecret for flows that need secret verification.
-// Cache backend failures (e.g. Redis unavailable) are handled transparently:
-// the cache layer falls back to the fetch function on any Get error.
+// On cache backend errors (e.g. Redis unavailable), falls back to direct DB lookup
+// so that valid OAuth flows are not rejected due to cache infrastructure issues.
 func (s *ClientService) GetClient(clientID string) (*models.OAuthApplication, error) {
 	client, err := s.clientCache.GetWithFetch(
 		context.Background(), clientID, s.clientCacheTTL,
@@ -477,7 +478,17 @@ func (s *ClientService) GetClient(clientID string) (*models.OAuthApplication, er
 	if err == nil {
 		return &client, nil
 	}
-	return nil, ErrClientNotFound
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, ErrClientNotFound
+	}
+	// Cache backend failure — fall back to direct DB lookup.
+	log.Printf("[ClientCache] cache lookup failed, falling back to DB: %v", err)
+	c, storeErr := s.store.GetClient(clientID)
+	if storeErr != nil {
+		return nil, ErrClientNotFound
+	}
+	c.ClientSecret = ""
+	return c, nil
 }
 
 // GetClientWithSecret returns an OAuth client by client_id without caching.

@@ -3,7 +3,9 @@ package services
 import (
 	"context"
 	"testing"
+	"time"
 
+	"github.com/go-authgate/authgate/internal/cache"
 	"github.com/go-authgate/authgate/internal/core"
 	"github.com/go-authgate/authgate/internal/models"
 	"github.com/go-authgate/authgate/internal/store"
@@ -12,6 +14,19 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// countingCache wraps a Cache and counts how many times the fetchFunc is invoked.
+type countingCache[T any] struct {
+	core.Cache[T]
+	count int
+}
+
+func (c *countingCache[T]) GetWithFetch(ctx context.Context, key string, ttl time.Duration, fetchFunc func(context.Context, string) (T, error)) (T, error) {
+	return c.Cache.GetWithFetch(ctx, key, ttl, func(ctx context.Context, k string) (T, error) {
+		c.count++
+		return fetchFunc(ctx, k)
+	})
+}
 
 func TestListClientsPaginatedWithCreator(t *testing.T) {
 	s := setupTestStore(t)
@@ -620,4 +635,102 @@ func TestUpdateClient_InvalidRedirectURIRejected(t *testing.T) {
 
 	err = svc.UpdateClient(context.Background(), resp.ClientID, userID, updateReq)
 	assert.ErrorIs(t, err, ErrInvalidRedirectURI)
+}
+
+func TestGetClient_SecretStripped(t *testing.T) {
+	s := setupTestStore(t)
+	svc := NewClientService(s, nil, nil, 0, nil, 0)
+	userID := uuid.New().String()
+
+	resp, err := svc.CreateClient(context.Background(), CreateClientRequest{
+		ClientName:       "Secret Test Client",
+		UserID:           userID,
+		CreatedBy:        userID,
+		EnableDeviceFlow: true,
+		ClientType:       "confidential",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, resp.ClientSecret)
+
+	client, err := svc.GetClient(resp.ClientID)
+	require.NoError(t, err)
+	assert.Empty(t, client.ClientSecret, "GetClient must strip ClientSecret from cached copy")
+}
+
+func TestGetClient_CacheHit(t *testing.T) {
+	s := setupTestStore(t)
+	inner := cache.NewMemoryCache[models.OAuthApplication]()
+	spy := &countingCache[models.OAuthApplication]{Cache: inner}
+	svc := NewClientService(s, nil, nil, 0, spy, 5*time.Minute)
+	userID := uuid.New().String()
+
+	resp, err := svc.CreateClient(context.Background(), CreateClientRequest{
+		ClientName:       "Cache Hit Client",
+		UserID:           userID,
+		CreatedBy:        userID,
+		EnableDeviceFlow: true,
+	})
+	require.NoError(t, err)
+
+	_, err = svc.GetClient(resp.ClientID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, spy.count, "first call should fetch from DB")
+
+	_, err = svc.GetClient(resp.ClientID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, spy.count, "second call should hit cache, not DB")
+}
+
+func TestGetClient_CacheInvalidationOnUpdate(t *testing.T) {
+	s := setupTestStore(t)
+	svc := NewClientService(s, nil, nil, 0, nil, 5*time.Minute)
+	userID := uuid.New().String()
+
+	resp, err := svc.CreateClient(context.Background(), CreateClientRequest{
+		ClientName:       "Original Name",
+		UserID:           userID,
+		CreatedBy:        userID,
+		EnableDeviceFlow: true,
+	})
+	require.NoError(t, err)
+
+	_, err = svc.GetClient(resp.ClientID)
+	require.NoError(t, err)
+
+	err = svc.UpdateClient(context.Background(), resp.ClientID, userID, UpdateClientRequest{
+		ClientName:       "Updated Name",
+		Status:           models.ClientStatusActive,
+		EnableDeviceFlow: true,
+	})
+	require.NoError(t, err)
+
+	client, err := svc.GetClient(resp.ClientID)
+	require.NoError(t, err)
+	assert.Equal(t, "Updated Name", client.ClientName, "UpdateClient should invalidate cache")
+}
+
+func TestGetClient_CacheInvalidationOnRegenerateSecret(t *testing.T) {
+	s := setupTestStore(t)
+	svc := NewClientService(s, nil, nil, 0, nil, 5*time.Minute)
+	userID := uuid.New().String()
+
+	resp, err := svc.CreateClient(context.Background(), CreateClientRequest{
+		ClientName:       "Regen Secret Client",
+		UserID:           userID,
+		CreatedBy:        userID,
+		EnableDeviceFlow: true,
+		ClientType:       "confidential",
+	})
+	require.NoError(t, err)
+
+	_, err = svc.GetClient(resp.ClientID)
+	require.NoError(t, err)
+
+	_, err = svc.RegenerateSecret(context.Background(), resp.ClientID, userID)
+	require.NoError(t, err)
+
+	// Cache should be invalidated; GetClient should succeed (refetch from DB)
+	client, err := svc.GetClient(resp.ClientID)
+	require.NoError(t, err)
+	assert.Equal(t, resp.ClientID, client.ClientID)
 }
