@@ -21,6 +21,13 @@ import (
 
 const pendingClientsCountCacheKey = "clients:pending_count"
 
+// clientFetchErr wraps a store error returned inside GetWithFetch's fetchFunc,
+// so GetClient can distinguish it from a cache-backend error.
+type clientFetchErr struct{ cause error }
+
+func (e *clientFetchErr) Error() string { return e.cause.Error() }
+func (e *clientFetchErr) Unwrap() error { return e.cause }
+
 // buildGrantTypes derives the GrantTypes string from per-flow enable flags.
 func buildGrantTypes(enableDevice, enableAuthCode, enableClientCredentials bool) string {
 	var grants []string
@@ -465,9 +472,10 @@ func (s *ClientService) GetClient(clientID string) (*models.OAuthApplication, er
 	client, err := s.clientCache.GetWithFetch(
 		context.Background(), clientID, s.clientCacheTTL,
 		func(ctx context.Context, _ string) (models.OAuthApplication, error) {
-			c, err := s.store.GetClient(clientID)
-			if err != nil {
-				return models.OAuthApplication{}, err
+			c, storeErr := s.store.GetClient(clientID)
+			if storeErr != nil {
+				// Wrap so GetClient can tell this apart from a cache-backend error.
+				return models.OAuthApplication{}, &clientFetchErr{cause: storeErr}
 			}
 			// Strip secret material before caching (defense-in-depth)
 			cached := *c
@@ -478,6 +486,14 @@ func (s *ClientService) GetClient(clientID string) (*models.OAuthApplication, er
 	if err == nil {
 		return &client, nil
 	}
+	// Store error from fetchFunc — the DB was reached, no need to retry.
+	var fe *clientFetchErr
+	if errors.As(err, &fe) {
+		if errors.Is(fe.cause, gorm.ErrRecordNotFound) {
+			return nil, ErrClientNotFound
+		}
+		return nil, fe.cause
+	}
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, ErrClientNotFound
 	}
@@ -485,7 +501,10 @@ func (s *ClientService) GetClient(clientID string) (*models.OAuthApplication, er
 	log.Printf("[ClientCache] cache lookup failed, falling back to DB: %v", err)
 	c, storeErr := s.store.GetClient(clientID)
 	if storeErr != nil {
-		return nil, ErrClientNotFound
+		if errors.Is(storeErr, gorm.ErrRecordNotFound) {
+			return nil, ErrClientNotFound
+		}
+		return nil, storeErr
 	}
 	c.ClientSecret = ""
 	return c, nil
