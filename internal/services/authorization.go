@@ -77,6 +77,7 @@ func NewAuthorizationService(
 // ValidateAuthorizationRequest validates all parameters of an incoming authorization request.
 // Returns the parsed AuthorizationRequest on success.
 func (s *AuthorizationService) ValidateAuthorizationRequest(
+	ctx context.Context,
 	clientID, redirectURI, responseType, scope, codeChallenge, codeChallengeMethod, nonce string,
 ) (*AuthorizationRequest, error) {
 	// 1. response_type must be "code"
@@ -85,7 +86,7 @@ func (s *AuthorizationService) ValidateAuthorizationRequest(
 	}
 
 	// 2. Client must exist and be active
-	client, err := s.clientService.GetClient(context.Background(), clientID)
+	client, err := s.clientService.GetClient(ctx, clientID)
 	if err != nil {
 		return nil, ErrUnauthorizedClient
 	}

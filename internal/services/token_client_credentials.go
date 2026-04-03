@@ -128,8 +128,11 @@ func (s *TokenService) IssueClientCredentialsToken(
 
 // AuthenticateClient verifies client credentials (client_id + client_secret).
 // Returns nil on success, or an error if the client is not found, inactive, or the secret is invalid.
-func (s *TokenService) AuthenticateClient(clientID, clientSecret string) error {
-	client, err := s.clientService.GetClientWithSecret(context.Background(), clientID)
+func (s *TokenService) AuthenticateClient(
+	ctx context.Context,
+	clientID, clientSecret string,
+) error {
+	client, err := s.clientService.GetClientWithSecret(ctx, clientID)
 	if err != nil {
 		return ErrInvalidClientCredentials
 	}

@@ -272,7 +272,7 @@ func TestGetClientByUserCode_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	// Get client and device code by user code
-	result, resultDC, err := deviceService.GetClientByUserCode(dc.UserCode)
+	result, resultDC, err := deviceService.GetClientByUserCode(context.Background(), dc.UserCode)
 
 	// Assert
 	require.NoError(t, err)

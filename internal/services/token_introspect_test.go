@@ -119,7 +119,7 @@ func TestAuthenticateClient_Success(t *testing.T) {
 	svc, s := newIntrospectTokenService(t)
 
 	client, plainSecret := createConfidentialClientWithCCFlow(t, s, true)
-	err := svc.AuthenticateClient(client.ClientID, plainSecret)
+	err := svc.AuthenticateClient(context.Background(), client.ClientID, plainSecret)
 	assert.NoError(t, err)
 }
 
@@ -127,14 +127,14 @@ func TestAuthenticateClient_WrongSecret(t *testing.T) {
 	svc, s := newIntrospectTokenService(t)
 
 	client, _ := createConfidentialClientWithCCFlow(t, s, true)
-	err := svc.AuthenticateClient(client.ClientID, "wrong-secret")
+	err := svc.AuthenticateClient(context.Background(), client.ClientID, "wrong-secret")
 	assert.ErrorIs(t, err, ErrInvalidClientCredentials)
 }
 
 func TestAuthenticateClient_NonexistentClient(t *testing.T) {
 	svc, _ := newIntrospectTokenService(t)
 
-	err := svc.AuthenticateClient("nonexistent-client-id", "any-secret")
+	err := svc.AuthenticateClient(context.Background(), "nonexistent-client-id", "any-secret")
 	assert.ErrorIs(t, err, ErrInvalidClientCredentials)
 }
 
@@ -146,7 +146,7 @@ func TestAuthenticateClient_InactiveClient(t *testing.T) {
 	client.Status = models.ClientStatusInactive
 	require.NoError(t, s.UpdateClient(client))
 
-	err := svc.AuthenticateClient(client.ClientID, plainSecret)
+	err := svc.AuthenticateClient(context.Background(), client.ClientID, plainSecret)
 	assert.ErrorIs(t, err, ErrInvalidClientCredentials)
 }
 
