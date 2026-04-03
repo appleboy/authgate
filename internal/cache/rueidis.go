@@ -92,7 +92,15 @@ func (r *RueidisCache[T]) GetWithFetch(
 	// Run shared work under a non-canceling context so one caller's
 	// cancellation does not fail all waiters for the same key.
 	resultCh := r.sf.DoChan(key, func() (any, error) {
+		// Detach from caller cancellation so one request's cancel doesn't abort
+		// the shared fetch for all waiters. Preserve any deadline so the fetch
+		// cannot run unbounded when callers have timeouts.
 		sharedCtx := context.WithoutCancel(ctx)
+		if deadline, ok := ctx.Deadline(); ok {
+			var cancel context.CancelFunc
+			sharedCtx, cancel = context.WithDeadline(sharedCtx, deadline)
+			defer cancel()
+		}
 		// Re-check cache under singleflight (another goroutine may have populated it)
 		if value, err := r.Get(sharedCtx, key); err == nil {
 			return value, nil

@@ -302,14 +302,20 @@ func TestMemoryCache_Reaper(t *testing.T) {
 	_ = c.Set(ctx, "key1", 1, 5*time.Millisecond)
 	_ = c.Set(ctx, "key2", 2, time.Minute)
 
-	// Wait for at least one reaper tick.
-	time.Sleep(60 * time.Millisecond)
-
-	if got := c.Len(); got != 1 {
-		t.Errorf("expected 1 item after reaper eviction, got %d", got)
-	}
-	if _, err := c.Get(ctx, "key2"); err != nil {
-		t.Errorf("key2 should survive reaper: %v", err)
+	// Poll until the reaper evicts key1 while key2 remains, or timeout.
+	timeout := time.After(200 * time.Millisecond)
+	for {
+		if c.Len() == 1 {
+			if _, err := c.Get(ctx, "key2"); err == nil {
+				break
+			}
+		}
+		select {
+		case <-timeout:
+			t.Fatalf("expected 1 item after reaper eviction and key2 to survive, got len=%d", c.Len())
+		default:
+			time.Sleep(5 * time.Millisecond)
+		}
 	}
 }
 
