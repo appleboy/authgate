@@ -84,8 +84,8 @@ func (s *TokenService) getAccessTokenByHash(
 	hash string,
 ) (*models.AccessToken, error) {
 	tok, err := s.tokenCache.GetWithFetch(ctx, hash, s.config.TokenCacheTTL,
-		func(ctx context.Context, key string) (models.AccessToken, error) {
-			t, err := s.store.GetAccessTokenByHash(key)
+		func(ctx context.Context, _ string) (models.AccessToken, error) {
+			t, err := s.store.GetAccessTokenByHash(hash)
 			if err != nil {
 				return models.AccessToken{}, err
 			}

@@ -16,6 +16,7 @@ import (
 	"github.com/go-authgate/authgate/internal/util"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 const pendingClientsCountCacheKey = "clients:pending_count"
@@ -461,8 +462,8 @@ func (s *ClientService) ListClientsPaginatedWithCreator(
 func (s *ClientService) GetClient(clientID string) (*models.OAuthApplication, error) {
 	client, err := s.clientCache.GetWithFetch(
 		context.Background(), clientID, s.clientCacheTTL,
-		func(ctx context.Context, key string) (models.OAuthApplication, error) {
-			c, err := s.store.GetClient(key)
+		func(ctx context.Context, _ string) (models.OAuthApplication, error) {
+			c, err := s.store.GetClient(clientID)
 			if err != nil {
 				return models.OAuthApplication{}, err
 			}
@@ -472,10 +473,22 @@ func (s *ClientService) GetClient(clientID string) (*models.OAuthApplication, er
 			return cached, nil
 		},
 	)
-	if err != nil {
+	if err == nil {
+		return &client, nil
+	}
+	// Distinguish genuine "not found" from cache infrastructure errors.
+	// On cache backend failure, fall back to a direct store lookup so valid
+	// OAuth flows are not rejected due to Redis/rueidisaside outages.
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, ErrClientNotFound
 	}
-	return &client, nil
+	log.Printf("[ClientCache] cache lookup failed, falling back to DB: %v", err)
+	c, storeErr := s.store.GetClient(clientID)
+	if storeErr != nil {
+		return nil, ErrClientNotFound
+	}
+	c.ClientSecret = ""
+	return c, nil
 }
 
 // GetClientWithSecret returns an OAuth client by client_id without caching.
