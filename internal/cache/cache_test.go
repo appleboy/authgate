@@ -222,6 +222,7 @@ func TestMemoryCache_GetWithFetch_FetchError(t *testing.T) {
 
 func TestMemoryCache_GetWithFetch_Concurrent(t *testing.T) {
 	c := NewMemoryCache[int64]()
+	defer c.Close()
 	ctx := context.Background()
 
 	var fetchCount atomic.Int64
@@ -247,11 +248,12 @@ func TestMemoryCache_GetWithFetch_Concurrent(t *testing.T) {
 
 func TestMemoryCache_GetWithFetch_Singleflight(t *testing.T) {
 	c := NewMemoryCache[int64]()
+	defer c.Close()
 	ctx := context.Background()
 
-	// Block all goroutines inside fetchFunc until all 20 have entered,
-	// then release them together. This maximises singleflight contention
-	// and ensures only one invocation actually runs.
+	// Block the single in-flight fetch until the other callers have had time
+	// to queue behind the shared singleflight result, then release it.
+	// This maximises singleflight contention and ensures only one invocation runs.
 	const goroutines = 20
 	ready := make(chan struct{})
 	var fetchCount atomic.Int64
@@ -286,6 +288,7 @@ func TestMemoryCache_GetWithFetch_Singleflight(t *testing.T) {
 
 func TestMemoryCache_GetWithFetch_Expiration(t *testing.T) {
 	c := NewMemoryCache[int64]()
+	defer c.Close()
 	ctx := context.Background()
 
 	fetchCount := 0

@@ -135,43 +135,18 @@ func (m *MemoryCache[T]) GetWithFetch(
 	if value, err := m.Get(ctx, key); err == nil {
 		return value, nil
 	}
-
-	// Cache miss: use singleflight to deduplicate concurrent fetches.
-	// Run shared work under a non-canceling context so one caller's
-	// cancellation does not abort the fetch for all other callers.
-	resultCh := m.sf.DoChan(key, func() (any, error) {
-		// Detach from caller cancellation so one request's cancel doesn't abort
-		// the shared fetch for all waiters. Preserve any deadline so the fetch
-		// cannot run unbounded when callers have timeouts.
-		sharedCtx := context.WithoutCancel(ctx)
-		if deadline, ok := ctx.Deadline(); ok {
-			var cancel context.CancelFunc
-			sharedCtx, cancel = context.WithDeadline(sharedCtx, deadline)
-			defer cancel()
-		}
-		// Re-check cache under singleflight (another goroutine may have populated it)
+	return doWithSingleflight(ctx, key, &m.sf, func(sharedCtx context.Context) (T, error) {
+		// Re-check cache under singleflight (another goroutine may have populated it).
 		if value, err := m.Get(sharedCtx, key); err == nil {
 			return value, nil
 		}
 		value, err := fetchFunc(sharedCtx, key)
 		if err != nil {
-			return nil, err
+			return value, err
 		}
 		_ = m.Set(sharedCtx, key, value, ttl)
 		return value, nil
 	})
-
-	select {
-	case <-ctx.Done():
-		var zero T
-		return zero, ctx.Err()
-	case res := <-resultCh:
-		if res.Err != nil {
-			var zero T
-			return zero, res.Err
-		}
-		return res.Val.(T), nil
-	}
 }
 
 // reaper periodically evicts expired entries to prevent memory leaks.
