@@ -288,7 +288,7 @@ func (s *UserService) syncExternalUser(
 	return user, nil
 }
 
-func (s *UserService) GetUserByID(id string) (*models.User, error) {
+func (s *UserService) GetUserByID(ctx context.Context, id string) (*models.User, error) {
 	cacheKey := "user:" + id
 	fetchFn := func(ctx context.Context, key string) (models.User, error) {
 		u, err := s.store.GetUserByID(id)
@@ -306,7 +306,7 @@ func (s *UserService) GetUserByID(id string) (*models.User, error) {
 		return *u, nil
 	}
 
-	user, err := s.userCache.GetWithFetch(context.Background(), cacheKey, s.userCacheTTL, fetchFn)
+	user, err := s.userCache.GetWithFetch(ctx, cacheKey, s.userCacheTTL, fetchFn)
 	if err != nil {
 		return nil, err
 	}

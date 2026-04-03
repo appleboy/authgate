@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/go-authgate/authgate/internal/core"
+
+	"golang.org/x/sync/singleflight"
 )
 
 type cacheItem[T any] struct {
@@ -17,18 +19,30 @@ type cacheItem[T any] struct {
 var _ core.Cache[struct{}] = (*MemoryCache[struct{}])(nil)
 
 // MemoryCache implements Cache interface with in-memory storage.
-// Uses lazy expiration (checks expiry on Get).
+// Uses lazy expiration (checks expiry on Get) plus a background reaper
+// that periodically evicts expired entries to prevent memory leaks.
 // Suitable for single-instance deployments.
 type MemoryCache[T any] struct {
 	mu    sync.RWMutex
 	items map[string]cacheItem[T]
+	sf    singleflight.Group
+	stop  chan struct{}
 }
 
 // NewMemoryCache creates a new memory cache instance.
-func NewMemoryCache[T any]() *MemoryCache[T] {
-	return &MemoryCache[T]{
-		items: make(map[string]cacheItem[T]),
+// An optional cleanup interval may be provided (default: 5 minutes).
+// A background goroutine periodically evicts expired entries.
+func NewMemoryCache[T any](cleanupInterval ...time.Duration) *MemoryCache[T] {
+	interval := 5 * time.Minute
+	if len(cleanupInterval) > 0 && cleanupInterval[0] > 0 {
+		interval = cleanupInterval[0]
 	}
+	m := &MemoryCache[T]{
+		items: make(map[string]cacheItem[T]),
+		stop:  make(chan struct{}),
+	}
+	go m.reaper(interval)
+	return m
 }
 
 // Get retrieves a value from cache.
@@ -81,8 +95,15 @@ func (m *MemoryCache[T]) Delete(ctx context.Context, key string) error {
 	return nil
 }
 
-// Close cleans up resources.
+// Close stops the background reaper and cleans up resources.
 func (m *MemoryCache[T]) Close() error {
+	select {
+	case <-m.stop:
+		// Already closed
+	default:
+		close(m.stop)
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -97,12 +118,67 @@ func (m *MemoryCache[T]) Health(ctx context.Context) error {
 
 // GetWithFetch retrieves a value using the cache-aside pattern.
 // On cache miss, fetchFunc is called and the result is stored in cache.
-// No stampede protection is provided (single-instance memory cache).
+// Uses singleflight to deduplicate concurrent fetches for the same key.
 func (m *MemoryCache[T]) GetWithFetch(
 	ctx context.Context,
 	key string,
 	ttl time.Duration,
 	fetchFunc func(ctx context.Context, key string) (T, error),
 ) (T, error) {
-	return fetchThrough(ctx, key, ttl, m.Get, m.Set, fetchFunc)
+	// Fast path: return cached value if present
+	if value, err := m.Get(ctx, key); err == nil {
+		return value, nil
+	}
+
+	// Cache miss: use singleflight to deduplicate concurrent fetches
+	result, err, _ := m.sf.Do(key, func() (any, error) {
+		// Re-check cache under singleflight (another goroutine may have populated it)
+		if value, err := m.Get(ctx, key); err == nil {
+			return value, nil
+		}
+		value, err := fetchFunc(ctx, key)
+		if err != nil {
+			return nil, err
+		}
+		_ = m.Set(ctx, key, value, ttl)
+		return value, nil
+	})
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+	return result.(T), nil
+}
+
+// reaper periodically evicts expired entries to prevent memory leaks.
+func (m *MemoryCache[T]) reaper(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			m.evictExpired()
+		case <-m.stop:
+			return
+		}
+	}
+}
+
+// evictExpired removes all expired entries from the cache.
+func (m *MemoryCache[T]) evictExpired() {
+	now := time.Now()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for key, item := range m.items {
+		if now.After(item.expiresAt) {
+			delete(m.items, key)
+		}
+	}
+}
+
+// Len returns the number of items in the cache (for testing).
+func (m *MemoryCache[T]) Len() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return len(m.items)
 }

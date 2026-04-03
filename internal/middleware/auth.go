@@ -55,7 +55,7 @@ func loadUserFromSession(c *gin.Context, userService *services.UserService) (boo
 		return false, nil
 	}
 	userIDStr := userID.(string)
-	user, err := userService.GetUserByID(userIDStr)
+	user, err := userService.GetUserByID(c.Request.Context(), userIDStr)
 	if err != nil {
 		if errors.Is(err, services.ErrUserNotFound) {
 			// User no longer exists in DB — clear stale session to prevent redirect loops.
