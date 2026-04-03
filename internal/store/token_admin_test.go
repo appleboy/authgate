@@ -107,6 +107,20 @@ func TestGetTokensPaginated(t *testing.T) {
 		assert.Len(t, tokens, 6)
 	})
 
+	t.Run("search by email", func(t *testing.T) {
+		params := NewPaginationParams(1, 10, "tokenadmin@test.com")
+		tokens, _, err := store.GetTokensPaginated(params)
+		require.NoError(t, err)
+		assert.Len(t, tokens, 6)
+	})
+
+	t.Run("search by scopes", func(t *testing.T) {
+		params := NewPaginationParams(1, 10, "openid")
+		tokens, _, err := store.GetTokensPaginated(params)
+		require.NoError(t, err)
+		assert.Len(t, tokens, 6)
+	})
+
 	t.Run("search combined with status and category filters", func(t *testing.T) {
 		params := NewPaginationParams(1, 10, "tokenadmin")
 		params.StatusFilter = models.TokenStatusActive
