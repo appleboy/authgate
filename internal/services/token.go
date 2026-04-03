@@ -48,7 +48,7 @@ type TokenService struct {
 	config        *config.Config
 	deviceService *DeviceService
 	tokenProvider core.TokenProvider
-	auditService  *AuditService
+	auditService  core.AuditLogger
 	metrics       core.Recorder
 	tokenCache    core.Cache[models.AccessToken]
 }
@@ -58,10 +58,13 @@ func NewTokenService(
 	cfg *config.Config,
 	ds *DeviceService,
 	provider core.TokenProvider,
-	auditService *AuditService,
+	auditService core.AuditLogger,
 	m core.Recorder,
 	tokenCache core.Cache[models.AccessToken],
 ) *TokenService {
+	if auditService == nil {
+		auditService = NewNoopAuditService()
+	}
 	return &TokenService{
 		store:         s,
 		config:        cfg,
