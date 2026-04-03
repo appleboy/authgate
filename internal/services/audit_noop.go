@@ -16,9 +16,12 @@ var _ core.AuditLogger = (*NoopAuditService)(nil)
 // Used when audit logging is disabled.
 type NoopAuditService struct{}
 
-// NewNoopAuditService creates a new no-op audit service.
+// sharedNoopAuditService is a stateless singleton returned by NewNoopAuditService.
+var sharedNoopAuditService = &NoopAuditService{}
+
+// NewNoopAuditService returns the shared no-op audit service instance.
 func NewNoopAuditService() *NoopAuditService {
-	return &NoopAuditService{}
+	return sharedNoopAuditService
 }
 
 // Log is a no-op.

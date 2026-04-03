@@ -41,6 +41,9 @@ func NewDeviceService(
 	auditService core.AuditLogger,
 	m core.Recorder,
 ) *DeviceService {
+	if auditService == nil {
+		auditService = NewNoopAuditService()
+	}
 	return &DeviceService{
 		store:        s,
 		config:       cfg,

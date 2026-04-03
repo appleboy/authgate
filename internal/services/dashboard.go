@@ -25,6 +25,9 @@ func NewDashboardService(
 	s core.Store,
 	auditService core.AuditLogger,
 ) *DashboardService {
+	if auditService == nil {
+		auditService = NewNoopAuditService()
+	}
 	return &DashboardService{
 		store:        s,
 		auditService: auditService,
