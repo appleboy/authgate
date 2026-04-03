@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/go-authgate/authgate/internal/cache"
 	"github.com/go-authgate/authgate/internal/config"
 	"github.com/go-authgate/authgate/internal/core"
 	"github.com/go-authgate/authgate/internal/models"
@@ -99,6 +100,12 @@ func (s *TokenService) getAccessTokenByHash(
 	// propagate it. Otherwise, the cache backend failed — fall back to DB.
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
+	}
+	// Corrupted cache entry — delete it so the next request re-populates it.
+	if errors.Is(err, cache.ErrInvalidValue) {
+		if delErr := s.tokenCache.Delete(ctx, hash); delErr != nil {
+			log.Printf("[TokenCache] Failed to evict corrupted entry for hash=%s: %v", hash, delErr)
+		}
 	}
 	log.Printf("[TokenCache] cache lookup failed, falling back to DB: %v", err)
 	return s.store.GetAccessTokenByHash(hash)

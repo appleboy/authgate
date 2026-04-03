@@ -495,7 +495,13 @@ func (s *ClientService) GetClient(clientID string) (*models.OAuthApplication, er
 	}
 	// Corrupted cache entry — delete it so the next request re-populates it.
 	if errors.Is(err, cache.ErrInvalidValue) {
-		_ = s.clientCache.Delete(context.Background(), clientID)
+		if delErr := s.clientCache.Delete(context.Background(), clientID); delErr != nil {
+			log.Printf(
+				"[ClientCache] Failed to evict corrupted entry for client=%s: %v",
+				clientID,
+				delErr,
+			)
+		}
 	}
 	// Cache backend failure — fall back to direct DB lookup.
 	log.Printf("[ClientCache] cache lookup failed, falling back to DB: %v", err)
