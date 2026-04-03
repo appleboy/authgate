@@ -40,7 +40,7 @@ func TestNoopAuditService_GetAuditLogs(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, logs)
 	assert.Empty(t, logs)
-	assert.Equal(t, types.PaginationResult{}, pagination)
+	assert.Equal(t, types.CalculatePagination(0, 1, 10), pagination)
 }
 
 func TestNoopAuditService_CleanupOldLogs(t *testing.T) {

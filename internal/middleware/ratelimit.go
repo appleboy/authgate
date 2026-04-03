@@ -42,7 +42,7 @@ type RateLimitConfig struct {
 	RedisClient *redis.Client // Required for Redis store: shared go-redis client
 
 	// Audit settings
-	AuditService core.AuditLogger // Audit service for logging rate limit events
+	AuditService core.AuditLogger // Required: audit service for logging rate limit events
 }
 
 // NewRateLimiter creates a new rate limiter with configurable store backend

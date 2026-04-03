@@ -32,12 +32,12 @@ func (n *NoopAuditService) LogSync(_ context.Context, _ core.AuditLogEntry) erro
 	return nil
 }
 
-// GetAuditLogs returns empty results.
+// GetAuditLogs returns empty results with pagination metadata derived from params.
 func (n *NoopAuditService) GetAuditLogs(
-	_ types.PaginationParams,
+	params types.PaginationParams,
 	_ types.AuditLogFilters,
 ) ([]models.AuditLog, types.PaginationResult, error) {
-	return []models.AuditLog{}, types.PaginationResult{}, nil
+	return []models.AuditLog{}, types.CalculatePagination(0, params.Page, params.PageSize), nil
 }
 
 // CleanupOldLogs is a no-op.
