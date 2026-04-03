@@ -39,6 +39,7 @@ func newCachedTokenServiceWithConfig(
 	t.Helper()
 	s := setupTestStore(t)
 	memCache := cache.NewMemoryCache[models.AccessToken]()
+	t.Cleanup(func() { _ = memCache.Close() })
 	localProvider, err := token.NewLocalTokenProvider(cfg)
 	require.NoError(t, err)
 	deviceService := NewDeviceService(s, cfg, nil, metrics.NewNoopMetrics())
