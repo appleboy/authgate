@@ -245,6 +245,45 @@ func TestMemoryCache_GetWithFetch_Concurrent(t *testing.T) {
 	wg.Wait()
 }
 
+func TestMemoryCache_GetWithFetch_Singleflight(t *testing.T) {
+	c := NewMemoryCache[int64]()
+	ctx := context.Background()
+
+	// Block all goroutines inside fetchFunc until all 20 have entered,
+	// then release them together. This maximises singleflight contention
+	// and ensures only one invocation actually runs.
+	const goroutines = 20
+	ready := make(chan struct{})
+	var fetchCount atomic.Int64
+	fetchFunc := func(ctx context.Context, key string) (int64, error) {
+		fetchCount.Add(1)
+		<-ready // wait until all goroutines are queued
+		return 42, nil
+	}
+
+	var wg sync.WaitGroup
+	for range goroutines {
+		wg.Go(func() {
+			val, err := c.GetWithFetch(ctx, "sf-key", time.Minute, fetchFunc)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if val != 42 {
+				t.Errorf("expected 42, got %d", val)
+			}
+		})
+	}
+
+	// Give goroutines time to pile up in singleflight, then unblock.
+	time.Sleep(10 * time.Millisecond)
+	close(ready)
+	wg.Wait()
+
+	if n := fetchCount.Load(); n != 1 {
+		t.Errorf("expected fetchFunc called exactly once, got %d", n)
+	}
+}
+
 func TestMemoryCache_GetWithFetch_Expiration(t *testing.T) {
 	c := NewMemoryCache[int64]()
 	ctx := context.Background()
@@ -303,7 +342,10 @@ func TestMemoryCache_Reaper(t *testing.T) {
 	_ = c.Set(ctx, "key2", 2, time.Minute)
 
 	// Poll until the reaper evicts key1 while key2 remains, or timeout.
-	timeout := time.After(200 * time.Millisecond)
+	ticker := time.NewTicker(5 * time.Millisecond)
+	defer ticker.Stop()
+	timer := time.NewTimer(200 * time.Millisecond)
+	defer timer.Stop()
 	for {
 		if c.Len() == 1 {
 			if _, err := c.Get(ctx, "key2"); err == nil {
@@ -311,10 +353,9 @@ func TestMemoryCache_Reaper(t *testing.T) {
 			}
 		}
 		select {
-		case <-timeout:
+		case <-timer.C:
 			t.Fatalf("expected 1 item after reaper eviction and key2 to survive, got len=%d", c.Len())
-		default:
-			time.Sleep(5 * time.Millisecond)
+		case <-ticker.C:
 		}
 	}
 }
