@@ -16,6 +16,7 @@ type serviceSet struct {
 	token         *services.TokenService
 	client        *services.ClientService
 	authorization *services.AuthorizationService
+	dashboard     *services.DashboardService
 }
 
 // initializeServices creates all business logic services
@@ -58,6 +59,7 @@ func initializeServices(
 		db, auditService, clientCountCache, cfg.ClientCountCacheTTL,
 	)
 	authorizationService := services.NewAuthorizationService(db, cfg, auditService, tokenService)
+	dashboardService := services.NewDashboardService(db, auditService)
 
 	return serviceSet{
 		user:          userService,
@@ -65,5 +67,6 @@ func initializeServices(
 		token:         tokenService,
 		client:        clientService,
 		authorization: authorizationService,
+		dashboard:     dashboardService,
 	}
 }

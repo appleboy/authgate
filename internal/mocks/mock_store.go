@@ -713,6 +713,22 @@ func (mr *MockTokenReaderMockRecorder) GetTokensByUserIDPaginated(userID, params
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTokensByUserIDPaginated", reflect.TypeOf((*MockTokenReader)(nil).GetTokensByUserIDPaginated), userID, params)
 }
 
+// GetTokensPaginated mocks base method.
+func (m *MockTokenReader) GetTokensPaginated(params types.PaginationParams) ([]models.AccessToken, types.PaginationResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTokensPaginated", params)
+	ret0, _ := ret[0].([]models.AccessToken)
+	ret1, _ := ret[1].(types.PaginationResult)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// GetTokensPaginated indicates an expected call of GetTokensPaginated.
+func (mr *MockTokenReaderMockRecorder) GetTokensPaginated(params any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTokensPaginated", reflect.TypeOf((*MockTokenReader)(nil).GetTokensPaginated), params)
+}
+
 // MockTokenWriter is a mock of TokenWriter interface.
 type MockTokenWriter struct {
 	ctrl     *gomock.Controller
@@ -1294,6 +1310,45 @@ func (m *MockAuditStore) GetAuditLogsPaginated(params types.PaginationParams, fi
 func (mr *MockAuditStoreMockRecorder) GetAuditLogsPaginated(params, filters any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAuditLogsPaginated", reflect.TypeOf((*MockAuditStore)(nil).GetAuditLogsPaginated), params, filters)
+}
+
+// MockDashboardStore is a mock of DashboardStore interface.
+type MockDashboardStore struct {
+	ctrl     *gomock.Controller
+	recorder *MockDashboardStoreMockRecorder
+	isgomock struct{}
+}
+
+// MockDashboardStoreMockRecorder is the mock recorder for MockDashboardStore.
+type MockDashboardStoreMockRecorder struct {
+	mock *MockDashboardStore
+}
+
+// NewMockDashboardStore creates a new mock instance.
+func NewMockDashboardStore(ctrl *gomock.Controller) *MockDashboardStore {
+	mock := &MockDashboardStore{ctrl: ctrl}
+	mock.recorder = &MockDashboardStoreMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockDashboardStore) EXPECT() *MockDashboardStoreMockRecorder {
+	return m.recorder
+}
+
+// GetDashboardCounts mocks base method.
+func (m *MockDashboardStore) GetDashboardCounts() (types.DashboardCounts, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDashboardCounts")
+	ret0, _ := ret[0].(types.DashboardCounts)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDashboardCounts indicates an expected call of GetDashboardCounts.
+func (mr *MockDashboardStoreMockRecorder) GetDashboardCounts() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDashboardCounts", reflect.TypeOf((*MockDashboardStore)(nil).GetDashboardCounts))
 }
 
 // MockCleanupStore is a mock of CleanupStore interface.
@@ -1986,6 +2041,21 @@ func (mr *MockStoreMockRecorder) GetClientsByIDs(clientIDs any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClientsByIDs", reflect.TypeOf((*MockStore)(nil).GetClientsByIDs), clientIDs)
 }
 
+// GetDashboardCounts mocks base method.
+func (m *MockStore) GetDashboardCounts() (types.DashboardCounts, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDashboardCounts")
+	ret0, _ := ret[0].(types.DashboardCounts)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDashboardCounts indicates an expected call of GetDashboardCounts.
+func (mr *MockStoreMockRecorder) GetDashboardCounts() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDashboardCounts", reflect.TypeOf((*MockStore)(nil).GetDashboardCounts))
+}
+
 // GetDeviceCodeByUserCode mocks base method.
 func (m *MockStore) GetDeviceCodeByUserCode(userCode string) (*models.DeviceCode, error) {
 	m.ctrl.T.Helper()
@@ -2120,6 +2190,22 @@ func (m *MockStore) GetTokensByUserIDPaginated(userID string, params types.Pagin
 func (mr *MockStoreMockRecorder) GetTokensByUserIDPaginated(userID, params any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTokensByUserIDPaginated", reflect.TypeOf((*MockStore)(nil).GetTokensByUserIDPaginated), userID, params)
+}
+
+// GetTokensPaginated mocks base method.
+func (m *MockStore) GetTokensPaginated(params types.PaginationParams) ([]models.AccessToken, types.PaginationResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTokensPaginated", params)
+	ret0, _ := ret[0].([]models.AccessToken)
+	ret1, _ := ret[1].(types.PaginationResult)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// GetTokensPaginated indicates an expected call of GetTokensPaginated.
+func (mr *MockStoreMockRecorder) GetTokensPaginated(params any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTokensPaginated", reflect.TypeOf((*MockStore)(nil).GetTokensPaginated), params)
 }
 
 // GetUserAuthorization mocks base method.

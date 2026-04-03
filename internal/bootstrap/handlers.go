@@ -28,6 +28,8 @@ type handlerSet struct {
 	docs          *handlers.DocsHandler
 	jwks          *handlers.JWKSHandler
 	userAdmin     *handlers.UserAdminHandler
+	dashboard     *handlers.DashboardHandler
+	tokenAdmin    *handlers.TokenAdminHandler
 	userService   *services.UserService
 }
 
@@ -97,6 +99,8 @@ func initializeHandlers(deps handlerDeps) handlerSet {
 		docs:        handlers.NewDocsHandler(deps.templatesFS),
 		jwks:        jwksHandler,
 		userAdmin:   handlers.NewUserAdminHandler(deps.services.user, deps.services.token),
+		dashboard:   handlers.NewDashboardHandler(deps.services.dashboard),
+		tokenAdmin:  handlers.NewTokenAdminHandler(deps.services.token),
 		userService: deps.services.user,
 	}
 }

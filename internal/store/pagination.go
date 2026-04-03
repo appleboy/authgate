@@ -6,6 +6,7 @@ import "github.com/go-authgate/authgate/internal/store/types"
 type (
 	PaginationParams = types.PaginationParams
 	PaginationResult = types.PaginationResult
+	DashboardCounts  = types.DashboardCounts
 )
 
 // Re-export functions.

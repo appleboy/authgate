@@ -109,6 +109,19 @@ func buildNavbarProps(c *gin.Context, user *models.User, activeLink string) temp
 	}
 }
 
+// parseTokenPaginationParams extends parsePaginationParams with token-specific
+// status and category filters from query params.
+func parseTokenPaginationParams(c *gin.Context) store.PaginationParams {
+	params := parsePaginationParams(c)
+	if s := c.Query("status"); validTokenStatuses[s] {
+		params.StatusFilter = s
+	}
+	if cat := c.Query("category"); validTokenCategories[cat] {
+		params.CategoryFilter = cat
+	}
+	return params
+}
+
 // renderErrorPage renders the error page template with the given status code and message.
 func renderErrorPage(c *gin.Context, statusCode int, message string) {
 	templates.RenderTempl(c, statusCode, templates.ErrorPage(

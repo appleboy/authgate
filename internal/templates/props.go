@@ -382,6 +382,28 @@ type UserPasswordResetPageProps struct {
 	Warning     string // non-fatal warning (e.g. token revocation failure)
 }
 
+// DashboardPageProps contains properties for the admin dashboard page
+type DashboardPageProps struct {
+	BaseProps
+	NavbarProps
+	Stats services.DashboardStats
+}
+
+// TokensPageProps contains properties for the admin tokens page
+type TokensPageProps struct {
+	BaseProps
+	NavbarProps
+	Tokens         []services.TokenWithUser
+	Pagination     store.PaginationResult
+	Search         string
+	PageSize       int
+	StatusFilter   string
+	CategoryFilter string
+	Success        string
+	Warning        string
+	Now            time.Time
+}
+
 // AuditLogsPageProps contains properties for the audit logs page
 type AuditLogsPageProps struct {
 	BaseProps

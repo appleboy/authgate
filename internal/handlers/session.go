@@ -4,23 +4,10 @@ import (
 	"net/http"
 
 	"github.com/go-authgate/authgate/internal/middleware"
-	"github.com/go-authgate/authgate/internal/models"
 	"github.com/go-authgate/authgate/internal/services"
 	"github.com/go-authgate/authgate/internal/templates"
 
 	"github.com/gin-gonic/gin"
-)
-
-var (
-	validTokenStatuses = map[string]bool{
-		models.TokenStatusActive:   true,
-		models.TokenStatusDisabled: true,
-		models.TokenStatusRevoked:  true,
-	}
-	validTokenCategories = map[string]bool{
-		models.TokenCategoryAccess:  true,
-		models.TokenCategoryRefresh: true,
-	}
 )
 
 type SessionHandler struct {
@@ -41,13 +28,7 @@ func (h *SessionHandler) ListSessions(c *gin.Context) {
 		return
 	}
 
-	params := parsePaginationParams(c)
-	if s := c.Query("status"); validTokenStatuses[s] {
-		params.StatusFilter = s
-	}
-	if cat := c.Query("category"); validTokenCategories[cat] {
-		params.CategoryFilter = cat
-	}
+	params := parseTokenPaginationParams(c)
 
 	// Get paginated tokens
 	tokens, pagination, err := h.tokenService.GetUserTokensWithClientPaginated(

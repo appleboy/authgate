@@ -80,6 +80,9 @@ type TokenReader interface {
 		userID string,
 		params types.PaginationParams,
 	) ([]models.AccessToken, types.PaginationResult, error)
+	GetTokensPaginated(
+		params types.PaginationParams,
+	) ([]models.AccessToken, types.PaginationResult, error)
 	GetTokensByCategoryAndStatus(userID, category, status string) ([]models.AccessToken, error)
 	GetActiveTokenHashesByFamilyID(familyID string) ([]string, error)
 	GetActiveTokenHashesByAuthorizationID(authorizationID uint) ([]string, error)
@@ -150,6 +153,13 @@ type AuditStore interface {
 	GetAuditLogStats(startTime, endTime time.Time) (types.AuditLogStats, error)
 }
 
+// ── Dashboard ───────────────────────────────────────────────────────────
+
+// DashboardStore groups aggregated count queries for the admin dashboard.
+type DashboardStore interface {
+	GetDashboardCounts() (types.DashboardCounts, error)
+}
+
 // ── Cleanup ─────────────────────────────────────────────────────────────
 
 // CleanupStore groups expired-data cleanup operations.
@@ -190,6 +200,7 @@ type Store interface {
 	OAuthConnectionStore
 	AuditStore
 	MetricsStore
+	DashboardStore
 	CleanupStore
 	Transactor
 	Infrastructure

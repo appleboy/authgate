@@ -81,6 +81,52 @@ func (s *TokenService) GetUserTokensWithClientPaginated(
 	return result, pagination, nil
 }
 
+// TokenWithUser extends TokenWithClient with the token owner's username.
+type TokenWithUser struct {
+	TokenWithClient
+	Username string
+}
+
+// ListAllTokensPaginated returns paginated tokens across all users with client and user info.
+func (s *TokenService) ListAllTokensPaginated(
+	params store.PaginationParams,
+) ([]TokenWithUser, store.PaginationResult, error) {
+	tokens, pagination, err := s.store.GetTokensPaginated(params)
+	if err != nil {
+		return nil, store.PaginationResult{}, err
+	}
+	if len(tokens) == 0 {
+		return []TokenWithUser{}, pagination, nil
+	}
+
+	// Reuse existing client enrichment
+	withClients, err := s.enrichTokensWithClients(tokens)
+	if err != nil {
+		return nil, store.PaginationResult{}, err
+	}
+
+	// Batch-fetch usernames
+	userIDs := util.UniqueKeys(tokens, func(t models.AccessToken) string { return t.UserID })
+	userMap, err := s.store.GetUsersByIDs(userIDs)
+	if err != nil {
+		return nil, store.PaginationResult{}, err
+	}
+
+	result := make([]TokenWithUser, 0, len(withClients))
+	for _, twc := range withClients {
+		username := twc.UserID
+		if user, ok := userMap[twc.UserID]; ok && user != nil {
+			username = user.Username
+		}
+		result = append(result, TokenWithUser{
+			TokenWithClient: twc,
+			Username:        username,
+		})
+	}
+
+	return result, pagination, nil
+}
+
 // GetUserByID returns a user by their ID.
 func (s *TokenService) GetUserByID(userID string) (*models.User, error) {
 	return s.store.GetUserByID(userID)
