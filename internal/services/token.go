@@ -13,8 +13,14 @@ import (
 	"github.com/go-authgate/authgate/internal/util"
 
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
+
+// tokenFetchErr wraps a store error returned inside GetWithFetch's fetchFunc,
+// so getAccessTokenByHash can distinguish it from a cache-backend error.
+type tokenFetchErr struct{ cause error }
+
+func (e *tokenFetchErr) Error() string { return e.cause.Error() }
+func (e *tokenFetchErr) Unwrap() error { return e.cause }
 
 // TokenWithClient combines token and client information for display
 type TokenWithClient struct {
@@ -89,9 +95,9 @@ func (s *TokenService) getAccessTokenByHash(
 ) (*models.AccessToken, error) {
 	tok, err := s.tokenCache.GetWithFetch(ctx, hash, s.config.TokenCacheTTL,
 		func(ctx context.Context, _ string) (models.AccessToken, error) {
-			t, err := s.store.GetAccessTokenByHash(hash)
-			if err != nil {
-				return models.AccessToken{}, err
+			t, storeErr := s.store.GetAccessTokenByHash(hash)
+			if storeErr != nil {
+				return models.AccessToken{}, &tokenFetchErr{cause: storeErr}
 			}
 			return *t, nil
 		},
@@ -99,10 +105,10 @@ func (s *TokenService) getAccessTokenByHash(
 	if err == nil {
 		return &tok, nil
 	}
-	// If the fetch function itself returned a DB error (e.g. record not found),
-	// propagate it. Otherwise, the cache backend failed — fall back to DB.
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, err
+	// Store error from fetchFunc — the DB was reached, no need to retry.
+	var fe *tokenFetchErr
+	if errors.As(err, &fe) {
+		return nil, fe.cause
 	}
 	// Corrupted cache entry — delete it so the next request re-populates it.
 	if errors.Is(err, cache.ErrInvalidValue) {
