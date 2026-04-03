@@ -494,9 +494,6 @@ func (s *ClientService) GetClient(clientID string) (*models.OAuthApplication, er
 		}
 		return nil, fe.cause
 	}
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrClientNotFound
-	}
 	// Cache backend failure — fall back to direct DB lookup.
 	log.Printf("[ClientCache] cache lookup failed, falling back to DB: %v", err)
 	c, storeErr := s.store.GetClient(clientID)
