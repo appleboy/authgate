@@ -89,22 +89,32 @@ func (r *RueidisCache[T]) GetWithFetch(
 		return value, nil
 	}
 
-	// Cache miss: use singleflight to deduplicate concurrent fetches
-	result, err, _ := r.sf.Do(key, func() (any, error) {
+	// Cache miss: use singleflight to deduplicate concurrent fetches.
+	// Use a non-canceling context for the shared work so one caller's
+	// cancellation does not fail all waiters for the same key.
+	sharedCtx := context.WithoutCancel(ctx)
+	resultCh := r.sf.DoChan(key, func() (any, error) {
 		// Re-check cache under singleflight (another goroutine may have populated it)
-		if value, err := r.Get(ctx, key); err == nil {
+		if value, err := r.Get(sharedCtx, key); err == nil {
 			return value, nil
 		}
-		value, err := fetchFunc(ctx, key)
+		value, err := fetchFunc(sharedCtx, key)
 		if err != nil {
 			return nil, err
 		}
-		_ = r.Set(ctx, key, value, ttl)
+		_ = r.Set(sharedCtx, key, value, ttl)
 		return value, nil
 	})
-	if err != nil {
+
+	select {
+	case <-ctx.Done():
 		var zero T
-		return zero, err
+		return zero, ctx.Err()
+	case res := <-resultCh:
+		if res.Err != nil {
+			var zero T
+			return zero, res.Err
+		}
+		return res.Val.(T), nil
 	}
-	return result.(T), nil
 }

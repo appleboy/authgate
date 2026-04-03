@@ -23,10 +23,11 @@ var _ core.Cache[struct{}] = (*MemoryCache[struct{}])(nil)
 // that periodically evicts expired entries to prevent memory leaks.
 // Suitable for single-instance deployments.
 type MemoryCache[T any] struct {
-	mu    sync.RWMutex
-	items map[string]cacheItem[T]
-	sf    singleflight.Group
-	stop  chan struct{}
+	mu        sync.RWMutex
+	items     map[string]cacheItem[T]
+	sf        singleflight.Group
+	stop      chan struct{}
+	closeOnce sync.Once
 }
 
 // NewMemoryCache creates a new memory cache instance.
@@ -96,13 +97,11 @@ func (m *MemoryCache[T]) Delete(ctx context.Context, key string) error {
 }
 
 // Close stops the background reaper and cleans up resources.
+// Safe to call multiple times concurrently.
 func (m *MemoryCache[T]) Close() error {
-	select {
-	case <-m.stop:
-		// Already closed
-	default:
+	m.closeOnce.Do(func() {
 		close(m.stop)
-	}
+	})
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -130,24 +129,35 @@ func (m *MemoryCache[T]) GetWithFetch(
 		return value, nil
 	}
 
-	// Cache miss: use singleflight to deduplicate concurrent fetches
-	result, err, _ := m.sf.Do(key, func() (any, error) {
+	// Cache miss: use singleflight to deduplicate concurrent fetches.
+	// Run the shared work under a non-canceling context so one caller's
+	// cancellation does not abort the fetch for all other callers.
+	resultCh := m.sf.DoChan(key, func() (any, error) {
+		sharedCtx := context.WithoutCancel(ctx)
+
 		// Re-check cache under singleflight (another goroutine may have populated it)
-		if value, err := m.Get(ctx, key); err == nil {
+		if value, err := m.Get(sharedCtx, key); err == nil {
 			return value, nil
 		}
-		value, err := fetchFunc(ctx, key)
+		value, err := fetchFunc(sharedCtx, key)
 		if err != nil {
 			return nil, err
 		}
-		_ = m.Set(ctx, key, value, ttl)
+		_ = m.Set(sharedCtx, key, value, ttl)
 		return value, nil
 	})
-	if err != nil {
+
+	select {
+	case <-ctx.Done():
 		var zero T
-		return zero, err
+		return zero, ctx.Err()
+	case res := <-resultCh:
+		if res.Err != nil {
+			var zero T
+			return zero, res.Err
+		}
+		return res.Val.(T), nil
 	}
-	return result.(T), nil
 }
 
 // reaper periodically evicts expired entries to prevent memory leaks.
