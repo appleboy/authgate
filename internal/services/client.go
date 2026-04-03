@@ -21,13 +21,6 @@ import (
 
 const pendingClientsCountCacheKey = "clients:pending_count"
 
-// clientFetchErr wraps a store error returned inside GetWithFetch's fetchFunc,
-// so GetClient can distinguish it from a cache-backend error.
-type clientFetchErr struct{ cause error }
-
-func (e *clientFetchErr) Error() string { return e.cause.Error() }
-func (e *clientFetchErr) Unwrap() error { return e.cause }
-
 // buildGrantTypes derives the GrantTypes string from per-flow enable flags.
 func buildGrantTypes(enableDevice, enableAuthCode, enableClientCredentials bool) string {
 	var grants []string
@@ -472,7 +465,7 @@ func (s *ClientService) GetClient(
 		func(ctx context.Context, _ string) (models.OAuthApplication, error) {
 			c, storeErr := s.store.GetClient(clientID)
 			if storeErr != nil {
-				return models.OAuthApplication{}, &clientFetchErr{cause: storeErr}
+				return models.OAuthApplication{}, &fetchErr{cause: storeErr}
 			}
 			// Strip secret material before caching (defense-in-depth)
 			cached := *c
@@ -484,7 +477,7 @@ func (s *ClientService) GetClient(
 		return &client, nil
 	}
 	// Store error from fetchFunc — the DB was reached, no need to retry.
-	var fe *clientFetchErr
+	var fe *fetchErr
 	if errors.As(err, &fe) {
 		if errors.Is(fe.cause, gorm.ErrRecordNotFound) {
 			return nil, ErrClientNotFound

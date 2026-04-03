@@ -15,13 +15,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// tokenFetchErr wraps a store error returned inside GetWithFetch's fetchFunc,
-// so getAccessTokenByHash can distinguish it from a cache-backend error.
-type tokenFetchErr struct{ cause error }
-
-func (e *tokenFetchErr) Error() string { return e.cause.Error() }
-func (e *tokenFetchErr) Unwrap() error { return e.cause }
-
 // TokenWithClient combines token and client information for display
 type TokenWithClient struct {
 	models.AccessToken
@@ -97,7 +90,7 @@ func (s *TokenService) getAccessTokenByHash(
 		func(ctx context.Context, _ string) (models.AccessToken, error) {
 			t, storeErr := s.store.GetAccessTokenByHash(hash)
 			if storeErr != nil {
-				return models.AccessToken{}, &tokenFetchErr{cause: storeErr}
+				return models.AccessToken{}, &fetchErr{cause: storeErr}
 			}
 			return *t, nil
 		},
@@ -106,7 +99,7 @@ func (s *TokenService) getAccessTokenByHash(
 		return &tok, nil
 	}
 	// Store error from fetchFunc — the DB was reached, no need to retry.
-	var fe *tokenFetchErr
+	var fe *fetchErr
 	if errors.As(err, &fe) {
 		return nil, fe.cause
 	}
