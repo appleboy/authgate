@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -228,7 +229,7 @@ func TestDeviceCodeErrorMessage(t *testing.T) {
 			services.ErrDeviceCodeAlreadyAuthorized,
 			"This code has already been authorized",
 		},
-		{"unknown error", services.ErrDeviceCodeNotFound, "Invalid or expired code"},
+		{"unknown error", errors.New("unexpected failure"), "Invalid or expired code"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
