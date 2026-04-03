@@ -11,6 +11,7 @@ import (
 
 func TestMemoryCache_GetSet(t *testing.T) {
 	cache := NewMemoryCache[int64]()
+	t.Cleanup(func() { _ = cache.Close() })
 	ctx := context.Background()
 
 	// Test Set and Get
@@ -31,6 +32,7 @@ func TestMemoryCache_GetSet(t *testing.T) {
 
 func TestMemoryCache_GetMiss(t *testing.T) {
 	cache := NewMemoryCache[int64]()
+	t.Cleanup(func() { _ = cache.Close() })
 	ctx := context.Background()
 
 	_, err := cache.Get(ctx, "non-existent")
@@ -41,6 +43,7 @@ func TestMemoryCache_GetMiss(t *testing.T) {
 
 func TestMemoryCache_Expiration(t *testing.T) {
 	cache := NewMemoryCache[int64]()
+	t.Cleanup(func() { _ = cache.Close() })
 	ctx := context.Background()
 
 	// Set with very short TTL
@@ -70,6 +73,7 @@ func TestMemoryCache_Expiration(t *testing.T) {
 
 func TestMemoryCache_Delete(t *testing.T) {
 	cache := NewMemoryCache[int64]()
+	t.Cleanup(func() { _ = cache.Close() })
 	ctx := context.Background()
 
 	// Set a value
@@ -120,6 +124,7 @@ func TestMemoryCache_Close(t *testing.T) {
 
 func TestMemoryCache_Health(t *testing.T) {
 	cache := NewMemoryCache[int64]()
+	t.Cleanup(func() { _ = cache.Close() })
 	ctx := context.Background()
 
 	err := cache.Health(ctx)
@@ -130,6 +135,7 @@ func TestMemoryCache_Health(t *testing.T) {
 
 func TestMemoryCache_Concurrent(t *testing.T) {
 	cache := NewMemoryCache[int64]()
+	t.Cleanup(func() { _ = cache.Close() })
 	ctx := context.Background()
 
 	// Test concurrent writes and reads
@@ -170,6 +176,7 @@ func TestMemoryCache_Concurrent(t *testing.T) {
 
 func TestMemoryCache_GetWithFetch_CacheMiss(t *testing.T) {
 	c := NewMemoryCache[int64]()
+	defer c.Close()
 	ctx := context.Background()
 
 	fetchCount := 0
@@ -204,6 +211,7 @@ func TestMemoryCache_GetWithFetch_CacheMiss(t *testing.T) {
 
 func TestMemoryCache_GetWithFetch_FetchError(t *testing.T) {
 	c := NewMemoryCache[int64]()
+	defer c.Close()
 	ctx := context.Background()
 
 	expectedErr := errors.New("fetch failed")

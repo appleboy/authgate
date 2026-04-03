@@ -37,6 +37,9 @@ type MemoryCache[T any] struct {
 // When the reaper is enabled, callers must call Close to stop the background
 // goroutine and release resources.
 func NewMemoryCache[T any](cleanupInterval ...time.Duration) *MemoryCache[T] {
+	if len(cleanupInterval) > 1 {
+		panic("NewMemoryCache: at most one cleanupInterval argument is allowed")
+	}
 	interval := 5 * time.Minute
 	enableReaper := true
 	if len(cleanupInterval) > 0 {
