@@ -136,13 +136,7 @@ func initializeTokenCache(
 	cfg *config.Config,
 ) (core.Cache[models.AccessToken], func() error, error) {
 	if !cfg.TokenCacheEnabled {
-		// Use NoopCache when token cache is disabled
 		noop := cache.NewNoopCache[models.AccessToken]()
-		// Still wrap with instrumentation if metrics enabled (shows 100% miss rate)
-		if cfg.MetricsEnabled {
-			instrumented := cache.NewInstrumentedCache(noop, "token")
-			return instrumented, noop.Close, nil
-		}
 		return noop, noop.Close, nil
 	}
 	return initializeCache[models.AccessToken](ctx, cfg, cacheOpts{

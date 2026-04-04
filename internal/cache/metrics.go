@@ -7,23 +7,32 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-// CacheMetrics holds Prometheus counters for cache operations.
-type CacheMetrics struct {
+// Operation label values for cache_errors_total.
+const (
+	opGet          = "get"
+	opSet          = "set"
+	opDelete       = "delete"
+	opHealth       = "health"
+	opGetWithFetch = "get_with_fetch"
+)
+
+// Metrics holds Prometheus counters for cache operations.
+type Metrics struct {
 	hits   *prometheus.CounterVec
 	misses *prometheus.CounterVec
 	errors *prometheus.CounterVec
 }
 
 var (
-	cacheMetrics     *CacheMetrics
+	cacheMetrics     *Metrics
 	cacheMetricsOnce sync.Once
 )
 
-// getCacheMetrics returns the singleton CacheMetrics instance.
+// getMetrics returns the singleton Metrics instance.
 // Uses sync.Once to ensure Prometheus metrics are only registered once.
-func getCacheMetrics() *CacheMetrics {
+func getMetrics() *Metrics {
 	cacheMetricsOnce.Do(func() {
-		cacheMetrics = &CacheMetrics{
+		cacheMetrics = &Metrics{
 			hits: promauto.NewCounterVec(
 				prometheus.CounterOpts{
 					Name: "cache_hits_total",

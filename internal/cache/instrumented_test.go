@@ -10,19 +10,15 @@ import (
 )
 
 func TestInstrumentedCache_Get_Hit(t *testing.T) {
-	cacheName := "test_get_hit"
-	// Setup: Create underlying memory cache and pre-populate
 	underlying := NewMemoryCache[int64]()
 	t.Cleanup(func() { _ = underlying.Close() })
 
 	ctx := context.Background()
 	_ = underlying.Set(ctx, "key1", int64(42), time.Minute)
 
-	// Wrap with instrumentation
-	instrumented := NewInstrumentedCache(underlying, cacheName)
+	ic := NewInstrumentedCache(underlying, "test_get_hit")
 
-	// Get from cache (should be a hit)
-	value, err := instrumented.Get(ctx, "key1")
+	value, err := ic.Get(ctx, "key1")
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -30,30 +26,22 @@ func TestInstrumentedCache_Get_Hit(t *testing.T) {
 		t.Errorf("Expected value 42, got %d", value)
 	}
 
-	// Verify hit counter incremented
-	hitCount := testutil.ToFloat64(instrumented.metrics.hits.WithLabelValues(cacheName))
-	if hitCount != 1.0 {
-		t.Errorf("Expected 1 hit, got %f", hitCount)
+	if v := testutil.ToFloat64(ic.hitCounter); v != 1 {
+		t.Errorf("Expected 1 hit, got %f", v)
 	}
-
-	// Verify miss counter did not increment
-	missCount := testutil.ToFloat64(instrumented.metrics.misses.WithLabelValues(cacheName))
-	if missCount != 0.0 {
-		t.Errorf("Expected 0 misses, got %f", missCount)
+	if v := testutil.ToFloat64(ic.missCounter); v != 0 {
+		t.Errorf("Expected 0 misses, got %f", v)
 	}
 }
 
 func TestInstrumentedCache_Get_Miss(t *testing.T) {
-	cacheName := "test_get_miss"
-	// Setup: Create empty cache
 	underlying := NewMemoryCache[int64]()
 	t.Cleanup(func() { _ = underlying.Close() })
 
-	instrumented := NewInstrumentedCache(underlying, cacheName)
+	ic := NewInstrumentedCache(underlying, "test_get_miss")
 
-	// Get from cache (should be a miss)
 	ctx := context.Background()
-	value, err := instrumented.Get(ctx, "nonexistent")
+	value, err := ic.Get(ctx, "nonexistent")
 	if !errors.Is(err, ErrCacheMiss) {
 		t.Fatalf("Expected ErrCacheMiss, got %v", err)
 	}
@@ -61,75 +49,57 @@ func TestInstrumentedCache_Get_Miss(t *testing.T) {
 		t.Errorf("Expected zero value, got %d", value)
 	}
 
-	// Verify miss counter incremented
-	missCount := testutil.ToFloat64(instrumented.metrics.misses.WithLabelValues(cacheName))
-	if missCount != 1.0 {
-		t.Errorf("Expected 1 miss, got %f", missCount)
+	if v := testutil.ToFloat64(ic.missCounter); v != 1 {
+		t.Errorf("Expected 1 miss, got %f", v)
 	}
-
-	// Verify hit counter did not increment
-	hitCount := testutil.ToFloat64(instrumented.metrics.hits.WithLabelValues(cacheName))
-	if hitCount != 0.0 {
-		t.Errorf("Expected 0 hits, got %f", hitCount)
+	if v := testutil.ToFloat64(ic.hitCounter); v != 0 {
+		t.Errorf("Expected 0 hits, got %f", v)
 	}
 }
 
 func TestInstrumentedCache_Get_Error(t *testing.T) {
-	cacheName := "test_get_error"
-	// Setup: Create a mock cache that returns an error
 	mockErr := errors.New("mock error")
-	mockCache := &mockCache[int64]{
-		getFunc: func(ctx context.Context, key string) (int64, error) {
+	mc := &mockCache[int64]{
+		getFunc: func(_ context.Context, _ string) (int64, error) {
 			return 0, mockErr
 		},
 	}
 
-	instrumented := NewInstrumentedCache[int64](mockCache, cacheName)
+	ic := NewInstrumentedCache[int64](mc, "test_get_error")
 
-	// Get from cache (should be an error)
 	ctx := context.Background()
-	_, err := instrumented.Get(ctx, "key")
+	_, err := ic.Get(ctx, "key")
 	if !errors.Is(err, mockErr) {
 		t.Fatalf("Expected mock error, got %v", err)
 	}
 
-	// Verify error counter incremented
-	errorCount := testutil.ToFloat64(instrumented.metrics.errors.WithLabelValues(cacheName, "get"))
-	if errorCount != 1.0 {
-		t.Errorf("Expected 1 error, got %f", errorCount)
+	if v := testutil.ToFloat64(ic.errGet); v != 1 {
+		t.Errorf("Expected 1 error, got %f", v)
 	}
-
-	// Verify hit/miss counters did not increment
-	hitCount := testutil.ToFloat64(instrumented.metrics.hits.WithLabelValues(cacheName))
-	if hitCount != 0.0 {
-		t.Errorf("Expected 0 hits, got %f", hitCount)
+	if v := testutil.ToFloat64(ic.hitCounter); v != 0 {
+		t.Errorf("Expected 0 hits, got %f", v)
 	}
-	missCount := testutil.ToFloat64(instrumented.metrics.misses.WithLabelValues(cacheName))
-	if missCount != 0.0 {
-		t.Errorf("Expected 0 misses, got %f", missCount)
+	if v := testutil.ToFloat64(ic.missCounter); v != 0 {
+		t.Errorf("Expected 0 misses, got %f", v)
 	}
 }
 
 func TestInstrumentedCache_GetWithFetch_Hit(t *testing.T) {
-	cacheName := "test_gwf_hit"
-	// Setup: Create cache and pre-populate
 	underlying := NewMemoryCache[int64]()
 	t.Cleanup(func() { _ = underlying.Close() })
 
 	ctx := context.Background()
 	_ = underlying.Set(ctx, "key1", int64(42), time.Minute)
 
-	instrumented := NewInstrumentedCache(underlying, cacheName)
+	ic := NewInstrumentedCache(underlying, "test_gwf_hit")
 
-	// Track if fetchFunc was called
 	fetchCalled := false
-	fetchFunc := func(ctx context.Context, key string) (int64, error) {
+	fetchFunc := func(_ context.Context, _ string) (int64, error) {
 		fetchCalled = true
 		return 100, nil
 	}
 
-	// GetWithFetch (should hit cache, not call fetchFunc)
-	value, err := instrumented.GetWithFetch(ctx, "key1", time.Minute, fetchFunc)
+	value, err := ic.GetWithFetch(ctx, "key1", time.Minute, fetchFunc)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -140,37 +110,28 @@ func TestInstrumentedCache_GetWithFetch_Hit(t *testing.T) {
 		t.Error("fetchFunc should not have been called on cache hit")
 	}
 
-	// Verify hit counter incremented
-	hitCount := testutil.ToFloat64(instrumented.metrics.hits.WithLabelValues(cacheName))
-	if hitCount != 1.0 {
-		t.Errorf("Expected 1 hit, got %f", hitCount)
+	if v := testutil.ToFloat64(ic.hitCounter); v != 1 {
+		t.Errorf("Expected 1 hit, got %f", v)
 	}
-
-	// Verify miss counter did not increment
-	missCount := testutil.ToFloat64(instrumented.metrics.misses.WithLabelValues(cacheName))
-	if missCount != 0.0 {
-		t.Errorf("Expected 0 misses, got %f", missCount)
+	if v := testutil.ToFloat64(ic.missCounter); v != 0 {
+		t.Errorf("Expected 0 misses, got %f", v)
 	}
 }
 
 func TestInstrumentedCache_GetWithFetch_Miss(t *testing.T) {
-	cacheName := "test_gwf_miss"
-	// Setup: Create empty cache
 	underlying := NewMemoryCache[int64]()
 	t.Cleanup(func() { _ = underlying.Close() })
 
-	instrumented := NewInstrumentedCache(underlying, cacheName)
+	ic := NewInstrumentedCache(underlying, "test_gwf_miss")
 
-	// Track if fetchFunc was called
 	fetchCalled := false
-	fetchFunc := func(ctx context.Context, key string) (int64, error) {
+	fetchFunc := func(_ context.Context, _ string) (int64, error) {
 		fetchCalled = true
 		return 100, nil
 	}
 
-	// GetWithFetch (should miss cache, call fetchFunc)
 	ctx := context.Background()
-	value, err := instrumented.GetWithFetch(ctx, "key1", time.Minute, fetchFunc)
+	value, err := ic.GetWithFetch(ctx, "key1", time.Minute, fetchFunc)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -181,66 +142,48 @@ func TestInstrumentedCache_GetWithFetch_Miss(t *testing.T) {
 		t.Error("fetchFunc should have been called on cache miss")
 	}
 
-	// Verify miss counter incremented
-	missCount := testutil.ToFloat64(instrumented.metrics.misses.WithLabelValues(cacheName))
-	if missCount != 1.0 {
-		t.Errorf("Expected 1 miss, got %f", missCount)
+	if v := testutil.ToFloat64(ic.missCounter); v != 1 {
+		t.Errorf("Expected 1 miss, got %f", v)
 	}
-
-	// Verify hit counter did not increment
-	hitCount := testutil.ToFloat64(instrumented.metrics.hits.WithLabelValues(cacheName))
-	if hitCount != 0.0 {
-		t.Errorf("Expected 0 hits, got %f", hitCount)
+	if v := testutil.ToFloat64(ic.hitCounter); v != 0 {
+		t.Errorf("Expected 0 hits, got %f", v)
 	}
 }
 
 func TestInstrumentedCache_GetWithFetch_FetchError(t *testing.T) {
-	cacheName := "test_gwf_error"
-	// Setup: Create empty cache
 	underlying := NewMemoryCache[int64]()
 	t.Cleanup(func() { _ = underlying.Close() })
 
-	instrumented := NewInstrumentedCache(underlying, cacheName)
+	ic := NewInstrumentedCache(underlying, "test_gwf_error")
 
-	// fetchFunc that returns an error
 	fetchErr := errors.New("fetch failed")
-	fetchFunc := func(ctx context.Context, key string) (int64, error) {
+	fetchFunc := func(_ context.Context, _ string) (int64, error) {
 		return 0, fetchErr
 	}
 
-	// GetWithFetch (should miss cache, fetchFunc fails)
 	ctx := context.Background()
-	_, err := instrumented.GetWithFetch(ctx, "key1", time.Minute, fetchFunc)
+	_, err := ic.GetWithFetch(ctx, "key1", time.Minute, fetchFunc)
 	if !errors.Is(err, fetchErr) {
 		t.Fatalf("Expected fetch error, got %v", err)
 	}
 
-	// Verify miss counter incremented (cache miss occurred)
-	missCount := testutil.ToFloat64(instrumented.metrics.misses.WithLabelValues(cacheName))
-	if missCount != 1.0 {
-		t.Errorf("Expected 1 miss, got %f", missCount)
+	// fetch was called (miss) but the error came from the fetch function, not the cache
+	if v := testutil.ToFloat64(ic.errFetch); v != 1 {
+		t.Errorf("Expected 1 fetch error, got %f", v)
 	}
-
-	// Note: fetchFunc error is not recorded as cache error
-	// (it's an application error, not a cache infrastructure error)
 }
 
 func TestInstrumentedCache_Set(t *testing.T) {
-	cacheName := "test_set"
-	// Setup
 	underlying := NewMemoryCache[int64]()
 	t.Cleanup(func() { _ = underlying.Close() })
 
-	instrumented := NewInstrumentedCache(underlying, cacheName)
+	ic := NewInstrumentedCache(underlying, "test_set")
 
-	// Set value
 	ctx := context.Background()
-	err := instrumented.Set(ctx, "key1", int64(42), time.Minute)
-	if err != nil {
+	if err := ic.Set(ctx, "key1", int64(42), time.Minute); err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
 
-	// Verify value was set in underlying cache
 	value, err := underlying.Get(ctx, "key1")
 	if err != nil {
 		t.Fatalf("Expected value in cache, got error: %v", err)
@@ -251,131 +194,100 @@ func TestInstrumentedCache_Set(t *testing.T) {
 }
 
 func TestInstrumentedCache_Set_Error(t *testing.T) {
-	cacheName := "test_set_error"
-	// Setup: Mock cache that returns error on Set
 	mockErr := errors.New("set failed")
-	mockCache := &mockCache[int64]{
-		setFunc: func(ctx context.Context, key string, value int64, ttl time.Duration) error {
+	mc := &mockCache[int64]{
+		setFunc: func(_ context.Context, _ string, _ int64, _ time.Duration) error {
 			return mockErr
 		},
 	}
 
-	instrumented := NewInstrumentedCache[int64](mockCache, cacheName)
+	ic := NewInstrumentedCache[int64](mc, "test_set_error")
 
-	// Set value (should fail)
 	ctx := context.Background()
-	err := instrumented.Set(ctx, "key1", int64(42), time.Minute)
+	err := ic.Set(ctx, "key1", int64(42), time.Minute)
 	if !errors.Is(err, mockErr) {
 		t.Fatalf("Expected mock error, got %v", err)
 	}
 
-	// Verify error counter incremented
-	errorCount := testutil.ToFloat64(instrumented.metrics.errors.WithLabelValues(cacheName, "set"))
-	if errorCount != 1.0 {
-		t.Errorf("Expected 1 error, got %f", errorCount)
+	if v := testutil.ToFloat64(ic.errSet); v != 1 {
+		t.Errorf("Expected 1 error, got %f", v)
 	}
 }
 
 func TestInstrumentedCache_Delete(t *testing.T) {
-	cacheName := "test_delete"
-	// Setup
 	underlying := NewMemoryCache[int64]()
 	t.Cleanup(func() { _ = underlying.Close() })
 
 	ctx := context.Background()
 	_ = underlying.Set(ctx, "key1", int64(42), time.Minute)
 
-	instrumented := NewInstrumentedCache(underlying, cacheName)
+	ic := NewInstrumentedCache(underlying, "test_delete")
 
-	// Delete value
-	err := instrumented.Delete(ctx, "key1")
-	if err != nil {
+	if err := ic.Delete(ctx, "key1"); err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
 
-	// Verify value was deleted
-	_, err = underlying.Get(ctx, "key1")
+	_, err := underlying.Get(ctx, "key1")
 	if !errors.Is(err, ErrCacheMiss) {
 		t.Errorf("Expected ErrCacheMiss after delete, got %v", err)
 	}
 }
 
 func TestInstrumentedCache_Delete_Error(t *testing.T) {
-	cacheName := "test_delete_error"
-	// Setup: Mock cache that returns error on Delete
 	mockErr := errors.New("delete failed")
-	mockCache := &mockCache[int64]{
-		deleteFunc: func(ctx context.Context, key string) error {
+	mc := &mockCache[int64]{
+		deleteFunc: func(_ context.Context, _ string) error {
 			return mockErr
 		},
 	}
 
-	instrumented := NewInstrumentedCache[int64](mockCache, cacheName)
+	ic := NewInstrumentedCache[int64](mc, "test_delete_error")
 
-	// Delete value (should fail)
 	ctx := context.Background()
-	err := instrumented.Delete(ctx, "key1")
+	err := ic.Delete(ctx, "key1")
 	if !errors.Is(err, mockErr) {
 		t.Fatalf("Expected mock error, got %v", err)
 	}
 
-	// Verify error counter incremented
-	errorCount := testutil.ToFloat64(
-		instrumented.metrics.errors.WithLabelValues(cacheName, "delete"),
-	)
-	if errorCount != 1.0 {
-		t.Errorf("Expected 1 error, got %f", errorCount)
+	if v := testutil.ToFloat64(ic.errDelete); v != 1 {
+		t.Errorf("Expected 1 error, got %f", v)
 	}
 }
 
 func TestInstrumentedCache_Health(t *testing.T) {
-	cacheName := "test_health"
-	// Setup
 	underlying := NewMemoryCache[int64]()
 	t.Cleanup(func() { _ = underlying.Close() })
 
-	instrumented := NewInstrumentedCache(underlying, cacheName)
+	ic := NewInstrumentedCache(underlying, "test_health")
 
-	// Health check
-	ctx := context.Background()
-	err := instrumented.Health(ctx)
-	if err != nil {
+	if err := ic.Health(context.Background()); err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
 }
 
 func TestInstrumentedCache_Health_Error(t *testing.T) {
-	cacheName := "test_health_error"
-	// Setup: Mock cache that returns error on Health
 	mockErr := errors.New("health check failed")
-	mockCache := &mockCache[int64]{
-		healthFunc: func(ctx context.Context) error {
+	mc := &mockCache[int64]{
+		healthFunc: func(_ context.Context) error {
 			return mockErr
 		},
 	}
 
-	instrumented := NewInstrumentedCache[int64](mockCache, cacheName)
+	ic := NewInstrumentedCache[int64](mc, "test_health_error")
 
-	// Health check (should fail)
-	ctx := context.Background()
-	err := instrumented.Health(ctx)
+	err := ic.Health(context.Background())
 	if !errors.Is(err, mockErr) {
 		t.Fatalf("Expected mock error, got %v", err)
 	}
 
-	// Verify error counter incremented
-	errorCount := testutil.ToFloat64(
-		instrumented.metrics.errors.WithLabelValues(cacheName, "health"),
-	)
-	if errorCount != 1.0 {
-		t.Errorf("Expected 1 error, got %f", errorCount)
+	if v := testutil.ToFloat64(ic.errHealth); v != 1 {
+		t.Errorf("Expected 1 error, got %f", v)
 	}
 }
 
 func TestInstrumentedCache_MultipleCaches(t *testing.T) {
-	// Setup: Create two instrumented caches with different names
-	cache1 := NewInstrumentedCache(NewMemoryCache[int64](), "cache1")
-	cache2 := NewInstrumentedCache(NewMemoryCache[int64](), "cache2")
+	cache1 := NewInstrumentedCache(NewMemoryCache[int64](), "multi_cache1")
+	cache2 := NewInstrumentedCache(NewMemoryCache[int64](), "multi_cache2")
 	t.Cleanup(func() {
 		_ = cache1.Close()
 		_ = cache2.Close()
@@ -383,60 +295,42 @@ func TestInstrumentedCache_MultipleCaches(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Generate hits on cache1
 	_ = cache1.Set(ctx, "key", int64(1), time.Minute)
-	_, _ = cache1.Get(ctx, "key")
+	_, _ = cache1.Get(ctx, "key")         // hit on cache1
+	_, _ = cache2.Get(ctx, "nonexistent") // miss on cache2
 
-	// Generate misses on cache2
-	_, _ = cache2.Get(ctx, "nonexistent")
-
-	// Verify metrics are tracked separately
-	cache1Hits := testutil.ToFloat64(cache1.metrics.hits.WithLabelValues("cache1"))
-	if cache1Hits != 1.0 {
-		t.Errorf("Expected 1 hit for cache1, got %f", cache1Hits)
+	if v := testutil.ToFloat64(cache1.hitCounter); v != 1 {
+		t.Errorf("Expected 1 hit for cache1, got %f", v)
 	}
-
-	cache2Hits := testutil.ToFloat64(cache2.metrics.hits.WithLabelValues("cache2"))
-	if cache2Hits != 0.0 {
-		t.Errorf("Expected 0 hits for cache2, got %f", cache2Hits)
+	if v := testutil.ToFloat64(cache2.hitCounter); v != 0 {
+		t.Errorf("Expected 0 hits for cache2, got %f", v)
 	}
-
-	cache1Misses := testutil.ToFloat64(cache1.metrics.misses.WithLabelValues("cache1"))
-	if cache1Misses != 0.0 {
-		t.Errorf("Expected 0 misses for cache1, got %f", cache1Misses)
+	if v := testutil.ToFloat64(cache1.missCounter); v != 0 {
+		t.Errorf("Expected 0 misses for cache1, got %f", v)
 	}
-
-	cache2Misses := testutil.ToFloat64(cache2.metrics.misses.WithLabelValues("cache2"))
-	if cache2Misses != 1.0 {
-		t.Errorf("Expected 1 miss for cache2, got %f", cache2Misses)
+	if v := testutil.ToFloat64(cache2.missCounter); v != 1 {
+		t.Errorf("Expected 1 miss for cache2, got %f", v)
 	}
 }
 
 func TestInstrumentedCache_Close(t *testing.T) {
-	cacheName := "test_close"
-	// Setup
 	underlying := NewMemoryCache[int64]()
-	instrumented := NewInstrumentedCache(underlying, cacheName)
+	ic := NewInstrumentedCache(underlying, "test_close")
 
-	// Close should pass through to underlying cache
-	err := instrumented.Close()
-	if err != nil {
+	if err := ic.Close(); err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
 }
 
 func TestCacheMetrics_Registration(t *testing.T) {
-	// Verify that metrics are registered only once (via sync.Once)
-	// Multiple calls to getCacheMetrics should return the same instance
-	m1 := getCacheMetrics()
-	m2 := getCacheMetrics()
-
+	m1 := getMetrics()
+	m2 := getMetrics()
 	if m1 != m2 {
-		t.Error("Expected getCacheMetrics to return the same instance")
+		t.Error("Expected getMetrics to return the same instance")
 	}
 }
 
-// mockCache is a test helper that implements core.Cache[T] with configurable behavior
+// mockCache is a test helper that implements core.Cache[T] with configurable behavior.
 type mockCache[T any] struct {
 	getFunc          func(ctx context.Context, key string) (T, error)
 	setFunc          func(ctx context.Context, key string, value T, ttl time.Duration) error
@@ -491,7 +385,6 @@ func (m *mockCache[T]) GetWithFetch(
 	if m.getWithFetchFunc != nil {
 		return m.getWithFetchFunc(ctx, key, ttl, fetchFunc)
 	}
-	// Default: delegate to Get, and if miss, call fetchFunc
 	value, err := m.Get(ctx, key)
 	if err == nil {
 		return value, nil
