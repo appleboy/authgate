@@ -26,6 +26,7 @@ func callFetchFn[T any](
 func TestCacheWrapper_GetActiveTokensCount_CacheHit(t *testing.T) {
 	ctx := context.Background()
 	memCache := cache.NewMemoryCache[int64]()
+	t.Cleanup(func() { _ = memCache.Close() })
 	ctrl := gomock.NewController(t)
 	mockStore := mocks.NewMockMetricsStore(ctrl)
 	// No expectations: if CountActiveTokensByCategory is called, gomock fails automatically
@@ -48,6 +49,7 @@ func TestCacheWrapper_GetActiveTokensCount_CacheHit(t *testing.T) {
 func TestCacheWrapper_GetActiveTokensCount_CacheMiss(t *testing.T) {
 	ctx := context.Background()
 	memCache := cache.NewMemoryCache[int64]()
+	t.Cleanup(func() { _ = memCache.Close() })
 	ctrl := gomock.NewController(t)
 	mockStore := mocks.NewMockMetricsStore(ctrl)
 	mockStore.EXPECT().CountActiveTokensByCategory("access").Return(int64(100), nil).Times(1)
@@ -77,6 +79,7 @@ func TestCacheWrapper_GetActiveTokensCount_CacheMiss(t *testing.T) {
 func TestCacheWrapper_GetActiveTokensCount_DBError(t *testing.T) {
 	ctx := context.Background()
 	memCache := cache.NewMemoryCache[int64]()
+	t.Cleanup(func() { _ = memCache.Close() })
 	ctrl := gomock.NewController(t)
 	expectedErr := errors.New("database connection failed")
 	mockStore := mocks.NewMockMetricsStore(ctrl)
@@ -93,6 +96,7 @@ func TestCacheWrapper_GetActiveTokensCount_DBError(t *testing.T) {
 func TestCacheWrapper_GetActiveTokensCount_CacheExpiration(t *testing.T) {
 	ctx := context.Background()
 	memCache := cache.NewMemoryCache[int64]()
+	t.Cleanup(func() { _ = memCache.Close() })
 	ctrl := gomock.NewController(t)
 	mockStore := mocks.NewMockMetricsStore(ctrl)
 
@@ -147,6 +151,7 @@ func TestCacheWrapper_GetActiveTokensCount_CacheExpiration(t *testing.T) {
 func TestCacheWrapper_GetTotalDeviceCodesCount_CacheHit(t *testing.T) {
 	ctx := context.Background()
 	memCache := cache.NewMemoryCache[int64]()
+	t.Cleanup(func() { _ = memCache.Close() })
 	ctrl := gomock.NewController(t)
 	mockStore := mocks.NewMockMetricsStore(ctrl)
 	// No expectations: if CountTotalDeviceCodes is called, gomock fails automatically
@@ -169,6 +174,7 @@ func TestCacheWrapper_GetTotalDeviceCodesCount_CacheHit(t *testing.T) {
 func TestCacheWrapper_GetPendingDeviceCodesCount_CacheHit(t *testing.T) {
 	ctx := context.Background()
 	memCache := cache.NewMemoryCache[int64]()
+	t.Cleanup(func() { _ = memCache.Close() })
 	ctrl := gomock.NewController(t)
 	mockStore := mocks.NewMockMetricsStore(ctrl)
 	// No expectations: if CountPendingDeviceCodes is called, gomock fails automatically
@@ -191,6 +197,7 @@ func TestCacheWrapper_GetPendingDeviceCodesCount_CacheHit(t *testing.T) {
 func TestCacheWrapper_GetTotalDeviceCodesCount_CacheMiss(t *testing.T) {
 	ctx := context.Background()
 	memCache := cache.NewMemoryCache[int64]()
+	t.Cleanup(func() { _ = memCache.Close() })
 	ctrl := gomock.NewController(t)
 	mockStore := mocks.NewMockMetricsStore(ctrl)
 	mockStore.EXPECT().CountTotalDeviceCodes().Return(int64(200), nil).Times(1)
@@ -220,6 +227,7 @@ func TestCacheWrapper_GetTotalDeviceCodesCount_CacheMiss(t *testing.T) {
 func TestCacheWrapper_GetPendingDeviceCodesCount_CacheMiss(t *testing.T) {
 	ctx := context.Background()
 	memCache := cache.NewMemoryCache[int64]()
+	t.Cleanup(func() { _ = memCache.Close() })
 	ctrl := gomock.NewController(t)
 	mockStore := mocks.NewMockMetricsStore(ctrl)
 	mockStore.EXPECT().CountPendingDeviceCodes().Return(int64(50), nil).Times(1)
@@ -249,6 +257,7 @@ func TestCacheWrapper_GetPendingDeviceCodesCount_CacheMiss(t *testing.T) {
 func TestCacheWrapper_GetTotalDeviceCodesCount_DBError(t *testing.T) {
 	ctx := context.Background()
 	memCache := cache.NewMemoryCache[int64]()
+	t.Cleanup(func() { _ = memCache.Close() })
 	ctrl := gomock.NewController(t)
 	expectedErr := errors.New("database timeout")
 	mockStore := mocks.NewMockMetricsStore(ctrl)
@@ -265,6 +274,7 @@ func TestCacheWrapper_GetTotalDeviceCodesCount_DBError(t *testing.T) {
 func TestCacheWrapper_GetPendingDeviceCodesCount_DBError(t *testing.T) {
 	ctx := context.Background()
 	memCache := cache.NewMemoryCache[int64]()
+	t.Cleanup(func() { _ = memCache.Close() })
 	ctrl := gomock.NewController(t)
 	expectedErr := errors.New("database timeout")
 	mockStore := mocks.NewMockMetricsStore(ctrl)

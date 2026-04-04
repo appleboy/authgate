@@ -11,6 +11,7 @@ import (
 
 func TestMemoryCache_GetSet(t *testing.T) {
 	cache := NewMemoryCache[int64]()
+	t.Cleanup(func() { _ = cache.Close() })
 	ctx := context.Background()
 
 	// Test Set and Get
@@ -31,6 +32,7 @@ func TestMemoryCache_GetSet(t *testing.T) {
 
 func TestMemoryCache_GetMiss(t *testing.T) {
 	cache := NewMemoryCache[int64]()
+	t.Cleanup(func() { _ = cache.Close() })
 	ctx := context.Background()
 
 	_, err := cache.Get(ctx, "non-existent")
@@ -41,6 +43,7 @@ func TestMemoryCache_GetMiss(t *testing.T) {
 
 func TestMemoryCache_Expiration(t *testing.T) {
 	cache := NewMemoryCache[int64]()
+	t.Cleanup(func() { _ = cache.Close() })
 	ctx := context.Background()
 
 	// Set with very short TTL
@@ -70,6 +73,7 @@ func TestMemoryCache_Expiration(t *testing.T) {
 
 func TestMemoryCache_Delete(t *testing.T) {
 	cache := NewMemoryCache[int64]()
+	t.Cleanup(func() { _ = cache.Close() })
 	ctx := context.Background()
 
 	// Set a value
@@ -120,6 +124,7 @@ func TestMemoryCache_Close(t *testing.T) {
 
 func TestMemoryCache_Health(t *testing.T) {
 	cache := NewMemoryCache[int64]()
+	t.Cleanup(func() { _ = cache.Close() })
 	ctx := context.Background()
 
 	err := cache.Health(ctx)
@@ -130,6 +135,7 @@ func TestMemoryCache_Health(t *testing.T) {
 
 func TestMemoryCache_Concurrent(t *testing.T) {
 	cache := NewMemoryCache[int64]()
+	t.Cleanup(func() { _ = cache.Close() })
 	ctx := context.Background()
 
 	// Test concurrent writes and reads
@@ -170,6 +176,7 @@ func TestMemoryCache_Concurrent(t *testing.T) {
 
 func TestMemoryCache_GetWithFetch_CacheMiss(t *testing.T) {
 	c := NewMemoryCache[int64]()
+	defer c.Close()
 	ctx := context.Background()
 
 	fetchCount := 0
@@ -204,6 +211,7 @@ func TestMemoryCache_GetWithFetch_CacheMiss(t *testing.T) {
 
 func TestMemoryCache_GetWithFetch_FetchError(t *testing.T) {
 	c := NewMemoryCache[int64]()
+	defer c.Close()
 	ctx := context.Background()
 
 	expectedErr := errors.New("fetch failed")
@@ -222,6 +230,7 @@ func TestMemoryCache_GetWithFetch_FetchError(t *testing.T) {
 
 func TestMemoryCache_GetWithFetch_Concurrent(t *testing.T) {
 	c := NewMemoryCache[int64]()
+	defer c.Close()
 	ctx := context.Background()
 
 	var fetchCount atomic.Int64
@@ -245,8 +254,54 @@ func TestMemoryCache_GetWithFetch_Concurrent(t *testing.T) {
 	wg.Wait()
 }
 
+func TestMemoryCache_GetWithFetch_Singleflight(t *testing.T) {
+	c := NewMemoryCache[int64]()
+	defer c.Close()
+	ctx := context.Background()
+
+	// Each goroutine signals started before calling GetWithFetch. Main waits
+	// for all signals, then releases the fetch. Any goroutine that hasn't
+	// called GetWithFetch yet will find the cached value on arrival, so
+	// fetchFunc is guaranteed to be invoked exactly once.
+	const goroutines = 20
+	started := make(chan struct{}, goroutines) // buffered so goroutines never block on send
+	release := make(chan struct{})
+	var fetchCount atomic.Int64
+	fetchFunc := func(ctx context.Context, key string) (int64, error) {
+		fetchCount.Add(1)
+		<-release
+		return 42, nil
+	}
+
+	var wg sync.WaitGroup
+	for range goroutines {
+		wg.Go(func() {
+			started <- struct{}{}
+			val, err := c.GetWithFetch(ctx, "sf-key", time.Minute, fetchFunc)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if val != 42 {
+				t.Errorf("expected 42, got %d", val)
+			}
+		})
+	}
+
+	// Drain all start signals before releasing, maximising contention.
+	for range goroutines {
+		<-started
+	}
+	close(release)
+	wg.Wait()
+
+	if n := fetchCount.Load(); n != 1 {
+		t.Errorf("expected fetchFunc called exactly once, got %d", n)
+	}
+}
+
 func TestMemoryCache_GetWithFetch_Expiration(t *testing.T) {
 	c := NewMemoryCache[int64]()
+	defer c.Close()
 	ctx := context.Background()
 
 	fetchCount := 0
@@ -289,5 +344,52 @@ func TestMemoryCache_GetWithFetch_Expiration(t *testing.T) {
 	}
 	if fetchCount != 2 {
 		t.Errorf("expected 2 fetches after expiry, got %d", fetchCount)
+	}
+}
+
+func TestMemoryCache_Reaper(t *testing.T) {
+	// Short interval so the reaper fires within the test.
+	c := NewMemoryCache[int64](20 * time.Millisecond)
+	defer c.Close()
+	ctx := context.Background()
+
+	// Key1 expires before the reaper fires; key2 should survive.
+	_ = c.Set(ctx, "key1", 1, 5*time.Millisecond)
+	_ = c.Set(ctx, "key2", 2, time.Minute)
+
+	// Poll until the reaper evicts key1 while key2 remains, or timeout.
+	ticker := time.NewTicker(5 * time.Millisecond)
+	defer ticker.Stop()
+	timer := time.NewTimer(200 * time.Millisecond)
+	defer timer.Stop()
+	for {
+		if c.Len() == 1 {
+			if _, err := c.Get(ctx, "key2"); err == nil {
+				break
+			}
+		}
+		select {
+		case <-timer.C:
+			t.Fatalf(
+				"expected 1 item after reaper eviction and key2 to survive, got len=%d",
+				c.Len(),
+			)
+		case <-ticker.C:
+		}
+	}
+}
+
+func TestMemoryCache_NoReaper(t *testing.T) {
+	// Zero interval disables the reaper; expired items stay until lazily evicted.
+	c := NewMemoryCache[int64](0)
+	defer c.Close()
+	ctx := context.Background()
+
+	_ = c.Set(ctx, "key", 1, 5*time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
+
+	// Lazy eviction on Get should still report miss.
+	if _, err := c.Get(ctx, "key"); err != ErrCacheMiss {
+		t.Errorf("expected ErrCacheMiss on expired key, got %v", err)
 	}
 }

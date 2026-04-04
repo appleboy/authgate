@@ -163,7 +163,7 @@ func (h *OIDCHandler) UserInfo(c *gin.Context) {
 		return
 	}
 
-	user, err := h.userService.GetUserByID(result.UserID)
+	user, err := h.userService.GetUserByID(c.Request.Context(), result.UserID)
 	if err != nil {
 		c.Header("WWW-Authenticate", `Bearer error="invalid_token"`)
 		c.JSON(http.StatusUnauthorized, gin.H{

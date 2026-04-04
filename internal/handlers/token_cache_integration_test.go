@@ -49,6 +49,7 @@ func setupCacheTestEnv(t *testing.T) (
 	require.NoError(t, err)
 
 	memCache := cache.NewMemoryCache[models.AccessToken]()
+	t.Cleanup(func() { _ = memCache.Close() })
 
 	localProvider, err := token.NewLocalTokenProvider(cfg)
 	require.NoError(t, err)

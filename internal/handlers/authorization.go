@@ -78,7 +78,7 @@ func (h *AuthorizationHandler) ShowAuthorizePage(c *gin.Context) {
 	userIDStr := getUserIDFromContext(c)
 
 	// Retrieve the logged-in user for display
-	user, err := h.userService.GetUserByID(userIDStr)
+	user, err := h.userService.GetUserByID(c.Request.Context(), userIDStr)
 	if err != nil {
 		c.Redirect(http.StatusFound, "/login")
 		return
@@ -268,7 +268,7 @@ func (h *AuthorizationHandler) ListAuthorizations(c *gin.Context) {
 
 	userModel := getUserFromContext(c)
 	if userModel == nil {
-		userModel, _ = h.userService.GetUserByID(userIDStr)
+		userModel, _ = h.userService.GetUserByID(c.Request.Context(), userIDStr)
 	}
 	if userModel == nil {
 		renderErrorPage(c, http.StatusInternalServerError, "Failed to load user")

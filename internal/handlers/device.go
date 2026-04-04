@@ -158,7 +158,7 @@ func (h *DeviceHandler) DevicePage(c *gin.Context) {
 	// Get user info from database
 	var user *models.User
 	if userID != nil {
-		user, _ = h.userService.GetUserByID(userID.(string))
+		user, _ = h.userService.GetUserByID(c.Request.Context(), userID.(string))
 	}
 	if user == nil {
 		user = &models.User{} // zero-value for unauthenticated visitors
@@ -193,7 +193,7 @@ func (h *DeviceHandler) DeviceVerify(c *gin.Context) {
 
 	userCode := c.PostForm("user_code")
 
-	user, _ := h.userService.GetUserByID(userID.(string))
+	user, _ := h.userService.GetUserByID(c.Request.Context(), userID.(string))
 	if user == nil {
 		user = &models.User{}
 	}

@@ -4,8 +4,50 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
+
+	"golang.org/x/sync/singleflight"
 )
+
+// doWithSingleflight runs fn under singleflight deduplication.
+// context.WithoutCancel strips both cancellation and deadline from the caller's
+// context so that no single caller's timeout or cancel can abort the shared
+// fetch for other waiters. The fetch duration is bounded by the underlying
+// resource (e.g., database driver timeouts and connection pool limits).
+func doWithSingleflight[T any](
+	ctx context.Context,
+	key string,
+	sf *singleflight.Group,
+	fn func(sharedCtx context.Context) (T, error),
+) (T, error) {
+	// Avoid enqueueing singleflight work for a context that is already done.
+	select {
+	case <-ctx.Done():
+		var zero T
+		return zero, ctx.Err()
+	default:
+	}
+
+	resultCh := sf.DoChan(key, func() (any, error) {
+		result, err := fn(context.WithoutCancel(ctx))
+		return result, err
+	})
+	select {
+	case <-ctx.Done():
+		var zero T
+		return zero, ctx.Err()
+	case res := <-resultCh:
+		if res.Err != nil {
+			var zero T
+			return zero, res.Err
+		}
+		val, ok := res.Val.(T)
+		if !ok {
+			var zero T
+			return zero, fmt.Errorf("cache: singleflight returned unexpected type %T", res.Val)
+		}
+		return val, nil
+	}
+}
 
 // prefixedKey prepends prefix to key.
 func prefixedKey(prefix, key string) string {
@@ -28,27 +70,5 @@ func unmarshalValue[T any](str string) (T, error) {
 		var zero T
 		return zero, fmt.Errorf("%w: %v", ErrInvalidValue, err)
 	}
-	return value, nil
-}
-
-// fetchThrough implements the cache-aside pattern: try Get, on miss call
-// fetchFunc and store the result via Set. Used by MemoryCache and RueidisCache.
-func fetchThrough[T any](
-	ctx context.Context,
-	key string,
-	ttl time.Duration,
-	get func(context.Context, string) (T, error),
-	set func(context.Context, string, T, time.Duration) error,
-	fetchFunc func(context.Context, string) (T, error),
-) (T, error) {
-	if value, err := get(ctx, key); err == nil {
-		return value, nil
-	}
-	value, err := fetchFunc(ctx, key)
-	if err != nil {
-		var zero T
-		return zero, err
-	}
-	_ = set(ctx, key, value, ttl)
 	return value, nil
 }

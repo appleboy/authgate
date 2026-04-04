@@ -67,7 +67,7 @@ func TestGetUserByID_CacheMiss(t *testing.T) {
 		DoAndReturn(callFetchFn[models.User]).Times(1)
 
 	svc := newUserServiceWithStore(db, mockCache)
-	result, err := svc.GetUserByID(u.ID)
+	result, err := svc.GetUserByID(context.Background(), u.ID)
 	require.NoError(t, err)
 	assert.Equal(t, u.ID, result.ID)
 	assert.Equal(t, u.Username, result.Username)
@@ -90,11 +90,11 @@ func TestGetUserByID_CacheHit(t *testing.T) {
 
 	svc := newUserServiceWithStore(db, mockCache)
 
-	first, err := svc.GetUserByID(u.ID)
+	first, err := svc.GetUserByID(context.Background(), u.ID)
 	require.NoError(t, err)
 	assert.Equal(t, u.ID, first.ID)
 
-	second, err := svc.GetUserByID(u.ID)
+	second, err := svc.GetUserByID(context.Background(), u.ID)
 	require.NoError(t, err)
 	assert.Equal(t, u.ID, second.ID)
 }
@@ -120,14 +120,14 @@ func TestGetUserByID_CacheInvalidation(t *testing.T) {
 	svc := newUserServiceWithStore(db, mockCache)
 
 	// Populate (miss → DB fetch)
-	_, err := svc.GetUserByID(u.ID)
+	_, err := svc.GetUserByID(context.Background(), u.ID)
 	require.NoError(t, err)
 
 	// Invalidate
 	svc.InvalidateUserCache(u.ID)
 
 	// Re-fetch after invalidation (miss again → DB fetch)
-	result, err := svc.GetUserByID(u.ID)
+	result, err := svc.GetUserByID(context.Background(), u.ID)
 	require.NoError(t, err)
 	assert.Equal(t, u.ID, result.ID)
 }
@@ -144,7 +144,7 @@ func TestGetUserByID_ErrUserNotFound(t *testing.T) {
 
 	svc := newUserServiceWithStore(db, mockCache)
 
-	_, err := svc.GetUserByID(id)
+	_, err := svc.GetUserByID(context.Background(), id)
 	assert.ErrorIs(t, err, ErrUserNotFound)
 }
 
@@ -163,7 +163,7 @@ func TestGetUserByID_TransientDBError(t *testing.T) {
 
 	svc := newUserServiceWithStore(db, mockCache)
 
-	_, err := svc.GetUserByID(id)
+	_, err := svc.GetUserByID(context.Background(), id)
 	require.Error(t, err)
 	assert.NotErrorIs(
 		t, err, ErrUserNotFound,

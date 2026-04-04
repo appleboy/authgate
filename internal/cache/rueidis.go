@@ -8,6 +8,7 @@ import (
 	"github.com/go-authgate/authgate/internal/core"
 
 	"github.com/redis/rueidis"
+	"golang.org/x/sync/singleflight"
 )
 
 // Compile-time interface check.
@@ -17,6 +18,7 @@ var _ core.Cache[struct{}] = (*RueidisCache[struct{}])(nil)
 // Suitable for multi-instance deployments where cache needs to be shared.
 type RueidisCache[T any] struct {
 	redisBase[T]
+	sf singleflight.Group
 }
 
 // NewRueidisCache creates a new Redis cache instance using rueidis.
@@ -75,12 +77,26 @@ func (r *RueidisCache[T]) Get(ctx context.Context, key string) (T, error) {
 
 // GetWithFetch retrieves a value using the cache-aside pattern.
 // On cache miss, fetchFunc is called and the result is stored in cache.
-// No stampede protection is provided.
+// Uses singleflight to deduplicate concurrent fetches for the same key.
 func (r *RueidisCache[T]) GetWithFetch(
 	ctx context.Context,
 	key string,
 	ttl time.Duration,
 	fetchFunc func(ctx context.Context, key string) (T, error),
 ) (T, error) {
-	return fetchThrough(ctx, key, ttl, r.Get, r.Set, fetchFunc)
+	if value, err := r.Get(ctx, key); err == nil {
+		return value, nil
+	}
+	return doWithSingleflight(ctx, key, &r.sf, func(sharedCtx context.Context) (T, error) {
+		// Re-check cache under singleflight (another goroutine may have populated it).
+		if value, err := r.Get(sharedCtx, key); err == nil {
+			return value, nil
+		}
+		value, err := fetchFunc(sharedCtx, key)
+		if err != nil {
+			return value, err
+		}
+		_ = r.Set(sharedCtx, key, value, ttl)
+		return value, nil
+	})
 }
