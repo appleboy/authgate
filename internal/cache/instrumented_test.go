@@ -167,9 +167,10 @@ func TestInstrumentedCache_GetWithFetch_FetchError(t *testing.T) {
 		t.Fatalf("Expected fetch error, got %v", err)
 	}
 
-	// On error, neither hit nor miss is recorded — only the error counter
-	if v := testutil.ToFloat64(ic.missCounter); v != 0 {
-		t.Errorf("Expected 0 misses, got %f", v)
+	// fetchFunc was called → miss recorded (cache didn't have the key)
+	// error also recorded (fetch failed)
+	if v := testutil.ToFloat64(ic.missCounter); v != 1 {
+		t.Errorf("Expected 1 miss, got %f", v)
 	}
 	if v := testutil.ToFloat64(ic.hitCounter); v != 0 {
 		t.Errorf("Expected 0 hits, got %f", v)
