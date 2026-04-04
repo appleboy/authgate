@@ -13,9 +13,7 @@ import (
 // Compile-time interface check.
 var _ core.Cache[struct{}] = (*InstrumentedCache[struct{}])(nil)
 
-// InstrumentedCache wraps a cache implementation with Prometheus metrics instrumentation.
-// Records cache hits, misses, and errors for observability.
-// This wrapper is transparent and does not change cache behavior.
+// InstrumentedCache wraps a Cache with Prometheus hit/miss/error counters.
 type InstrumentedCache[T any] struct {
 	underlying core.Cache[T]
 
@@ -45,7 +43,6 @@ func NewInstrumentedCache[T any](underlying core.Cache[T], cacheName string) *In
 	}
 }
 
-// Get retrieves a value from cache and records metrics.
 func (i *InstrumentedCache[T]) Get(ctx context.Context, key string) (T, error) {
 	value, err := i.underlying.Get(ctx, key)
 	switch {
@@ -59,7 +56,6 @@ func (i *InstrumentedCache[T]) Get(ctx context.Context, key string) (T, error) {
 	return value, err
 }
 
-// Set stores a value in cache and records errors.
 func (i *InstrumentedCache[T]) Set(
 	ctx context.Context,
 	key string,
@@ -73,7 +69,6 @@ func (i *InstrumentedCache[T]) Set(
 	return err
 }
 
-// Delete removes a key from cache and records errors.
 func (i *InstrumentedCache[T]) Delete(ctx context.Context, key string) error {
 	err := i.underlying.Delete(ctx, key)
 	if err != nil {
@@ -82,12 +77,10 @@ func (i *InstrumentedCache[T]) Delete(ctx context.Context, key string) error {
 	return err
 }
 
-// Close closes the underlying cache connection.
 func (i *InstrumentedCache[T]) Close() error {
 	return i.underlying.Close()
 }
 
-// Health checks the underlying cache health and records errors.
 func (i *InstrumentedCache[T]) Health(ctx context.Context) error {
 	err := i.underlying.Health(ctx)
 	if err != nil {
