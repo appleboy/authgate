@@ -109,12 +109,13 @@ func (i *InstrumentedCache[T]) GetWithFetch(
 	}
 
 	value, err := i.underlying.GetWithFetch(ctx, key, ttl, wrapped)
-	if fetchCalled.Load() {
-		i.missCounter.Inc()
-	} else {
-		i.hitCounter.Inc()
-	}
-	if err != nil && !errors.Is(err, ErrCacheMiss) {
+	if err == nil {
+		if fetchCalled.Load() {
+			i.missCounter.Inc()
+		} else {
+			i.hitCounter.Inc()
+		}
+	} else if !errors.Is(err, ErrCacheMiss) {
 		i.errFetch.Inc()
 	}
 	return value, err

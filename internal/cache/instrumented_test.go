@@ -167,12 +167,54 @@ func TestInstrumentedCache_GetWithFetch_FetchError(t *testing.T) {
 		t.Fatalf("Expected fetch error, got %v", err)
 	}
 
-	// fetch was called → miss recorded; error also recorded separately
-	if v := testutil.ToFloat64(ic.missCounter); v != 1 {
-		t.Errorf("Expected 1 miss, got %f", v)
+	// On error, neither hit nor miss is recorded — only the error counter
+	if v := testutil.ToFloat64(ic.missCounter); v != 0 {
+		t.Errorf("Expected 0 misses, got %f", v)
+	}
+	if v := testutil.ToFloat64(ic.hitCounter); v != 0 {
+		t.Errorf("Expected 0 hits, got %f", v)
 	}
 	if v := testutil.ToFloat64(ic.errFetch); v != 1 {
 		t.Errorf("Expected 1 fetch error, got %f", v)
+	}
+}
+
+func TestInstrumentedCache_GetWithFetch_ContextCanceled(t *testing.T) {
+	// Simulates context cancellation where GetWithFetch returns an error
+	// without ever calling fetchFunc (e.g., singleflight waiter timeout).
+	mc := &mockCache[int64]{
+		getWithFetchFunc: func(_ context.Context, _ string, _ time.Duration,
+			_ func(context.Context, string) (int64, error),
+		) (int64, error) {
+			return 0, context.Canceled
+		},
+	}
+
+	ic := NewInstrumentedCache[int64](mc, "test_gwf_ctx")
+
+	ctx := context.Background()
+	_, err := ic.GetWithFetch(
+		ctx,
+		"key1",
+		time.Minute,
+		func(_ context.Context, _ string) (int64, error) {
+			t.Fatal("fetchFunc should not be called")
+			return 0, nil
+		},
+	)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Expected context.Canceled, got %v", err)
+	}
+
+	// Neither hit nor miss — only error
+	if v := testutil.ToFloat64(ic.hitCounter); v != 0 {
+		t.Errorf("Expected 0 hits, got %f", v)
+	}
+	if v := testutil.ToFloat64(ic.missCounter); v != 0 {
+		t.Errorf("Expected 0 misses, got %f", v)
+	}
+	if v := testutil.ToFloat64(ic.errFetch); v != 1 {
+		t.Errorf("Expected 1 error, got %f", v)
 	}
 }
 
