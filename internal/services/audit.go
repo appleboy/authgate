@@ -99,16 +99,16 @@ func (s *AuditService) worker() {
 			s.flushBatch()
 
 		case <-s.shutdownCh:
-			// Drain remaining events from logChan before shutdown
-			for {
-				select {
-				case entry := <-s.logChan:
-					s.addToBatch(entry)
-				default:
-					s.flushBatch()
-					return
-				}
+			// Drain only the backlog present when shutdown begins.
+			// Snapshot the length to avoid an unbounded drain if
+			// producers continue sending after shutdown has started.
+			pending := len(s.logChan)
+			for range pending {
+				entry := <-s.logChan
+				s.addToBatch(entry)
 			}
+			s.flushBatch()
+			return
 		}
 	}
 }
