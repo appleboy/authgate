@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-authgate/authgate/internal/core"
@@ -84,6 +85,7 @@ type AuditService struct {
 	// Graceful shutdown
 	wg         sync.WaitGroup
 	shutdownCh chan struct{}
+	stopped    atomic.Bool
 
 	// Prometheus counter for dropped events
 	eventsDropped prometheus.Counter
@@ -204,9 +206,11 @@ func (s *AuditService) buildAuditLog(
 	entry.Details = maskSensitiveDetails(entry.Details)
 
 	// Truncate fields to match database column size limits.
-	entry.UserAgent = util.TruncateString(entry.UserAgent, 500)
-	entry.RequestPath = util.TruncateString(entry.RequestPath, 500)
-	entry.RequestMethod = util.TruncateString(entry.RequestMethod, 10)
+	// TruncateString appends "..." (3 chars) when truncating, so subtract 3
+	// from the varchar limit to guarantee the final length fits the column.
+	entry.UserAgent = util.TruncateString(entry.UserAgent, 497)
+	entry.RequestPath = util.TruncateString(entry.RequestPath, 497)
+	entry.RequestMethod = util.TruncateString(entry.RequestMethod, 7)
 
 	now := time.Now()
 	return &models.AuditLog{
@@ -231,8 +235,14 @@ func (s *AuditService) buildAuditLog(
 	}
 }
 
-// Log records an audit log entry asynchronously
+// Log records an audit log entry asynchronously.
+// Events submitted after Shutdown has been called are dropped.
 func (s *AuditService) Log(ctx context.Context, entry core.AuditLogEntry) {
+	if s.stopped.Load() {
+		log.Printf("WARNING: Audit service stopped, dropping event: %s", entry.Action)
+		s.eventsDropped.Inc()
+		return
+	}
 	auditLog := s.buildAuditLog(ctx, entry)
 	select {
 	case s.logChan <- auditLog:
@@ -268,6 +278,10 @@ func (s *AuditService) GetAuditLogStats(startTime, endTime time.Time) (store.Aud
 
 // Shutdown gracefully shuts down the audit service
 func (s *AuditService) Shutdown(ctx context.Context) error {
+	// Reject new events before draining the channel so nothing is
+	// enqueued after the worker exits.
+	s.stopped.Store(true)
+
 	// Stop ticker
 	s.batchTicker.Stop()
 
