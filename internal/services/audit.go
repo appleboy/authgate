@@ -21,51 +21,69 @@ import (
 // Compile-time interface check.
 var _ core.AuditLogger = (*AuditService)(nil)
 
-// auditEventsDropped is a singleton counter registered once via sync.Once
-// to avoid duplicate-registration panics when multiple AuditService
-// instances are created (e.g. in tests).
+// auditEventsDropped is a singleton counter protected by a mutex so it can
+// be created before metrics are configured and registered later once a
+// registerer becomes available.
 //
 // The counter is only registered with Prometheus when a registerer is
 // explicitly provided via SetAuditMetricsRegisterer, so deployments with
 // metrics disabled do not leak collectors from the services layer.
 var (
 	auditEventsDropped           prometheus.Counter
-	auditEventsDroppedOnce       sync.Once
+	auditEventsDroppedMu         sync.Mutex
+	auditEventsDroppedRegistered bool
 	auditEventsDroppedRegisterer prometheus.Registerer
 )
 
+// registerAuditDroppedCounterLocked attempts to register the existing counter
+// with the configured registerer. The caller must hold auditEventsDroppedMu.
+func registerAuditDroppedCounterLocked() {
+	if auditEventsDropped == nil ||
+		auditEventsDroppedRegisterer == nil ||
+		auditEventsDroppedRegistered {
+		return
+	}
+	if err := auditEventsDroppedRegisterer.Register(auditEventsDropped); err != nil {
+		if existing, ok := err.(prometheus.AlreadyRegisteredError); ok {
+			if c, ok := existing.ExistingCollector.(prometheus.Counter); ok {
+				auditEventsDropped = c
+				auditEventsDroppedRegistered = true
+				return
+			}
+		}
+		log.Printf("failed to register audit dropped-events counter: %v", err)
+		return
+	}
+	auditEventsDroppedRegistered = true
+}
+
 // SetAuditMetricsRegisterer configures the Prometheus registerer used by the
-// audit service. It must be called before any AuditService is created in order
-// for the dropped-events counter to be registered with Prometheus.
+// audit service. If the dropped-events counter was created before metrics
+// were configured, setting a non-nil registerer will register the existing
+// counter, ensuring late initialization (e.g. in tests) is not silently lost.
 func SetAuditMetricsRegisterer(registerer prometheus.Registerer) {
+	auditEventsDroppedMu.Lock()
+	defer auditEventsDroppedMu.Unlock()
+
 	auditEventsDroppedRegisterer = registerer
+	registerAuditDroppedCounterLocked()
 }
 
 func getAuditEventsDroppedCounter() prometheus.Counter {
-	auditEventsDroppedOnce.Do(func() {
+	auditEventsDroppedMu.Lock()
+	defer auditEventsDroppedMu.Unlock()
+
+	if auditEventsDropped == nil {
 		// Use a single fully-prefixed Name (no Namespace/Subsystem) to
 		// match the convention used by metrics in internal/metrics.
-		opts := prometheus.CounterOpts{
+		auditEventsDropped = prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "audit_events_dropped_total",
 			Help: "Total number of audit log events dropped due to a full buffer.",
-		}
-		counter := prometheus.NewCounter(opts)
-
-		if auditEventsDroppedRegisterer != nil {
-			if err := auditEventsDroppedRegisterer.Register(counter); err != nil {
-				if existing, ok := err.(prometheus.AlreadyRegisteredError); ok {
-					if c, ok := existing.ExistingCollector.(prometheus.Counter); ok {
-						auditEventsDropped = c
-						return
-					}
-				}
-				log.Printf("failed to register audit dropped-events counter: %v", err)
-			}
-		}
-		// When no registerer is set, the counter still works in-memory but
-		// is not exposed via the Prometheus /metrics endpoint.
-		auditEventsDropped = counter
-	})
+		})
+	}
+	registerAuditDroppedCounterLocked()
+	// When no registerer is set, the counter still works in-memory but
+	// is not exposed via the Prometheus /metrics endpoint.
 	return auditEventsDropped
 }
 
