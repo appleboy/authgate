@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-authgate/authgate/internal/core"
@@ -14,10 +15,77 @@ import (
 	"github.com/go-authgate/authgate/internal/util"
 
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // Compile-time interface check.
 var _ core.AuditLogger = (*AuditService)(nil)
+
+// auditEventsDropped is a singleton counter protected by a mutex so it can
+// be created before metrics are configured and registered later once a
+// registerer becomes available.
+//
+// The counter is only registered with Prometheus when a registerer is
+// explicitly provided via SetAuditMetricsRegisterer, so deployments with
+// metrics disabled do not leak collectors from the services layer.
+var (
+	auditEventsDropped           prometheus.Counter
+	auditEventsDroppedMu         sync.Mutex
+	auditEventsDroppedRegistered bool
+	auditEventsDroppedRegisterer prometheus.Registerer
+)
+
+// registerAuditDroppedCounterLocked attempts to register the existing counter
+// with the configured registerer. The caller must hold auditEventsDroppedMu.
+func registerAuditDroppedCounterLocked() {
+	if auditEventsDropped == nil ||
+		auditEventsDroppedRegisterer == nil ||
+		auditEventsDroppedRegistered {
+		return
+	}
+	if err := auditEventsDroppedRegisterer.Register(auditEventsDropped); err != nil {
+		if existing, ok := err.(prometheus.AlreadyRegisteredError); ok {
+			if c, ok := existing.ExistingCollector.(prometheus.Counter); ok {
+				auditEventsDropped = c
+				auditEventsDroppedRegistered = true
+				return
+			}
+		}
+		log.Printf("failed to register audit dropped-events counter: %v", err)
+		return
+	}
+	auditEventsDroppedRegistered = true
+}
+
+// SetAuditMetricsRegisterer configures the Prometheus registerer used by the
+// audit service. If the dropped-events counter was created before metrics
+// were configured, setting a non-nil registerer will register the existing
+// counter, ensuring late initialization (e.g. in tests) is not silently lost.
+func SetAuditMetricsRegisterer(registerer prometheus.Registerer) {
+	auditEventsDroppedMu.Lock()
+	defer auditEventsDroppedMu.Unlock()
+
+	auditEventsDroppedRegisterer = registerer
+	registerAuditDroppedCounterLocked()
+}
+
+func getAuditEventsDroppedCounter() prometheus.Counter {
+	auditEventsDroppedMu.Lock()
+	defer auditEventsDroppedMu.Unlock()
+
+	if auditEventsDropped == nil {
+		// Use a single fully-prefixed Name (no Namespace/Subsystem) to
+		// match the convention used by metrics in internal/metrics.
+		auditEventsDropped = prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "audit_events_dropped_total",
+			Help: "Total number of audit log events dropped due to a full buffer.",
+		})
+	}
+	registerAuditDroppedCounterLocked()
+	// When no registerer is set, the counter still works in-memory but
+	// is not exposed via the Prometheus /metrics endpoint.
+	return auditEventsDropped
+}
 
 // AuditService handles audit logging operations
 type AuditService struct {
@@ -33,8 +101,12 @@ type AuditService struct {
 	batchTicker *time.Ticker
 
 	// Graceful shutdown
-	wg         sync.WaitGroup
-	shutdownCh chan struct{}
+	wg      sync.WaitGroup
+	sendMu  sync.RWMutex // coordinates Log() senders with Shutdown()
+	stopped atomic.Bool
+
+	// Prometheus counter for dropped events
+	eventsDropped prometheus.Counter
 }
 
 // NewAuditService creates a new audit service
@@ -44,11 +116,11 @@ func NewAuditService(s core.Store, bufferSize int) *AuditService {
 	}
 
 	service := &AuditService{
-		store:       s,
-		bufferSize:  bufferSize,
-		logChan:     make(chan *models.AuditLog, bufferSize),
-		batchBuffer: make([]*models.AuditLog, 0, 100),
-		shutdownCh:  make(chan struct{}),
+		store:         s,
+		bufferSize:    bufferSize,
+		logChan:       make(chan *models.AuditLog, bufferSize),
+		batchBuffer:   make([]*models.AuditLog, 0, 100),
+		eventsDropped: getAuditEventsDroppedCounter(),
 	}
 
 	service.batchTicker = time.NewTicker(1 * time.Second)
@@ -59,23 +131,25 @@ func NewAuditService(s core.Store, bufferSize int) *AuditService {
 	return service
 }
 
-// worker is the background goroutine that processes audit logs
+// worker is the background goroutine that processes audit logs.
+// It drains logChan until the channel is closed by Shutdown, then
+// flushes any remaining batch and exits.
 func (s *AuditService) worker() {
 	defer s.wg.Done()
 
 	for {
 		select {
-		case log := <-s.logChan:
-			s.addToBatch(log)
+		case entry, ok := <-s.logChan:
+			if !ok {
+				// Channel closed by Shutdown — flush remaining batch.
+				s.flushBatch()
+				return
+			}
+			s.addToBatch(entry)
 
 		case <-s.batchTicker.C:
 			// Flush batch every second
 			s.flushBatch()
-
-		case <-s.shutdownCh:
-			// Flush remaining logs before shutdown
-			s.flushBatch()
-			return
 		}
 	}
 }
@@ -126,13 +200,51 @@ func (s *AuditService) buildAuditLog(
 	if entry.ActorIP == "" {
 		entry.ActorIP = util.GetIPFromContext(ctx)
 	}
+	// Fill ActorUsername from context only when the entry's ActorUserID is
+	// empty or matches the context user — otherwise the username could be
+	// misattributed to a different principal than ActorUserID identifies.
 	if entry.ActorUsername == "" {
-		entry.ActorUsername = models.GetUsernameFromContext(ctx)
+		ctxUserID := models.GetUserIDFromContext(ctx)
+		if entry.ActorUserID == "" || entry.ActorUserID == ctxUserID {
+			entry.ActorUsername = models.GetUsernameFromContext(ctx)
+		}
+	}
+	// Fall back to a DB lookup when context did not provide a username and
+	// the actor is a real user (not a synthetic machine identity from the
+	// client_credentials grant, which uses a "client:<clientID>" format and
+	// has no corresponding user row).
+	if entry.ActorUsername == "" && entry.ActorUserID != "" &&
+		!strings.HasPrefix(entry.ActorUserID, "client:") {
+		if user, err := s.store.GetUserByID(entry.ActorUserID); err == nil {
+			entry.ActorUsername = user.Username
+		}
 	}
 	if entry.ActorUserID == "" {
 		entry.ActorUserID = models.GetUserIDFromContext(ctx)
 	}
+	if entry.UserAgent == "" {
+		entry.UserAgent = util.GetUserAgentFromContext(ctx)
+	}
+	if entry.RequestPath == "" {
+		entry.RequestPath = util.GetRequestPathFromContext(ctx)
+	}
+	if entry.RequestMethod == "" {
+		entry.RequestMethod = util.GetRequestMethodFromContext(ctx)
+	}
 	entry.Details = maskSensitiveDetails(entry.Details)
+
+	// Truncate fields to match database column size limits.
+	// TruncateString appends "..." (3 chars) when truncating, so subtract 3
+	// from the varchar limit to guarantee the final length fits the column.
+	entry.UserAgent = util.TruncateString(entry.UserAgent, 497)
+	entry.RequestPath = util.TruncateString(entry.RequestPath, 497)
+
+	// RequestMethod is stored in a varchar(10) column. Preserve values up to
+	// the full column width and hard-truncate anything longer without adding
+	// an ellipsis.
+	if len(entry.RequestMethod) > 10 {
+		entry.RequestMethod = entry.RequestMethod[:10]
+	}
 
 	now := time.Now()
 	return &models.AuditLog{
@@ -157,13 +269,25 @@ func (s *AuditService) buildAuditLog(
 	}
 }
 
-// Log records an audit log entry asynchronously
+// Log records an audit log entry asynchronously.
+// Events submitted after Shutdown has been called are dropped.
+// The RWMutex ensures all in-flight sends complete before Shutdown
+// closes logChan, eliminating the send-on-closed-channel race.
 func (s *AuditService) Log(ctx context.Context, entry core.AuditLogEntry) {
+	s.sendMu.RLock()
+	defer s.sendMu.RUnlock()
+
+	if s.stopped.Load() {
+		log.Printf("WARNING: Audit service stopped, dropping event: %s", entry.Action)
+		s.eventsDropped.Inc()
+		return
+	}
 	auditLog := s.buildAuditLog(ctx, entry)
 	select {
 	case s.logChan <- auditLog:
 	default:
 		log.Printf("WARNING: Audit log buffer full, dropping event: %s", entry.Action)
+		s.eventsDropped.Inc()
 	}
 }
 
@@ -193,11 +317,18 @@ func (s *AuditService) GetAuditLogStats(startTime, endTime time.Time) (store.Aud
 
 // Shutdown gracefully shuts down the audit service
 func (s *AuditService) Shutdown(ctx context.Context) error {
+	// 1. Reject new events so future Log() calls return immediately.
+	s.stopped.Store(true)
+
+	// 2. Wait for all in-flight Log() calls to finish, then close
+	//    logChan. The exclusive lock ensures no sender is mid-send
+	//    when the channel is closed.
+	s.sendMu.Lock()
+	close(s.logChan)
+	s.sendMu.Unlock()
+
 	// Stop ticker
 	s.batchTicker.Stop()
-
-	// Signal worker to stop
-	close(s.shutdownCh)
 
 	// Wait for worker to finish with timeout
 	done := make(chan struct{})

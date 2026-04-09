@@ -52,7 +52,8 @@ func (s *TokenService) revokeTokenFamilyWithAudit(
 		s.metrics.RecordTokenRevoked("family", "replay_detection")
 	}
 
-	// Audit log — CRITICAL severity because this indicates potential token theft
+	// Audit log — CRITICAL severity because this indicates potential token theft.
+	// ActorUsername is auto-resolved by buildAuditLog.
 	_ = s.auditService.LogSync(ctx, core.AuditLogEntry{
 		EventType:    models.EventSuspiciousActivity,
 		Severity:     models.SeverityCritical,
@@ -204,7 +205,7 @@ func (s *TokenService) RefreshAccessToken(
 	// Record successful refresh
 	s.metrics.RecordTokenRefresh(true)
 
-	// Log token refresh
+	// Log token refresh — ActorUsername is auto-resolved by buildAuditLog.
 	providerName := s.tokenProvider.Name()
 	details := models.AuditDetails{
 		"client_id":           newAccessToken.ClientID,

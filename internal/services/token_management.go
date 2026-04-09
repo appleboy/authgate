@@ -42,7 +42,7 @@ func (s *TokenService) RevokeTokenByID(ctx context.Context, tokenID, actorUserID
 
 	err = s.store.RevokeToken(tokenID)
 	if err != nil {
-		// Log revocation failure
+		// Log revocation failure — ActorUsername is auto-resolved by buildAuditLog.
 		s.auditService.Log(ctx, core.AuditLogEntry{
 			EventType:    models.EventTokenRevoked,
 			Severity:     models.SeverityError,
@@ -62,7 +62,7 @@ func (s *TokenService) RevokeTokenByID(ctx context.Context, tokenID, actorUserID
 	// Record revocation
 	s.metrics.RecordTokenRevoked(tok.TokenCategory, "user_request")
 
-	// Log token revocation
+	// Log token revocation — ActorUsername is auto-resolved by buildAuditLog.
 	s.auditService.Log(ctx, core.AuditLogEntry{
 		EventType:    models.EventTokenRevoked,
 		Severity:     models.SeverityInfo,
@@ -133,7 +133,7 @@ func (s *TokenService) updateTokenStatusWithAudit(
 
 	err = s.store.UpdateTokenStatus(tokenID, newStatus)
 	if err != nil {
-		// Log failure
+		// Log failure — ActorUsername is auto-resolved by buildAuditLog.
 		s.auditService.Log(ctx, core.AuditLogEntry{
 			EventType:    eventType,
 			Severity:     models.SeverityError,
@@ -150,7 +150,7 @@ func (s *TokenService) updateTokenStatusWithAudit(
 
 	s.invalidateTokenCache(ctx, tok.TokenHash)
 
-	// Log success
+	// Log success — ActorUsername is auto-resolved by buildAuditLog.
 	s.auditService.Log(ctx, core.AuditLogEntry{
 		EventType:    eventType,
 		Severity:     models.SeverityInfo,

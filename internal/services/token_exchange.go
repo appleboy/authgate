@@ -77,7 +77,7 @@ func (s *TokenService) ExchangeDeviceCode(
 	// Delete the used device code
 	_ = s.store.DeleteDeviceCodeByID(dc.ID)
 
-	// Log token issuance
+	// Log token issuance — ActorUsername is auto-resolved by buildAuditLog.
 	s.auditService.Log(ctx, core.AuditLogEntry{
 		EventType:    models.EventAccessTokenIssued,
 		Severity:     models.SeverityInfo,
@@ -153,25 +153,30 @@ func (s *TokenService) ExchangeAuthorizationCode(
 				AtHash:   token.ComputeAtHash(accessToken.RawToken),
 			}
 
-			// Fetch user profile for scope-gated claims
-			if user, err := s.store.GetUserByID(authCode.UserID); err == nil {
-				if scopeSet["profile"] {
-					params.Name = user.FullName
-					params.PreferredUsername = user.Username
-					params.Picture = user.AvatarURL
-					updatedAt := user.UpdatedAt
-					params.UpdatedAt = &updatedAt
+			// Fetch user profile only when scope-gated claims are needed
+			if scopeSet["profile"] || scopeSet["email"] {
+				if user, err := s.store.GetUserByID(authCode.UserID); err == nil {
+					// Cache the user in context so the audit service's
+					// ActorUsername enrichment hits context (no extra DB call).
+					ctx = models.SetUserContext(ctx, user)
+					if scopeSet["profile"] {
+						params.Name = user.FullName
+						params.PreferredUsername = user.Username
+						params.Picture = user.AvatarURL
+						updatedAt := user.UpdatedAt
+						params.UpdatedAt = &updatedAt
+					}
+					if scopeSet["email"] {
+						params.Email = user.Email
+						params.EmailVerified = false // AuthGate does not verify email addresses
+					}
+				} else {
+					log.Printf(
+						"[Token] ID token: failed to fetch user profile for user_id=%s, profile/email claims will be omitted: %v",
+						authCode.UserID,
+						err,
+					)
 				}
-				if scopeSet["email"] {
-					params.Email = user.Email
-					params.EmailVerified = false // AuthGate does not verify email addresses
-				}
-			} else if scopeSet["profile"] || scopeSet["email"] {
-				log.Printf(
-					"[Token] ID token: failed to fetch user profile for user_id=%s, profile/email claims will be omitted: %v",
-					authCode.UserID,
-					err,
-				)
 			}
 
 			if generated, err := idp.GenerateIDToken(params); err == nil {
@@ -202,7 +207,9 @@ func (s *TokenService) ExchangeAuthorizationCode(
 	s.metrics.RecordTokenIssued("access", "authorization_code", duration, providerName)
 	s.metrics.RecordTokenIssued("refresh", "authorization_code", duration, providerName)
 
-	// Audit
+	// Audit — ActorUsername is auto-resolved by buildAuditLog (from the
+	// context user cached above when openid+profile/email was requested,
+	// or via DB fallback otherwise).
 	s.auditService.Log(ctx, core.AuditLogEntry{
 		EventType:    models.EventAccessTokenIssued,
 		Severity:     models.SeverityInfo,
