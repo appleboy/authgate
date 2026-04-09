@@ -191,6 +191,13 @@ func (s *TokenService) ExchangeAuthorizationCode(
 				}
 			}
 
+			// Ensure actorUsername is resolved before logging ID token audit
+			// entry. The profile/email block above may have set it already;
+			// fall back to a DB lookup for openid-only requests.
+			if actorUsername == "" {
+				actorUsername = s.resolveUsername(ctx, authCode.UserID)
+			}
+
 			if generated, err := idp.GenerateIDToken(params); err == nil {
 				idToken = generated
 				s.auditService.Log(ctx, core.AuditLogEntry{

@@ -128,16 +128,19 @@ func (s *AuditService) worker() {
 			s.flushBatch()
 
 		case <-s.shutdownCh:
-			// Drain only the backlog present when shutdown begins.
-			// Snapshot the length to avoid an unbounded drain if
-			// producers continue sending after shutdown has started.
-			pending := len(s.logChan)
-			for range pending {
-				entry := <-s.logChan
-				s.addToBatch(entry)
+			// Drain all queued entries that were accepted before shutdown
+			// completed. Use a non-blocking receive loop rather than a
+			// len() snapshot so entries enqueued concurrently after the
+			// snapshot are still flushed.
+			for {
+				select {
+				case entry := <-s.logChan:
+					s.addToBatch(entry)
+				default:
+					s.flushBatch()
+					return
+				}
 			}
-			s.flushBatch()
-			return
 		}
 	}
 }
@@ -210,7 +213,13 @@ func (s *AuditService) buildAuditLog(
 	// from the varchar limit to guarantee the final length fits the column.
 	entry.UserAgent = util.TruncateString(entry.UserAgent, 497)
 	entry.RequestPath = util.TruncateString(entry.RequestPath, 497)
-	entry.RequestMethod = util.TruncateString(entry.RequestMethod, 7)
+
+	// RequestMethod is stored in a varchar(10) column. Preserve values up to
+	// the full column width and hard-truncate anything longer without adding
+	// an ellipsis.
+	if len(entry.RequestMethod) > 10 {
+		entry.RequestMethod = entry.RequestMethod[:10]
+	}
 
 	now := time.Now()
 	return &models.AuditLog{
