@@ -50,6 +50,7 @@ var (
 	ErrCannotDisableSelf       = errors.New("cannot change your own active status")
 	ErrUserAlreadyActive       = errors.New("user is already active")
 	ErrUserAlreadyDisabled     = errors.New("user is already disabled")
+	ErrOAuthConnectionNotFound = errors.New("OAuth connection not found")
 )
 
 type UserService struct {
@@ -911,7 +912,8 @@ func (s *UserService) DeleteUserAdmin(
 	return nil
 }
 
-// CountUsersByRole returns the number of users with the given role.
+// CountUsersByRole returns the number of active users with the given role.
+// Disabled users are excluded so that last-admin guards work correctly.
 func (s *UserService) CountUsersByRole(role string) (int64, error) {
 	return s.store.CountUsersByRole(role)
 }
@@ -991,6 +993,9 @@ func (s *UserService) CreateUserAdmin(
 	}
 
 	if err := s.store.CreateUser(user); err != nil {
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
+			return nil, "", ErrUsernameConflict
+		}
 		return nil, "", fmt.Errorf("failed to create user: %w", err)
 	}
 
@@ -1029,7 +1034,7 @@ func (s *UserService) DeleteUserOAuthConnection(
 	target, err := s.store.GetOAuthConnectionByUserAndID(userID, connectionID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("OAuth connection not found")
+			return ErrOAuthConnectionNotFound
 		}
 		return fmt.Errorf("failed to look up OAuth connection: %w", err)
 	}

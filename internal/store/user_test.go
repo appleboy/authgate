@@ -178,6 +178,22 @@ func TestCountUsersByRole(t *testing.T) {
 		require.NoError(t, err)
 		assert.GreaterOrEqual(t, userCount, int64(1))
 	})
+
+	t.Run("excludes disabled users", func(t *testing.T) {
+		store := createFreshStore(t, "sqlite", nil)
+		// Seeded admin is active. Create a disabled admin.
+		disabledAdmin := createTestUser(t, store, &models.User{
+			Role:  models.UserRoleAdmin,
+			Email: uuid.New().String()[:8] + "@test.com",
+		})
+		disabledAdmin.IsActive = false
+		require.NoError(t, store.UpdateUser(disabledAdmin))
+
+		adminCount, err := store.CountUsersByRole(models.UserRoleAdmin)
+		require.NoError(t, err)
+		// Only the seeded admin should be counted, not the disabled one
+		assert.Equal(t, int64(1), adminCount)
+	})
 }
 
 func TestGetUserStatsByUserID(t *testing.T) {

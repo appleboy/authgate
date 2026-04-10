@@ -420,7 +420,11 @@ func (h *UserAdminHandler) DeleteUserConnection(c *gin.Context) {
 		connID,
 		currentUser.ID,
 	); err != nil {
-		renderErrorPage(c, http.StatusBadRequest, err.Error())
+		if errors.Is(err, services.ErrOAuthConnectionNotFound) {
+			renderErrorPage(c, http.StatusNotFound, err.Error())
+		} else {
+			renderErrorPage(c, http.StatusInternalServerError, "Failed to remove OAuth connection")
+		}
 		return
 	}
 

@@ -14,7 +14,10 @@ func providerDisplayName(provider string) string {
 	case "microsoft":
 		return "Microsoft"
 	default:
-		return strings.Title(provider) //nolint:staticcheck // acceptable for display names
+		if provider == "" {
+			return ""
+		}
+		return strings.ToUpper(provider[:1]) + provider[1:]
 	}
 }
 
