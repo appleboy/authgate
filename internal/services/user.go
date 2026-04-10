@@ -45,6 +45,10 @@ var (
 	ErrInvalidRole             = errors.New("role must be admin or user")
 	ErrEmailRequired           = errors.New("email is required")
 	ErrEmailConflict           = errors.New("email already in use by another user")
+	ErrUsernameRequired        = errors.New("username is required")
+	ErrCannotDisableSelf       = errors.New("cannot disable your own account")
+	ErrUserAlreadyActive       = errors.New("user is already active")
+	ErrUserAlreadyDisabled     = errors.New("user is already disabled")
 )
 
 type UserService struct {
@@ -513,6 +517,7 @@ func (s *UserService) createUserWithOAuth(
 		AvatarURL:    oauthUserInfo.AvatarURL,
 		Role:         models.UserRoleUser,
 		AuthSource:   models.AuthSourceLocal,
+		IsActive:     true,
 		PasswordHash: "", // OAuth users have no password
 	}
 
@@ -905,4 +910,207 @@ func (s *UserService) DeleteUserAdmin(
 // CountUsersByRole returns the number of users with the given role.
 func (s *UserService) CountUsersByRole(role string) (int64, error) {
 	return s.store.CountUsersByRole(role)
+}
+
+// ── Admin Create User ─────────────────────────────────────────────────
+
+// CreateUserRequest carries the fields for admin user creation.
+type CreateUserRequest struct {
+	Username string
+	Email    string
+	FullName string
+	Role     string
+	Password string // optional — if empty, generate random
+}
+
+// CreateUserAdmin creates a new local-auth user. Returns the user and
+// the plaintext password (to show once).
+func (s *UserService) CreateUserAdmin(
+	ctx context.Context,
+	req CreateUserRequest,
+	actorUserID string,
+) (*models.User, string, error) {
+	// Validate and sanitize required fields
+	req.Username = sanitizeUsername(strings.TrimSpace(req.Username))
+	req.Email = strings.TrimSpace(req.Email)
+	if req.Username == "" {
+		return nil, "", ErrUsernameRequired
+	}
+	if req.Email == "" {
+		return nil, "", ErrEmailRequired
+	}
+	if req.Role == "" {
+		req.Role = models.UserRoleUser
+	}
+	if req.Role != models.UserRoleAdmin && req.Role != models.UserRoleUser {
+		return nil, "", ErrInvalidRole
+	}
+
+	// Check username uniqueness
+	if _, err := s.store.GetUserByUsername(req.Username); err == nil {
+		return nil, "", ErrUsernameConflict
+	}
+
+	// Check email uniqueness
+	if _, err := s.store.GetUserByEmail(req.Email); err == nil {
+		return nil, "", ErrEmailConflict
+	}
+
+	// Generate password if not provided
+	password := req.Password
+	if password == "" {
+		var err error
+		password, err = util.GenerateRandomPassword(16)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to generate password: %w", err)
+		}
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	user := &models.User{
+		ID:           uuid.New().String(),
+		Username:     req.Username,
+		Email:        req.Email,
+		FullName:     req.FullName,
+		Role:         req.Role,
+		PasswordHash: string(hash),
+		AuthSource:   models.AuthSourceLocal,
+		IsActive:     true,
+	}
+
+	if err := s.store.CreateUser(user); err != nil {
+		return nil, "", fmt.Errorf("failed to create user: %w", err)
+	}
+
+	s.auditService.Log(ctx, core.AuditLogEntry{
+		EventType:    models.EventUserCreated,
+		Severity:     models.SeverityInfo,
+		ActorUserID:  actorUserID,
+		ResourceType: models.ResourceUser,
+		ResourceID:   user.ID,
+		ResourceName: user.Username,
+		Action:       "User created by admin",
+		Details: models.AuditDetails{
+			"username": user.Username,
+			"email":    user.Email,
+			"role":     user.Role,
+		},
+		Success: true,
+	})
+
+	return user, password, nil
+}
+
+// ── Admin OAuth Connection Management ─────────────────────────────────
+
+// GetUserOAuthConnections returns all OAuth connections for a user.
+func (s *UserService) GetUserOAuthConnections(userID string) ([]models.OAuthConnection, error) {
+	return s.store.GetOAuthConnectionsByUserID(userID)
+}
+
+// DeleteUserOAuthConnection deletes a specific OAuth connection for a user.
+func (s *UserService) DeleteUserOAuthConnection(
+	ctx context.Context,
+	userID, connectionID, actorUserID string,
+) error {
+	// Verify the connection belongs to this user with a single indexed query
+	target, err := s.store.GetOAuthConnectionByUserAndID(userID, connectionID)
+	if err != nil {
+		return errors.New("OAuth connection not found")
+	}
+
+	if err := s.store.DeleteOAuthConnection(connectionID); err != nil {
+		return fmt.Errorf("failed to delete connection: %w", err)
+	}
+
+	s.auditService.Log(ctx, core.AuditLogEntry{
+		EventType:    models.EventOAuthConnectionDeleted,
+		Severity:     models.SeverityWarning,
+		ActorUserID:  actorUserID,
+		ResourceType: models.ResourceUser,
+		ResourceID:   userID,
+		ResourceName: target.Provider + ":" + target.ProviderUsername,
+		Action:       "OAuth connection removed by admin",
+		Details: models.AuditDetails{
+			"provider":          target.Provider,
+			"provider_username": target.ProviderUsername,
+			"connection_id":     connectionID,
+		},
+		Success: true,
+	})
+
+	return nil
+}
+
+// ── Admin Disable/Enable User ─────────────────────────────────────────
+
+// SetUserActiveStatus enables or disables a user account.
+func (s *UserService) SetUserActiveStatus(
+	ctx context.Context,
+	userID, actorUserID string,
+	isActive bool,
+) error {
+	if actorUserID == userID {
+		return ErrCannotDisableSelf
+	}
+
+	user, err := s.AdminGetUserByID(userID)
+	if err != nil {
+		return err
+	}
+
+	if isActive && user.IsActive {
+		return ErrUserAlreadyActive
+	}
+	if !isActive && !user.IsActive {
+		return ErrUserAlreadyDisabled
+	}
+
+	// Prevent disabling the last admin
+	if !isActive && user.Role == models.UserRoleAdmin {
+		adminCount, countErr := s.store.CountUsersByRole(models.UserRoleAdmin)
+		if countErr != nil {
+			return fmt.Errorf("failed to count admins: %w", countErr)
+		}
+		if adminCount <= 1 {
+			return ErrCannotRemoveLastAdmin
+		}
+	}
+
+	user.IsActive = isActive
+	if err := s.store.UpdateUser(user); err != nil {
+		return fmt.Errorf("failed to update user: %w", err)
+	}
+
+	s.InvalidateUserCache(userID)
+
+	eventType := models.EventUserEnabled
+	action := "User account enabled by admin"
+	severity := models.SeverityInfo
+	if !isActive {
+		eventType = models.EventUserDisabled
+		action = "User account disabled by admin"
+		severity = models.SeverityWarning
+	}
+
+	s.auditService.Log(ctx, core.AuditLogEntry{
+		EventType:    eventType,
+		Severity:     severity,
+		ActorUserID:  actorUserID,
+		ResourceType: models.ResourceUser,
+		ResourceID:   userID,
+		ResourceName: user.Username,
+		Action:       action,
+		Details: models.AuditDetails{
+			"username":  user.Username,
+			"is_active": isActive,
+		},
+		Success: true,
+	})
+
+	return nil
 }

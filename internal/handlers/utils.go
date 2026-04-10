@@ -1,12 +1,14 @@
 package handlers
 
 import (
+	"net/http"
 	"strconv"
 
 	"github.com/go-authgate/authgate/internal/models"
 	"github.com/go-authgate/authgate/internal/store"
 	"github.com/go-authgate/authgate/internal/templates"
 
+	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 )
 
@@ -120,6 +122,31 @@ func parseTokenPaginationParams(c *gin.Context) store.PaginationParams {
 		params.CategoryFilter = cat
 	}
 	return params
+}
+
+// getFlashMessage retrieves and clears the first flash message from the session.
+func getFlashMessage(c *gin.Context) string {
+	session := sessions.Default(c)
+	flashes := session.Flashes()
+	if err := session.Save(); err != nil {
+		c.Set("session_save_error", err)
+	}
+	if len(flashes) > 0 {
+		if msg, ok := flashes[0].(string); ok {
+			return msg
+		}
+	}
+	return ""
+}
+
+// flashAndRedirect sets a flash message and redirects to the given URL.
+func flashAndRedirect(c *gin.Context, msg, url string) {
+	session := sessions.Default(c)
+	session.AddFlash(msg)
+	if err := session.Save(); err != nil {
+		c.Set("session_save_error", err)
+	}
+	c.Redirect(http.StatusFound, url)
 }
 
 // renderErrorPage renders the error page template with the given status code and message.

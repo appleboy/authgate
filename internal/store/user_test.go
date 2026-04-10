@@ -20,6 +20,7 @@ func createTestUser(t *testing.T, s *Store, overrides *models.User) *models.User
 		PasswordHash: "hashed",
 		Role:         models.UserRoleUser,
 		AuthSource:   models.AuthSourceLocal,
+		IsActive:     true,
 	}
 	if overrides != nil {
 		if overrides.Username != "" {
