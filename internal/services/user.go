@@ -1117,31 +1117,15 @@ func (s *UserService) SetUserActiveStatus(
 	userID, actorUserID string,
 	isActive bool,
 ) error {
-	if actorUserID == userID {
-		return ErrCannotDisableSelf
+	// Re-validate for defense-in-depth (handler calls ValidateSetUserActiveStatus
+	// separately so it can skip token revocation on validation failure).
+	if err := s.ValidateSetUserActiveStatus(userID, actorUserID, isActive); err != nil {
+		return err
 	}
 
 	user, err := s.AdminGetUserByID(userID)
 	if err != nil {
 		return err
-	}
-
-	if isActive && user.IsActive {
-		return ErrUserAlreadyActive
-	}
-	if !isActive && !user.IsActive {
-		return ErrUserAlreadyDisabled
-	}
-
-	// Prevent disabling the last admin
-	if !isActive && user.Role == models.UserRoleAdmin {
-		adminCount, countErr := s.store.CountUsersByRole(models.UserRoleAdmin)
-		if countErr != nil {
-			return fmt.Errorf("failed to count admins: %w", countErr)
-		}
-		if adminCount <= 1 {
-			return ErrCannotRemoveLastAdmin
-		}
 	}
 
 	user.IsActive = isActive
