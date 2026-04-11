@@ -666,6 +666,12 @@ a.admin-user-stat-card-link {
   display: block;
 }
 
+a.admin-user-stat-card-link:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-lg);
+}
+
 a.admin-user-stat-card-link:hover .admin-user-stat-value {
   color: var(--color-primary);
 }
