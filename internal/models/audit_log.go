@@ -139,7 +139,7 @@ type AuditLog struct {
 	// Event information
 	EventType EventType     `gorm:"type:varchar(50);index;not null;index:idx_audit_type_time,priority:1"                                                                                             json:"event_type"`
 	EventTime time.Time     `gorm:"index;not null;index:idx_audit_type_time,priority:2,sort:desc;index:idx_audit_actor_time,priority:2,sort:desc;index:idx_audit_resource_time,priority:3,sort:desc" json:"event_time"`
-	Severity  EventSeverity `gorm:"type:varchar(20);not null;index"                                                                                                                                  json:"severity"`
+	Severity  EventSeverity `gorm:"type:varchar(20);not null;index:idx_audit_severity"                                                                                                               json:"severity"`
 
 	// Actor information
 	ActorUserID   string `gorm:"type:varchar(36);index;index:idx_audit_actor_time,priority:1" json:"actor_user_id"`

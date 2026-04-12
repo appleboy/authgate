@@ -128,7 +128,7 @@ func addAuditLogCleanupJob(
 	auditService core.AuditLogger,
 	locker rueidislock.Locker,
 ) {
-	if !cfg.EnableAuditLogging || cfg.AuditLogRetention <= 0 {
+	if !cfg.EnableAuditLogging || cfg.AuditLogRetention <= 0 || cfg.AuditLogCleanupInterval <= 0 {
 		return
 	}
 
@@ -147,7 +147,7 @@ func addAuditLogCleanupJob(
 	}
 
 	m.AddRunningJob(func(ctx context.Context) error {
-		ticker := time.NewTicker(24 * time.Hour)
+		ticker := time.NewTicker(cfg.AuditLogCleanupInterval)
 		defer ticker.Stop()
 
 		if err := run(ctx); err != nil {
