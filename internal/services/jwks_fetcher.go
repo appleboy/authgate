@@ -102,6 +102,15 @@ func (f *JWKSFetcher) GetWithRefresh(ctx context.Context, uri, kid string) (*uti
 	}
 	if setErr := f.cache.Set(ctx, uri, fresh, f.ttl); setErr != nil {
 		log.Printf("[JWKSFetcher] cache set after refresh failed for %s: %v", uri, setErr)
+		// Best-effort delete: without it the stale cached JWKS would
+		// keep being returned until the cooldown expires, since
+		// subsequent callers skip refresh while lastRefresh is fresh.
+		if delErr := f.cache.Delete(ctx, uri); delErr != nil {
+			log.Printf(
+				"[JWKSFetcher] cache delete after failed refresh set failed for %s: %v",
+				uri, delErr,
+			)
+		}
 	}
 	return &fresh, nil
 }
@@ -168,7 +177,9 @@ func (f *JWKSFetcher) fetch(ctx context.Context, uri string) (util.JWKSet, error
 	if err != nil {
 		return util.JWKSet{}, fmt.Errorf("%w: %v", ErrJWKSFetchFailed, err)
 	}
-	req.Header.Set("Accept", "application/json")
+	// RFC 7517 §8.5 defines application/jwk-set+json; many JWKS endpoints
+	// honour Accept strictly and would 406 on plain application/json alone.
+	req.Header.Set("Accept", "application/jwk-set+json, application/json")
 	resp, err := f.httpClient.Do(req)
 	if err != nil {
 		return util.JWKSet{}, fmt.Errorf("%w: %v", ErrJWKSFetchFailed, err)
