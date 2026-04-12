@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 
@@ -126,11 +127,13 @@ func parseTokenPaginationParams(c *gin.Context) store.PaginationParams {
 }
 
 // getFlashMessage retrieves and clears the first flash message from the session.
+// A failed session.Save here only loses the just-cleared flash (a UX nicety),
+// so we log and continue rather than fail the request.
 func getFlashMessage(c *gin.Context) string {
 	session := sessions.Default(c)
 	flashes := session.Flashes()
 	if err := session.Save(); err != nil {
-		c.Set("session_save_error", err)
+		log.Printf("[Session] Failed to save session after reading flash: %v", err)
 	}
 	if len(flashes) > 0 {
 		if msg, ok := flashes[0].(string); ok {
@@ -141,11 +144,13 @@ func getFlashMessage(c *gin.Context) string {
 }
 
 // flashAndRedirect sets a flash message and redirects to the given URL.
+// A failed session.Save here only drops the flash message, so we log and
+// continue with the redirect rather than fail the request.
 func flashAndRedirect(c *gin.Context, msg, url string) {
 	session := sessions.Default(c)
 	session.AddFlash(msg)
 	if err := session.Save(); err != nil {
-		c.Set("session_save_error", err)
+		log.Printf("[Session] Failed to save flash message: %v", err)
 	}
 	c.Redirect(http.StatusFound, url)
 }

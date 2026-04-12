@@ -225,7 +225,7 @@ func (s *UserService) authenticateAndCreateExternalUser(
 		return nil, ErrInvalidCredentials
 	}
 
-	// Create new user in local database
+	// Create new user in local database (or fetch existing one matched by external_id)
 	user, err := s.syncExternalUser(authResult, AuthModeHTTPAPI)
 	if err != nil {
 		log.Printf("[Auth] Failed to create user=%s: %v", username, err)
@@ -242,6 +242,13 @@ func (s *UserService) authenticateAndCreateExternalUser(
 		})
 
 		return nil, ErrUserSyncFailed
+	}
+
+	// UpsertExternalUser may match an existing local record by external_id even
+	// when GetUserByUsername missed (e.g. username changed upstream). Re-check
+	// IsActive here so disabled accounts cannot authenticate via this path.
+	if !user.IsActive {
+		return nil, ErrAccountDisabled
 	}
 
 	log.Printf("[Auth] New external user created: %s", username)
@@ -384,6 +391,17 @@ func (s *UserService) updateOAuthConnectionAndGetUser(
 	oauthUserInfo *auth.OAuthUserInfo,
 	token *oauth2.Token,
 ) (*models.User, error) {
+	// Verify the owning account is still active before persisting any state.
+	// Otherwise a disabled user could refresh their stored OAuth tokens just by
+	// completing the provider redirect, even though we then reject the login.
+	user, err := s.store.GetUserByID(connection.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("user not found for OAuth connection: %w", err)
+	}
+	if !user.IsActive {
+		return nil, ErrAccountDisabled
+	}
+
 	// Update token and metadata
 	connection.AccessToken = token.AccessToken
 	connection.RefreshToken = token.RefreshToken
@@ -395,16 +413,6 @@ func (s *UserService) updateOAuthConnectionAndGetUser(
 
 	if err := s.store.UpdateOAuthConnection(connection); err != nil {
 		return nil, fmt.Errorf("failed to update OAuth connection: %w", err)
-	}
-
-	// Get user
-	user, err := s.store.GetUserByID(connection.UserID)
-	if err != nil {
-		return nil, fmt.Errorf("user not found for OAuth connection: %w", err)
-	}
-
-	if !user.IsActive {
-		return nil, ErrAccountDisabled
 	}
 
 	// Sync avatar and name if changed
