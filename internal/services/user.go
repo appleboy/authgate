@@ -721,8 +721,10 @@ func (s *UserService) UpdateUserProfile(
 		}
 	}
 
-	// Prevent removing the last admin
-	if req.Role != "" && user.Role == models.UserRoleAdmin && req.Role != models.UserRoleAdmin {
+	// Prevent removing the last admin. Only applies when demoting an *active*
+	// admin; demoting a disabled admin doesn't reduce the active-admin count.
+	if req.Role != "" && user.IsActive && user.Role == models.UserRoleAdmin &&
+		req.Role != models.UserRoleAdmin {
 		adminCount, err := s.store.CountUsersByRole(models.UserRoleAdmin)
 		if err != nil {
 			return fmt.Errorf("failed to count admins: %w", err)
@@ -841,7 +843,9 @@ func (s *UserService) ValidateDeleteUser(userID, actorUserID string) error {
 		return err
 	}
 
-	if user.Role == models.UserRoleAdmin {
+	// Only block when removing an *active* admin; deleting a disabled admin
+	// doesn't reduce the active-admin count.
+	if user.IsActive && user.Role == models.UserRoleAdmin {
 		adminCount, countErr := s.store.CountUsersByRole(models.UserRoleAdmin)
 		if countErr != nil {
 			return fmt.Errorf("failed to count admins: %w", countErr)
@@ -870,8 +874,9 @@ func (s *UserService) DeleteUserAdmin(
 		return err
 	}
 
-	// Re-check last-admin guard (defense in depth against races).
-	if user.Role == models.UserRoleAdmin {
+	// Re-check last-admin guard (defense in depth against races). Only applies
+	// to active admins; disabled admins don't count toward operational capacity.
+	if user.IsActive && user.Role == models.UserRoleAdmin {
 		adminCount, countErr := s.store.CountUsersByRole(models.UserRoleAdmin)
 		if countErr != nil {
 			return fmt.Errorf("failed to count admins: %w", countErr)
@@ -1112,16 +1117,40 @@ func (s *UserService) ValidateSetUserActiveStatus(
 	return nil
 }
 
-// SetUserActiveStatus enables or disables a user account.
-// The handler must call ValidateSetUserActiveStatus beforehand.
+// SetUserActiveStatus enables or disables a user account. Validation guards
+// (self-change, already in target state, last-admin) are re-checked here as
+// defense in depth so direct callers cannot bypass invariants. Handlers should
+// still call ValidateSetUserActiveStatus first when they need to gate
+// pre-change side effects (e.g. token revocation).
 func (s *UserService) SetUserActiveStatus(
 	ctx context.Context,
 	userID, actorUserID string,
 	isActive bool,
 ) error {
+	if actorUserID == userID {
+		return ErrCannotChangeOwnStatus
+	}
+
 	user, err := s.AdminGetUserByID(userID)
 	if err != nil {
 		return err
+	}
+
+	if isActive && user.IsActive {
+		return ErrUserAlreadyActive
+	}
+	if !isActive && !user.IsActive {
+		return ErrUserAlreadyDisabled
+	}
+
+	if !isActive && user.Role == models.UserRoleAdmin {
+		adminCount, countErr := s.store.CountUsersByRole(models.UserRoleAdmin)
+		if countErr != nil {
+			return fmt.Errorf("failed to count admins: %w", countErr)
+		}
+		if adminCount <= 1 {
+			return ErrCannotRemoveLastAdmin
+		}
 	}
 
 	user.IsActive = isActive
