@@ -47,6 +47,7 @@ var (
 	ErrAssertionExpired             = errors.New("client_assertion is expired")
 	ErrAssertionNotYetValid         = errors.New("client_assertion is not yet valid")
 	ErrAssertionLifetimeTooLong     = errors.New("client_assertion lifetime exceeds server maximum")
+	ErrAssertionInvalidTimeWindow   = errors.New("client_assertion exp must be strictly after iat")
 	ErrAssertionMissingJTI          = errors.New("client_assertion is missing jti")
 	ErrAssertionJTIReplay           = errors.New("client_assertion jti was already used")
 	ErrAssertionJTICacheUnavailable = errors.New("client_assertion jti replay cache unavailable")
@@ -261,7 +262,7 @@ func (v *ClientAssertionVerifier) validateTimeClaims(claims jwt.MapClaims) error
 	// exp must be strictly after iat: a zero or negative lifetime is
 	// nonsensical and would otherwise pass the MaxLifetime bound below.
 	if !exp.After(iat) {
-		return ErrAssertionLifetimeTooLong
+		return ErrAssertionInvalidTimeWindow
 	}
 	if exp.Sub(iat) > v.cfg.MaxLifetime {
 		return ErrAssertionLifetimeTooLong

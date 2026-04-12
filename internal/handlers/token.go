@@ -286,14 +286,16 @@ func (h *TokenHandler) TokenInfo(c *gin.Context) {
 // Introspect godoc
 //
 //	@Summary		Introspect token (RFC 7662)
-//	@Description	Determine the active state and metadata of an OAuth 2.0 token. Requires client authentication via HTTP Basic Auth or form-body client credentials.
+//	@Description	Determine the active state and metadata of an OAuth 2.0 token. Requires client authentication via HTTP Basic Auth, form-body client_id/client_secret, or RFC 7523 private_key_jwt (client_assertion + client_assertion_type).
 //	@Tags			OAuth
 //	@Accept			x-www-form-urlencoded
 //	@Produce		json
-//	@Param			token			formData	string																																		true	"The token to introspect"
-//	@Param			token_type_hint	formData	string																																		false	"Hint about the type of token: 'access_token' or 'refresh_token'"
-//	@Param			client_id		formData	string																																		false	"Client ID (alternative to HTTP Basic Auth)"
-//	@Param			client_secret	formData	string																																		false	"Client secret (alternative to HTTP Basic Auth)"
+//	@Param			token					formData	string																																		true	"The token to introspect"
+//	@Param			token_type_hint			formData	string																																		false	"Hint about the type of token: 'access_token' or 'refresh_token'"
+//	@Param			client_id				formData	string																																		false	"Client ID (alternative to HTTP Basic Auth)"
+//	@Param			client_secret			formData	string																																		false	"Client secret (alternative to HTTP Basic Auth)"
+//	@Param			client_assertion		formData	string																																		false	"Signed JWT assertion (RFC 7523 private_key_jwt); use with client_assertion_type"
+//	@Param			client_assertion_type	formData	string																																		false	"Must be urn:ietf:params:oauth:client-assertion-type:jwt-bearer when client_assertion is present"
 //	@Success		200				{object}	object{active=bool,scope=string,client_id=string,username=string,token_type=string,exp=int,iat=int,sub=string,iss=string,jti=string}	"Token introspection response"
 //	@Failure		401				{object}	object{error=string,error_description=string}																							"Client authentication failed"
 //	@Router			/oauth/introspect [post]

@@ -88,10 +88,18 @@ func (f *JWKSFetcher) GetWithRefresh(ctx context.Context, uri, kid string) (*uti
 	if !f.canRefreshNow(uri) {
 		return set, nil
 	}
-	if err := f.cache.Delete(ctx, uri); err != nil {
-		log.Printf("[JWKSFetcher] cache delete failed for %s: %v", uri, err)
+	// Bypass the cache: fetch fresh directly and best-effort update the
+	// cache afterward. This keeps key rotation working even if the cache
+	// backend is degraded and Delete/Set fails — callers still see the
+	// freshly rotated keys.
+	fresh, err := f.fetch(ctx, uri)
+	if err != nil {
+		return nil, err
 	}
-	return f.getCached(ctx, uri)
+	if setErr := f.cache.Set(ctx, uri, fresh, f.ttl); setErr != nil {
+		log.Printf("[JWKSFetcher] cache set after refresh failed for %s: %v", uri, setErr)
+	}
+	return &fresh, nil
 }
 
 // canRefreshNow returns true if uri has not been force-refreshed within
