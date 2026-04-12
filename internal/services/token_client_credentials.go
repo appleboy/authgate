@@ -46,6 +46,36 @@ func (s *TokenService) IssueClientCredentialsToken(
 		return nil, ErrInvalidClientCredentials
 	}
 
+	return s.issueClientCredentialsTokenForClient(ctx, client, requestedScopes)
+}
+
+// IssueClientCredentialsTokenForClient issues a client_credentials access token
+// for a client that has already been authenticated (e.g. via RFC 7523
+// private_key_jwt). The caller is responsible for authentication; this method
+// only checks client type, flow enablement, and scope bounds.
+func (s *TokenService) IssueClientCredentialsTokenForClient(
+	ctx context.Context,
+	client *models.OAuthApplication,
+	requestedScopes string,
+) (*models.AccessToken, error) {
+	if client == nil || !client.IsActive() {
+		return nil, ErrInvalidClientCredentials
+	}
+	if core.ClientType(client.ClientType) != core.ClientTypeConfidential {
+		return nil, ErrClientNotConfidential
+	}
+	if !client.EnableClientCredentialsFlow {
+		return nil, ErrClientCredentialsFlowDisabled
+	}
+	return s.issueClientCredentialsTokenForClient(ctx, client, requestedScopes)
+}
+
+func (s *TokenService) issueClientCredentialsTokenForClient(
+	ctx context.Context,
+	client *models.OAuthApplication,
+	requestedScopes string,
+) (*models.AccessToken, error) {
+	clientID := client.ClientID
 	// 5. Resolve effective scopes
 	effectiveScopes := requestedScopes
 	if effectiveScopes == "" {
