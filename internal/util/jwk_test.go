@@ -124,7 +124,10 @@ func TestParseJWKSet_InvalidJSON(t *testing.T) {
 }
 
 func TestFindByKid_SingleKeyNoKid(t *testing.T) {
-	priv, _ := rsa.GenerateKey(rand.Reader, 2048)
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
 	set := &JWKSet{Keys: []JWK{jwkFromRSA(t, &priv.PublicKey, "")}}
 	if got := set.FindByKid(""); got == nil {
 		t.Fatal("expected single key match when kid empty")
@@ -132,7 +135,10 @@ func TestFindByKid_SingleKeyNoKid(t *testing.T) {
 }
 
 func TestFindByKid_MultipleKeysEmptyKid(t *testing.T) {
-	priv, _ := rsa.GenerateKey(rand.Reader, 2048)
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
 	set := &JWKSet{Keys: []JWK{
 		jwkFromRSA(t, &priv.PublicKey, "a"),
 		jwkFromRSA(t, &priv.PublicKey, "b"),

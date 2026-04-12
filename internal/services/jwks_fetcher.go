@@ -106,11 +106,12 @@ func (f *JWKSFetcher) GetWithRefresh(ctx context.Context, uri, kid string) (*uti
 	return &fresh, nil
 }
 
-// canRefreshNow returns true if uri has not been force-refreshed within
-// tryReserveRefresh attempts to claim the right to refresh uri via CAS.
-// On success it returns the timestamp it stored (so the caller can roll back
-// on fetch failure) and whether a previous reservation existed — both needed
-// to undo the reservation cleanly if the subsequent network fetch fails.
+// tryReserveRefresh attempts to reserve a refresh for uri, subject to the
+// per-URI cooldown. LoadOrStore + CompareAndSwap together ensure that at most
+// one concurrent caller wins the right to refresh once the cooldown has
+// elapsed. On success it returns the previous timestamp (zero when the uri
+// was never refreshed) and the timestamp it stored, so rollbackRefreshReservation
+// can undo the reservation if the subsequent network fetch fails.
 func (f *JWKSFetcher) tryReserveRefresh(uri string) (prev, stored time.Time, ok bool) {
 	for {
 		now := time.Now()
