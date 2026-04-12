@@ -80,13 +80,16 @@ func (f *JWKSFetcher) GetWithRefresh(ctx context.Context, uri, kid string) (*uti
 	if kid == "" || set.FindByKid(kid) != nil {
 		return set, nil
 	}
+	// With no cache there is nothing to refresh — getCached already dialed
+	// the remote for this call, so an additional fetch is pure overhead.
+	if f.cache == nil {
+		return set, nil
+	}
 	if !f.canRefreshNow(uri) {
 		return set, nil
 	}
-	if f.cache != nil {
-		if err := f.cache.Delete(ctx, uri); err != nil {
-			log.Printf("[JWKSFetcher] cache delete failed for %s: %v", uri, err)
-		}
+	if err := f.cache.Delete(ctx, uri); err != nil {
+		log.Printf("[JWKSFetcher] cache delete failed for %s: %v", uri, err)
 	}
 	return f.getCached(ctx, uri)
 }

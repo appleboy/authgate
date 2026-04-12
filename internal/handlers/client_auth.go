@@ -38,25 +38,22 @@ type AuthenticatedClient struct {
 
 // ClientAuthenticator performs RFC 6749 §2.3 + RFC 7521 §4.2 authentication at
 // the token endpoint. It supports client_secret_basic, client_secret_post,
-// private_key_jwt, and none (public clients).
+// private_key_jwt, and none (public clients). Assertion-audience validation
+// lives on ClientAssertionVerifier; this type only dispatches.
 type ClientAuthenticator struct {
 	clientService     *services.ClientService
 	assertionVerifier *services.ClientAssertionVerifier
-	audience          string
 }
 
-// NewClientAuthenticator wires a new authenticator. assertionVerifier may be nil,
-// in which case private_key_jwt is rejected. The audience is the token endpoint
-// URL presented to clients (typically BaseURL + "/oauth/token").
+// NewClientAuthenticator wires a new authenticator. assertionVerifier may be
+// nil, in which case private_key_jwt assertions are rejected.
 func NewClientAuthenticator(
 	cs *services.ClientService,
 	av *services.ClientAssertionVerifier,
-	audience string,
 ) *ClientAuthenticator {
 	return &ClientAuthenticator{
 		clientService:     cs,
 		assertionVerifier: av,
-		audience:          audience,
 	}
 }
 
@@ -77,9 +74,6 @@ func (a *ClientAuthenticator) Authenticate(
 
 	clientID, secret, cameFromHeader := parseClientCredentials(c)
 	if clientID == "" {
-		if requireConfidential {
-			return nil, ErrClientAuthRequired
-		}
 		return nil, ErrClientAuthRequired
 	}
 

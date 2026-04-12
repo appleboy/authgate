@@ -85,7 +85,6 @@ func initializeHandlers(deps handlerDeps) handlerSet {
 		clientAuth = handlers.NewClientAuthenticator(
 			deps.services.client,
 			verifier,
-			tokenEndpoint,
 		)
 	}
 

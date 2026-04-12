@@ -81,7 +81,7 @@ func setupPKJWTEnv(t *testing.T) (*gin.Engine, *store.Store, string) {
 			ClockSkew:         cfg.ClientAssertionClockSkew,
 		},
 	)
-	clientAuth := NewClientAuthenticator(clientSvc, verifier, tokenEndpoint)
+	clientAuth := NewClientAuthenticator(clientSvc, verifier)
 	handler := NewTokenHandler(tokenSvc, authzSvc, cfg).WithClientAuthenticator(clientAuth)
 
 	r := gin.New()

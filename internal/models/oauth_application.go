@@ -143,9 +143,6 @@ func (app *OAuthApplication) UsesClientSecret() bool {
 		app.TokenEndpointAuthMethod == TokenEndpointAuthClientSecretPost
 }
 
-// ErrInvalidKeyMaterial indicates a client's private_key_jwt configuration is invalid.
-var ErrInvalidKeyMaterial = errors.New("invalid key material for private_key_jwt")
-
 // ValidateKeyMaterial verifies that a private_key_jwt client has exactly one of
 // JWKSURI or JWKS set, and that the signing algorithm is supported. For other
 // auth methods, it verifies no key material is present.
