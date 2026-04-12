@@ -85,7 +85,8 @@ func (f *JWKSFetcher) GetWithRefresh(ctx context.Context, uri, kid string) (*uti
 	if f.cache == nil {
 		return set, nil
 	}
-	if !f.canRefreshNow(uri) {
+	prev, stored, ok := f.tryReserveRefresh(uri)
+	if !ok {
 		return set, nil
 	}
 	// Bypass the cache: fetch fresh directly and best-effort update the
@@ -94,6 +95,9 @@ func (f *JWKSFetcher) GetWithRefresh(ctx context.Context, uri, kid string) (*uti
 	// freshly rotated keys.
 	fresh, err := f.fetch(ctx, uri)
 	if err != nil {
+		// Roll back the reservation so the next caller can retry, rather
+		// than being suppressed by the cooldown after a transient error.
+		f.rollbackRefreshReservation(uri, prev, stored)
 		return nil, err
 	}
 	if setErr := f.cache.Set(ctx, uri, fresh, f.ttl); setErr != nil {
@@ -103,26 +107,41 @@ func (f *JWKSFetcher) GetWithRefresh(ctx context.Context, uri, kid string) (*uti
 }
 
 // canRefreshNow returns true if uri has not been force-refreshed within
-// jwksRefreshCooldown, and marks it as refreshed. Concurrent callers for the
-// same uri collapse into a single refresh per cooldown window via CAS.
-func (f *JWKSFetcher) canRefreshNow(uri string) bool {
+// tryReserveRefresh attempts to claim the right to refresh uri via CAS.
+// On success it returns the timestamp it stored (so the caller can roll back
+// on fetch failure) and whether a previous reservation existed — both needed
+// to undo the reservation cleanly if the subsequent network fetch fails.
+func (f *JWKSFetcher) tryReserveRefresh(uri string) (prev, stored time.Time, ok bool) {
 	for {
 		now := time.Now()
-		prev, loaded := f.lastRefresh.LoadOrStore(uri, now)
+		existing, loaded := f.lastRefresh.LoadOrStore(uri, now)
 		if !loaded {
-			return true
+			// First-ever reservation for this uri.
+			return time.Time{}, now, true
 		}
-		prevTime := prev.(time.Time)
+		prevTime := existing.(time.Time)
 		if now.Sub(prevTime) < jwksRefreshCooldown {
-			return false
+			return time.Time{}, time.Time{}, false
 		}
-		// CompareAndSwap guarantees only one concurrent caller wins the
+		// CompareAndSwap ensures only one concurrent caller wins the
 		// post-cooldown refresh decision; losers retry the loop and fall
 		// back into the cooldown branch.
 		if f.lastRefresh.CompareAndSwap(uri, prevTime, now) {
-			return true
+			return prevTime, now, true
 		}
 	}
+}
+
+// rollbackRefreshReservation reverts a reservation made by tryReserveRefresh
+// after the refresh fetch failed. Without this, a transient fetch error would
+// strand key rotation until the cooldown elapses.
+func (f *JWKSFetcher) rollbackRefreshReservation(uri string, prev, stored time.Time) {
+	if prev.IsZero() {
+		// Best-effort: if someone else updated since, leave their value alone.
+		f.lastRefresh.CompareAndDelete(uri, stored)
+		return
+	}
+	f.lastRefresh.CompareAndSwap(uri, stored, prev)
 }
 
 func (f *JWKSFetcher) getCached(ctx context.Context, uri string) (*util.JWKSet, error) {

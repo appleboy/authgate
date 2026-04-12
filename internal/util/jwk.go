@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 )
 
@@ -119,6 +120,15 @@ func rsaKeyFromJWK(k *JWK) (*rsa.PublicKey, error) {
 	if eInt < 3 || eInt&1 == 0 {
 		return nil, fmt.Errorf(
 			"%w: RSA exponent must be odd and >= 3 (got %d)",
+			ErrInvalidJWKS, eInt,
+		)
+	}
+	// rsa.PublicKey.E is an int, which is 32 bits on some platforms. Reject
+	// exponents that would truncate when cast rather than silently producing
+	// a corrupted key.
+	if eInt > math.MaxInt {
+		return nil, fmt.Errorf(
+			"%w: RSA exponent %d exceeds platform int range",
 			ErrInvalidJWKS, eInt,
 		)
 	}
