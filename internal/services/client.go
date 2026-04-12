@@ -277,6 +277,17 @@ func (s *ClientService) CreateClient(
 		if clientType != core.ClientTypeConfidential {
 			return nil, ErrPrivateKeyJWTRequiresConfidential
 		}
+		// Only client_credentials and introspection currently authenticate
+		// via the shared ClientAuthenticator. Enabling other grants on a
+		// private_key_jwt client would produce a client that can register
+		// but cannot actually exchange codes or refresh tokens, because
+		// those paths still expect a shared secret.
+		if req.EnableAuthCodeFlow || req.EnableDeviceFlow {
+			return nil, fmt.Errorf(
+				"%w: private_key_jwt is currently supported only for the client_credentials grant; disable authorization_code and device_code flows",
+				ErrInvalidClientData,
+			)
+		}
 	}
 
 	// Generate client ID
@@ -471,6 +482,15 @@ func (s *ClientService) UpdateClient(
 		case models.TokenEndpointAuthPrivateKeyJWT:
 			if clientType != core.ClientTypeConfidential {
 				return ErrPrivateKeyJWTRequiresConfidential
+			}
+			// See the matching guard in CreateClient — authorization_code and
+			// device_code still expect a shared secret, so enabling them on a
+			// private_key_jwt client produces an unusable configuration.
+			if req.EnableAuthCodeFlow || req.EnableDeviceFlow {
+				return fmt.Errorf(
+					"%w: private_key_jwt is currently supported only for the client_credentials grant; disable authorization_code and device_code flows",
+					ErrInvalidClientData,
+				)
 			}
 		}
 		client.TokenEndpointAuthMethod = req.TokenEndpointAuthMethod
