@@ -164,6 +164,10 @@ type Config struct {
 	EnableExpiredTokenCleanup   bool          // Enable periodic cleanup of expired tokens and device codes (default: false)
 	ExpiredTokenCleanupInterval time.Duration // How often to purge expired rows (default: 1h)
 
+	// Distributed cleanup lock (multi-pod deployments)
+	EnableCleanupLock      bool          // Use Redis lock so only one pod runs cleanup per interval (default: false)
+	CleanupLockKeyValidity time.Duration // Lock validity window, auto-extended by rueidislock (default: 5m)
+
 	// Prometheus Metrics settings
 	MetricsEnabled             bool          // Enable Prometheus metrics endpoint (default: false)
 	MetricsToken               string        // Bearer token for /metrics (empty = no auth, recommended for production)
@@ -370,6 +374,10 @@ func Load() *Config {
 		// Token/Device Code cleanup settings
 		EnableExpiredTokenCleanup:   getEnvBool("ENABLE_EXPIRED_TOKEN_CLEANUP", false),
 		ExpiredTokenCleanupInterval: getEnvDuration("EXPIRED_TOKEN_CLEANUP_INTERVAL", time.Hour),
+
+		// Distributed cleanup lock
+		EnableCleanupLock:      getEnvBool("ENABLE_CLEANUP_LOCK", false),
+		CleanupLockKeyValidity: getEnvDuration("CLEANUP_LOCK_KEY_VALIDITY", 5*time.Minute),
 
 		// Prometheus Metrics settings
 		MetricsEnabled:             getEnvBool("METRICS_ENABLED", false),

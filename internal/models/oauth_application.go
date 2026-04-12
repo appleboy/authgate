@@ -35,15 +35,15 @@ type OAuthApplication struct {
 	ClientSecret                string      `gorm:"not null"` // bcrypt hashed secret
 	ClientName                  string      `gorm:"not null"`
 	Description                 string      `gorm:"type:text"`
-	UserID                      string      `gorm:"not null"`
+	UserID                      string      `gorm:"not null;index"`
 	Scopes                      string      `gorm:"not null"`
 	GrantTypes                  string      `gorm:"not null;default:'device_code'"`
 	RedirectURIs                StringArray `gorm:"type:json"`
 	ClientType                  string      `gorm:"not null;default:'public'"` // "confidential" or "public"
 	EnableDeviceFlow            bool        `gorm:"not null;default:true"`
 	EnableAuthCodeFlow          bool        `gorm:"not null;default:false"`
-	EnableClientCredentialsFlow bool        `gorm:"not null;default:false"`    // Client Credentials Grant (RFC 6749 §4.4); confidential clients only
-	Status                      string      `gorm:"not null;default:'active'"` // ClientStatusPending / ClientStatusActive / ClientStatusInactive
+	EnableClientCredentialsFlow bool        `gorm:"not null;default:false"`          // Client Credentials Grant (RFC 6749 §4.4); confidential clients only
+	Status                      string      `gorm:"not null;default:'active';index"` // ClientStatusPending / ClientStatusActive / ClientStatusInactive
 	CreatedBy                   string
 	CreatedAt                   time.Time
 	UpdatedAt                   time.Time
