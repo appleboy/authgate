@@ -95,13 +95,21 @@ func (a *ClientAuthenticator) Authenticate(
 		if secret == "" || !client.ValidateClientSecret([]byte(secret)) {
 			return nil, ErrClientAuthSecretBad
 		}
-		method := models.TokenEndpointAuthClientSecretBasic
+		observed := models.TokenEndpointAuthClientSecretBasic
 		if !cameFromHeader {
-			method = models.TokenEndpointAuthClientSecretPost
+			observed = models.TokenEndpointAuthClientSecretPost
+		}
+		// Enforce the registered method contract: a client registered as
+		// client_secret_basic must use Basic Auth, and client_secret_post
+		// must use form-body credentials. Accepting either mode would let a
+		// stolen secret be presented through whichever channel happens to
+		// be easier for the attacker.
+		if client.TokenEndpointAuthMethod != observed {
+			return nil, ErrClientAuthMethodUnmet
 		}
 		return &AuthenticatedClient{
 			Client: client,
-			Method: method,
+			Method: observed,
 		}, nil
 	}
 

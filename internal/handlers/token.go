@@ -307,7 +307,12 @@ func (h *TokenHandler) Introspect(c *gin.Context) {
 	if h.clientAuthenticator != nil {
 		authed, err := h.clientAuthenticator.Authenticate(c, true)
 		if err != nil {
-			c.Header("WWW-Authenticate", `Basic realm="authgate"`)
+			// Only advertise a Basic challenge when Basic is actually an
+			// applicable method for this caller — otherwise a private_key_jwt
+			// client would see a misleading WWW-Authenticate header.
+			if shouldChallengeBasic(c) {
+				c.Header("WWW-Authenticate", `Basic realm="authgate"`)
+			}
 			respondOAuthError(
 				c,
 				http.StatusUnauthorized,
@@ -447,7 +452,9 @@ func (h *TokenHandler) handleClientCredentialsGrant(c *gin.Context) {
 	if h.clientAuthenticator != nil {
 		authed, err := h.clientAuthenticator.Authenticate(c, true)
 		if err != nil {
-			c.Header("WWW-Authenticate", `Basic realm="authgate"`)
+			if shouldChallengeBasic(c) {
+				c.Header("WWW-Authenticate", `Basic realm="authgate"`)
+			}
 			respondOAuthError(
 				c,
 				http.StatusUnauthorized,
@@ -496,6 +503,15 @@ func (h *TokenHandler) handleClientCredentialsGrant(c *gin.Context) {
 	c.JSON(http.StatusOK, buildTokenResponse(accessToken, nil, ""))
 }
 
+// shouldChallengeBasic reports whether an HTTP Basic Auth challenge is
+// meaningful in a 401 response to the given request. We skip the challenge
+// when the caller explicitly used private_key_jwt (client_assertion is
+// present) because Basic is not an applicable method for that client.
+func shouldChallengeBasic(c *gin.Context) bool {
+	return c.PostForm(formClientAssertion) == "" &&
+		c.PostForm(formClientAssertionType) == ""
+}
+
 // writeClientCredentialsError maps service-layer errors from the client_credentials
 // flow to RFC 6749 error responses. Shared between the classic and shared-authenticator
 // code paths.
@@ -503,7 +519,9 @@ func (h *TokenHandler) writeClientCredentialsError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, services.ErrInvalidClientCredentials),
 		errors.Is(err, services.ErrClientNotConfidential):
-		c.Header("WWW-Authenticate", `Basic realm="authgate"`)
+		if shouldChallengeBasic(c) {
+			c.Header("WWW-Authenticate", `Basic realm="authgate"`)
+		}
 		respondOAuthError(
 			c,
 			http.StatusUnauthorized,
