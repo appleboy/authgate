@@ -763,3 +763,53 @@ func TestAuthCodeFlowConfigFields(t *testing.T) {
 	assert.True(t, cfg.PKCERequired)
 	assert.False(t, cfg.ConsentRemember)
 }
+
+func TestTLSEnabled(t *testing.T) {
+	tests := []struct {
+		name     string
+		certFile string
+		keyFile  string
+		want     bool
+	}{
+		{"both empty", "", "", false},
+		{"only cert set", "cert.pem", "", false},
+		{"only key set", "", "key.pem", false},
+		{"both set", "cert.pem", "key.pem", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{TLSCertFile: tt.certFile, TLSKeyFile: tt.keyFile}
+			assert.Equal(t, tt.want, cfg.TLSEnabled())
+		})
+	}
+}
+
+func TestValidate_TLSPartialConfig(t *testing.T) {
+	tests := []struct {
+		name      string
+		certFile  string
+		keyFile   string
+		expectErr bool
+	}{
+		{"both empty passes", "", "", false},
+		{"both set passes", "cert.pem", "key.pem", false},
+		{"only cert set fails", "cert.pem", "", true},
+		{"only key set fails", "", "key.pem", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validBaseConfig()
+			cfg.TLSCertFile = tt.certFile
+			cfg.TLSKeyFile = tt.keyFile
+			err := cfg.Validate()
+			if tt.expectErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "TLS_CERT_FILE and TLS_KEY_FILE")
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}

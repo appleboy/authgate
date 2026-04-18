@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -37,8 +38,10 @@ const (
 
 type Config struct {
 	// Server settings
-	ServerAddr string
-	BaseURL    string
+	ServerAddr  string
+	BaseURL     string
+	TLSCertFile string // Both TLSCertFile and TLSKeyFile must be set to serve HTTPS.
+	TLSKeyFile  string
 
 	// Environment detection
 	IsProduction bool
@@ -229,6 +232,12 @@ type Config struct {
 	DBCloseTimeout        time.Duration // Database close timeout (default: 5s)
 }
 
+// TLSEnabled reports whether TLS serving should be activated.
+// Both TLSCertFile and TLSKeyFile must be set for TLS to be enabled.
+func (c *Config) TLSEnabled() bool {
+	return c.TLSCertFile != "" && c.TLSKeyFile != ""
+}
+
 func Load() *Config {
 	// Load .env file if exists (ignore error if not found)
 	_ = godotenv.Load()
@@ -243,8 +252,10 @@ func Load() *Config {
 	}
 
 	return &Config{
-		ServerAddr: getEnv("SERVER_ADDR", ":8080"),
-		BaseURL:    getEnv("BASE_URL", "http://localhost:8080"),
+		ServerAddr:  getEnv("SERVER_ADDR", ":8080"),
+		BaseURL:     getEnv("BASE_URL", "http://localhost:8080"),
+		TLSCertFile: getEnv("TLS_CERT_FILE", ""),
+		TLSKeyFile:  getEnv("TLS_KEY_FILE", ""),
 		IsProduction: getEnvBool("ENVIRONMENT", false) ||
 			getEnv("ENVIRONMENT", "") == "production",
 		JWTSecret:           getEnv("JWT_SECRET", "your-256-bit-secret-change-in-production"),
@@ -558,6 +569,11 @@ func (c *Config) Validate() error {
 			"invalid JWT_SIGNING_ALGORITHM value: %q (must be \"HS256\", \"RS256\", or \"ES256\")",
 			c.JWTSigningAlgorithm,
 		)
+	}
+
+	// TLS cert/key must be set together — setting only one would silently fall back to HTTP.
+	if (c.TLSCertFile != "") != (c.TLSKeyFile != "") {
+		return errors.New("TLS_CERT_FILE and TLS_KEY_FILE must both be set or both be empty")
 	}
 
 	// Validate rate limit store type

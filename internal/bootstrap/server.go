@@ -28,11 +28,24 @@ func createHTTPServer(cfg *config.Config, handler http.Handler) *http.Server {
 	}
 }
 
-// addServerRunningJob adds the HTTP server running job
-func addServerRunningJob(m *graceful.Manager, srv *http.Server) {
+// addServerRunningJob adds the HTTP server running job.
+// Serves HTTPS when cfg.TLSEnabled(); otherwise plain HTTP.
+func addServerRunningJob(m *graceful.Manager, srv *http.Server, cfg *config.Config) {
 	m.AddRunningJob(func(ctx context.Context) error {
 		go func() {
-			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			scheme := "HTTP"
+			if cfg.TLSEnabled() {
+				scheme = "HTTPS"
+			}
+			log.Printf("Starting %s server on %s", scheme, srv.Addr)
+
+			var err error
+			if cfg.TLSEnabled() {
+				err = srv.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile)
+			} else {
+				err = srv.ListenAndServe()
+			}
+			if err != nil && err != http.ErrServerClosed {
 				log.Fatalf("Failed to start server: %v", err)
 			}
 		}()
