@@ -5,6 +5,7 @@ This guide covers all configuration options for AuthGate, including environment 
 ## Table of Contents
 
 - [Environment Variables](#environment-variables)
+- [TLS / HTTPS](#tls--https)
 - [Bootstrap and Shutdown Timeouts](#bootstrap-and-shutdown-timeouts)
 - [Generate Strong Secrets](#generate-strong-secrets)
 - [Default Test Data](#default-test-data)
@@ -27,6 +28,10 @@ Create a `.env` file in the project root:
 # Server Configuration
 SERVER_ADDR=:8080                # Listen address (e.g., :8080, 0.0.0.0:8080)
 BASE_URL=http://localhost:8080   # Public URL for verification_uri
+
+# TLS / HTTPS (optional) — set both to serve HTTPS on SERVER_ADDR
+# TLS_CERT_FILE=/etc/authgate/tls/fullchain.pem
+# TLS_KEY_FILE=/etc/authgate/tls/privkey.pem
 
 # Security - CHANGE THESE IN PRODUCTION!
 JWT_SECRET=your-256-bit-secret-change-in-production       # HMAC-SHA256 signing key
@@ -131,6 +136,35 @@ ENABLE_AUDIT_LOGGING=true               # Enable audit logging (default: true)
 AUDIT_LOG_RETENTION=2160h               # Retention period: 90 days (default: 90 days = 2160h)
 AUDIT_LOG_BUFFER_SIZE=1000              # Async buffer size (default: 1000)
 AUDIT_LOG_CLEANUP_INTERVAL=24h          # Cleanup frequency (default: 24h)
+```
+
+---
+
+## TLS / HTTPS
+
+AuthGate can serve HTTPS directly by setting two environment variables. When both are configured, the server listens on `SERVER_ADDR` using TLS. When both are empty (the default), it serves plain HTTP. Setting only one of the two is rejected at startup by `Config.Validate()` — this prevents silently falling back to HTTP when the operator meant to enable TLS.
+
+```bash
+TLS_CERT_FILE=/etc/authgate/tls/fullchain.pem   # PEM-encoded certificate (full chain)
+TLS_KEY_FILE=/etc/authgate/tls/privkey.pem      # PEM-encoded private key
+```
+
+Notes:
+
+- **Both variables must be set together.** Setting only one causes `Config.Validate()` to fail at startup (prevents accidental HTTP fallback when TLS was intended). Leave both empty for plain HTTP.
+- **Use a full chain certificate** (leaf + intermediates). Clients often reject leaf-only certificates from non-root CAs.
+- **Update `BASE_URL`** to `https://...` so OAuth redirect URIs, `verification_uri`, and JWKS links use the correct scheme.
+- **Cipher suites / TLS versions** use Go's `crypto/tls` defaults — modern, secure, no tuning needed for typical deployments.
+- **No hot reload.** Renewed certificates require restarting AuthGate. For zero-downtime certificate rotation (ACME/Let's Encrypt), terminate TLS at a reverse proxy (nginx, Caddy, Cloudflare) instead.
+
+Quick local test with a self-signed certificate:
+
+```bash
+openssl req -x509 -newkey rsa:2048 -nodes -keyout key.pem -out cert.pem \
+  -days 1 -subj "/CN=localhost"
+TLS_CERT_FILE=cert.pem TLS_KEY_FILE=key.pem BASE_URL=https://localhost:8080 \
+  ./bin/authgate server
+curl -k https://localhost:8080/health
 ```
 
 ---

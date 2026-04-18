@@ -212,7 +212,7 @@ func (app *Application) startWithGracefulShutdown() {
 	m := app.manager // Use stored manager instance
 
 	// Add jobs
-	addServerRunningJob(m, app.Server)
+	addServerRunningJob(m, app.Server, app.Config)
 	addServerShutdownJob(m, app.Server, app.Config)
 	addAuditServiceShutdownJob(m, app.AuditService, app.Config)
 	addRedisClientShutdownJob(m, app.RateLimitRedisClient, app.Config)
