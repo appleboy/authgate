@@ -1619,6 +1619,37 @@ func TestUpsertExternalUser_EmptyAuthSource_Rejects(t *testing.T) {
 	assert.ErrorIs(t, err, ErrExternalUserMissingIdentity)
 }
 
+// TestGetUserByEmail_ExactMatchPlusLegacyDuplicate_ReturnsError verifies that
+// even when a properly normalized row exists, the presence of any legacy
+// whitespace-variant duplicate still surfaces ErrAmbiguousEmail. The exact
+// match alone is not safe to return because the OAuth auto-link path would
+// otherwise silently pick it while another row owns the same logical email.
+func TestGetUserByEmail_ExactMatchPlusLegacyDuplicate_ReturnsError(t *testing.T) {
+	store, err := New(context.Background(), "sqlite", ":memory:", getTestConfig())
+	require.NoError(t, err)
+
+	require.NoError(t, store.CreateUser(&models.User{
+		ID:         uuid.New().String(),
+		Username:   "normal",
+		Email:      "mixed@example.com", // exact match
+		Role:       models.UserRoleUser,
+		IsActive:   true,
+		AuthSource: "http_api",
+	}))
+	require.NoError(t, store.CreateUser(&models.User{
+		ID:         uuid.New().String(),
+		Username:   "legacy",
+		Email:      "  mixed@example.com", // normalizes to the same value
+		Role:       models.UserRoleUser,
+		IsActive:   true,
+		AuthSource: "http_api",
+	}))
+
+	_, err = store.GetUserByEmail("mixed@example.com")
+	assert.ErrorIs(t, err, ErrAmbiguousEmail,
+		"ambiguity must be surfaced even when an exact match exists alongside a legacy duplicate")
+}
+
 // TestGetUserByEmail_AmbiguousWhitespaceDuplicates_ReturnsError verifies that
 // when the TRIM fallback would match more than one legacy row the store
 // refuses to pick a non-deterministic winner and surfaces ErrAmbiguousEmail.

@@ -190,30 +190,21 @@ func (s *Store) GetUsersByIDs(userIDs []string) (map[string]*models.User, error)
 }
 
 // GetUserByEmail finds a user by email address. The lookup is resilient to
-// incidental whitespace on either side: the argument is trimmed, and if no
-// indexed exact match is found, a fallback scan on TRIM(email) lets callers
-// still locate legacy rows written before email normalization was enforced.
-//
-// When the fallback matches more than one row (legacy duplicates differing
-// only in whitespace), the function returns ErrAmbiguousEmail instead of
-// picking a non-deterministic winner — in the OAuth auto-link path this
-// prevents silently linking a verified provider to the wrong local user.
+// incidental whitespace on either side: the argument is trimmed and the
+// store matches against TRIM(email). If more than one row matches the
+// normalized value — whether via exact match plus a legacy duplicate or
+// purely through the fallback — the function returns ErrAmbiguousEmail
+// rather than picking a non-deterministic winner. In the OAuth auto-link
+// path this guarantees a verified provider can never silently bind to the
+// wrong local user when legacy whitespace duplicates exist.
 func (s *Store) GetUserByEmail(email string) (*models.User, error) {
 	email = strings.TrimSpace(email)
 
-	var user models.User
-	err := s.db.Where("email = ?", email).First(&user).Error
-	if err == nil {
-		return &user, nil
-	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, err
-	}
-
-	// Fallback: legacy rows may have incidental whitespace in the stored
-	// value. This query bypasses the unique index but is only reached on a
-	// primary miss, so the cost stays bounded. Fetch up to two rows so we
-	// can distinguish unique legacy match from an ambiguous duplicate.
+	// Fetch up to two matches against the normalized stored email. Using
+	// TRIM(email) for the comparison means a legacy row whose Email carries
+	// incidental whitespace is returned alongside a properly normalized row,
+	// so the ambiguity check below catches duplicates regardless of whether
+	// an exact match also exists.
 	var matches []models.User
 	if err := s.db.Where("TRIM(email) = ?", email).Limit(2).Find(&matches).Error; err != nil {
 		return nil, err

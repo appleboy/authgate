@@ -504,6 +504,37 @@ func TestUpdateUserProfile_EmailChange_ClearsEmailVerified(t *testing.T) {
 		"changing the email via admin edit must downgrade EmailVerified")
 }
 
+func TestUpdateUserProfile_NormalizationEdit_DetectsConflict(t *testing.T) {
+	db := setupTestStore(t)
+	ctrl := gomock.NewController(t)
+	mockCache := mocks.NewMockCache[models.User](ctrl)
+
+	// u has a legacy whitespace email; another user already owns the trimmed form.
+	u := makeTestUser(t, db)
+	trimmed := u.Email
+	u.Email = "  " + trimmed + "  "
+	require.NoError(t, db.UpdateUser(u))
+
+	other := makeTestUser(t, db)
+	other.Email = trimmed
+	require.NoError(t, db.UpdateUser(other))
+
+	actor := makeTestUser(t, db)
+
+	svc := newUserServiceWithStore(db, mockCache)
+	err := svc.UpdateUserProfile(context.Background(), u.ID, actor.ID, UpdateUserProfileRequest{
+		FullName: u.FullName,
+		Email:    trimmed, // pure normalization edit
+		Role:     u.Role,
+	})
+	assert.ErrorIs(
+		t,
+		err,
+		ErrEmailConflict,
+		"normalization-only edit must surface a deterministic ErrEmailConflict instead of a DB error",
+	)
+}
+
 func TestUpdateUserProfile_LegacyUnnormalizedStoredEmail_SelfHeals(t *testing.T) {
 	db := setupTestStore(t)
 	ctrl := gomock.NewController(t)

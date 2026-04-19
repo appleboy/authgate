@@ -776,13 +776,22 @@ func (s *UserService) UpdateUserProfile(
 		return ErrEmailRequired
 	}
 
-	// Check email conflict. Compare against the normalized stored value so a
-	// pre-existing row with incidental whitespace doesn't treat a no-op edit
-	// as a real change.
+	// Run the uniqueness check whenever the stored raw value differs from
+	// the (already trimmed) input, even if the two agree after trimming.
+	// A pure normalization edit ("  a@b  " → "a@b") still rewrites the DB
+	// value; if another user already owns the trimmed form exactly, this
+	// would collide at the UNIQUE constraint — catch it here with a
+	// deterministic ErrEmailConflict instead of a raw DB error.
 	storedEmail := strings.TrimSpace(user.Email)
-	if req.Email != storedEmail {
+	if req.Email != user.Email {
 		existing, lookupErr := s.store.GetUserByEmail(req.Email)
 		if lookupErr != nil {
+			// Ambiguous matches mean at least two other rows already share
+			// this normalized email — from the admin's perspective that's
+			// just a conflict, so surface the familiar error.
+			if errors.Is(lookupErr, store.ErrAmbiguousEmail) {
+				return ErrEmailConflict
+			}
 			if !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
 				return fmt.Errorf("failed to check email uniqueness: %w", lookupErr)
 			}
