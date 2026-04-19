@@ -170,6 +170,94 @@ func TestAuthenticateWithOAuth_ExistingConnection(t *testing.T) {
 	assert.Equal(t, user1.ID, user2.ID)
 }
 
+// TestAuthenticateWithOAuth_ExistingConnection_PromotesEmailVerified verifies
+// that re-authenticating via an already-linked OAuth connection promotes
+// User.EmailVerified to true when the provider reports a verified email that
+// matches the stored address. This covers the migration and steady-state case
+// where existing OAuth users default to EmailVerified=false (e.g., rows added
+// before the column existed) and must self-heal on next login.
+func TestAuthenticateWithOAuth_ExistingConnection_PromotesEmailVerified(t *testing.T) {
+	svc := newOAuthUserService(t)
+
+	providerUserID := uuid.New().String()
+	info := &auth.OAuthUserInfo{
+		ProviderUserID: providerUserID,
+		Username:       "frank",
+		Email:          "frank@example.com",
+		EmailVerified:  true,
+	}
+
+	// Seed a user + connection as if created via a provider that didn't yet
+	// expose verification, leaving EmailVerified=false.
+	user, err := svc.AuthenticateWithOAuth(
+		context.Background(),
+		"github",
+		&auth.OAuthUserInfo{
+			ProviderUserID: providerUserID,
+			Username:       "frank",
+			Email:          "frank@example.com",
+			EmailVerified:  false,
+		},
+		newOAuthToken(),
+	)
+	require.NoError(t, err)
+	require.False(t, user.EmailVerified)
+
+	// Re-authenticate via the same connection with a verified flag — the
+	// stored flag must be promoted.
+	promoted, err := svc.AuthenticateWithOAuth(
+		context.Background(),
+		"github",
+		info,
+		newOAuthToken(),
+	)
+	require.NoError(t, err)
+	assert.Equal(t, user.ID, promoted.ID)
+	assert.True(
+		t,
+		promoted.EmailVerified,
+		"existing OAuth connection must promote EmailVerified when provider confirms the same email",
+	)
+}
+
+// TestAuthenticateWithOAuth_ExistingConnection_DoesNotPromoteOnEmailMismatch
+// guards against a provider account whose email drifted away from the local
+// user's email: verification of a different address must not promote the
+// local user's EmailVerified flag.
+func TestAuthenticateWithOAuth_ExistingConnection_DoesNotPromoteOnEmailMismatch(t *testing.T) {
+	svc := newOAuthUserService(t)
+
+	providerUserID := uuid.New().String()
+	user, err := svc.AuthenticateWithOAuth(
+		context.Background(),
+		"github",
+		&auth.OAuthUserInfo{
+			ProviderUserID: providerUserID,
+			Username:       "grace",
+			Email:          "grace@example.com",
+			EmailVerified:  false,
+		},
+		newOAuthToken(),
+	)
+	require.NoError(t, err)
+	require.False(t, user.EmailVerified)
+
+	// Provider now returns a verified flag but for a different email — the
+	// stored user's EmailVerified must stay false.
+	_, err = svc.AuthenticateWithOAuth(context.Background(), "github", &auth.OAuthUserInfo{
+		ProviderUserID: providerUserID,
+		Username:       "grace",
+		Email:          "other@example.com",
+		EmailVerified:  true,
+	}, newOAuthToken())
+	require.NoError(t, err)
+
+	reloaded, err := svc.store.GetUserByID(user.ID)
+	require.NoError(t, err)
+	assert.False(t, reloaded.EmailVerified,
+		"EmailVerified must not be promoted when the provider email drifted from the stored email")
+}
+
 // TestAuthenticateWithOAuth_AutoRegisterDisabled verifies that when
 // oauthAutoRegister is false, a new user is rejected.
 func TestAuthenticateWithOAuth_AutoRegisterDisabled(t *testing.T) {

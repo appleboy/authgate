@@ -415,7 +415,10 @@ func (s *UserService) updateOAuthConnectionAndGetUser(
 		return nil, fmt.Errorf("failed to update OAuth connection: %w", err)
 	}
 
-	// Sync avatar and name if changed
+	// Sync avatar and name if changed. Also self-heal EmailVerified for
+	// existing connections so users migrated from before the column existed
+	// (or anyone whose earlier promotion write failed) eventually get their
+	// email verification flag set when the provider reports a verified match.
 	updated := false
 	if oauthUserInfo.AvatarURL != "" && user.AvatarURL != oauthUserInfo.AvatarURL {
 		user.AvatarURL = oauthUserInfo.AvatarURL
@@ -423,6 +426,14 @@ func (s *UserService) updateOAuthConnectionAndGetUser(
 	}
 	if oauthUserInfo.FullName != "" && user.FullName != oauthUserInfo.FullName {
 		user.FullName = oauthUserInfo.FullName
+		updated = true
+	}
+	// Only promote when the provider email still matches the stored email —
+	// otherwise a drifted provider account could assert verification for an
+	// address it does not own.
+	if !user.EmailVerified && oauthUserInfo.EmailVerified &&
+		oauthUserInfo.Email != "" && oauthUserInfo.Email == user.Email {
+		user.EmailVerified = true
 		updated = true
 	}
 	if updated {
