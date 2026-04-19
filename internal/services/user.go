@@ -1058,8 +1058,12 @@ func (s *UserService) CreateUserAdmin(
 		return nil, "", fmt.Errorf("failed to check username uniqueness: %w", err)
 	}
 
-	// Check email uniqueness
+	// Check email uniqueness. Ambiguous matches (legacy whitespace variants)
+	// also count as a conflict — the target email is already occupied by one
+	// or more rows, so the admin create must be rejected the same way.
 	if _, err := s.store.GetUserByEmail(req.Email); err == nil {
+		return nil, "", ErrEmailConflict
+	} else if errors.Is(err, store.ErrAmbiguousEmail) {
 		return nil, "", ErrEmailConflict
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, "", fmt.Errorf("failed to check email uniqueness: %w", err)
@@ -1093,8 +1097,12 @@ func (s *UserService) CreateUserAdmin(
 
 	if err := s.store.CreateUser(user); err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) {
-			// Re-query to determine which unique constraint was violated (race condition).
-			if _, emailErr := s.store.GetUserByEmail(req.Email); emailErr == nil {
+			// Re-query to determine which unique constraint was violated
+			// (race condition). ErrAmbiguousEmail also signals "email is
+			// in use" here — treat it the same as a normal email match
+			// instead of falling through to the username-conflict branch.
+			_, emailErr := s.store.GetUserByEmail(req.Email)
+			if emailErr == nil || errors.Is(emailErr, store.ErrAmbiguousEmail) {
 				return nil, "", ErrEmailConflict
 			}
 			return nil, "", ErrUsernameConflict

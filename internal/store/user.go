@@ -204,6 +204,15 @@ func (s *Store) GetUsersByIDs(userIDs []string) (map[string]*models.User, error)
 // was found and we need to confirm no legacy whitespace duplicate exists.
 // The confirmation query is capped to one extra row (LIMIT 1 excluding the
 // exact-match ID) to keep scans bounded on large tables.
+//
+// Known limitation: Go's strings.TrimSpace strips Unicode whitespace (tabs,
+// newlines, NBSP, …) while SQL TRIM() only removes ASCII spaces by default
+// on the supported dialects (SQLite, Postgres). In practice OAuth providers
+// and admin forms return ASCII-space whitespace if any, so the divergence
+// only matters for pre-existing legacy rows whose stored email contains
+// exotic whitespace — those rows would miss this lookup. The write paths
+// in this package trim with strings.TrimSpace on insert/update, so newly
+// stored rows stay free of both kinds.
 func (s *Store) GetUserByEmail(email string) (*models.User, error) {
 	email = strings.TrimSpace(email)
 
