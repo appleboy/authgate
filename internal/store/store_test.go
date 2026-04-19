@@ -1450,6 +1450,39 @@ func TestUpsertExternalUser_EmailChange_ClearsEmailVerified(t *testing.T) {
 		"changing the email via external sync must downgrade EmailVerified")
 }
 
+// TestUpsertExternalUser_EmailWhitespaceOnly_PreservesEmailVerified verifies
+// that incidental whitespace from an external provider does not spuriously
+// clear EmailVerified. The trimmed email is what ends up stored.
+func TestUpsertExternalUser_EmailWhitespaceOnly_PreservesEmailVerified(t *testing.T) {
+	store, err := New(context.Background(), "sqlite", ":memory:", getTestConfig())
+	require.NoError(t, err)
+
+	user, err := store.UpsertExternalUser(
+		"erin",
+		"ext-erin",
+		"http_api",
+		"erin@example.com",
+		"Erin",
+	)
+	require.NoError(t, err)
+
+	user.EmailVerified = true
+	require.NoError(t, store.UpdateUser(user))
+
+	updated, err := store.UpsertExternalUser(
+		"erin",
+		"ext-erin",
+		"http_api",
+		"  erin@example.com  ",
+		"Erin",
+	)
+	require.NoError(t, err)
+	assert.Equal(t, "erin@example.com", updated.Email,
+		"trimmed email must be stored; trailing whitespace must not leak")
+	assert.True(t, updated.EmailVerified,
+		"whitespace-only differences must not downgrade EmailVerified")
+}
+
 // TestUpsertExternalUser_EmailUnchanged_PreservesEmailVerified verifies that
 // EmailVerified is preserved when the external sync keeps the same email.
 func TestUpsertExternalUser_EmailUnchanged_PreservesEmailVerified(t *testing.T) {

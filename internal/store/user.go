@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/go-authgate/authgate/internal/models"
 	"github.com/go-authgate/authgate/internal/store/types"
@@ -44,6 +45,13 @@ func (s *Store) GetUserByExternalID(externalID, authSource string) (*models.User
 func (s *Store) UpsertExternalUser(
 	username, externalID, authSource, email, fullName string,
 ) (*models.User, error) {
+	// Normalize inputs so incidental whitespace from upstream providers does
+	// not pollute storage or spuriously downgrade EmailVerified on the next
+	// login. Matches the trimming performed by the admin create/update paths.
+	username = strings.TrimSpace(username)
+	email = strings.TrimSpace(email)
+	fullName = strings.TrimSpace(fullName)
+
 	var user models.User
 
 	// Try to find existing user by external ID
