@@ -285,7 +285,7 @@ templ ClientFormCommonFields(props ClientFormFieldsProps) {
 		</div>
 		<small class="admin-form-hint">
 			Press <kbd>Enter</kbd> to add a URI. You can also paste multiple URIs separated by
-			commas or new lines. Click <strong>&times;</strong> on a tag to remove it.
+			commas or newlines. Click <strong>&times;</strong> on a tag to remove it.
 			Required when Authorization Code Flow is enabled.
 		</small>
 	</div>
@@ -503,9 +503,7 @@ templ clientRedirectURIPickerScript() {
 				}
 			});
 			picker.addEventListener('click', function (e) {
-				if (e.target !== textInput && !e.target.classList.contains('admin-uri-tag-remove')) {
-					textInput.focus();
-				}
+				if (e.target !== textInput) { textInput.focus(); }
 			});
 
 			var form = picker.closest('form');
