@@ -193,6 +193,11 @@ func (s *Store) GetUsersByIDs(userIDs []string) (map[string]*models.User, error)
 // incidental whitespace on either side: the argument is trimmed, and if no
 // indexed exact match is found, a fallback scan on TRIM(email) lets callers
 // still locate legacy rows written before email normalization was enforced.
+//
+// When the fallback matches more than one row (legacy duplicates differing
+// only in whitespace), the function returns ErrAmbiguousEmail instead of
+// picking a non-deterministic winner — in the OAuth auto-link path this
+// prevents silently linking a verified provider to the wrong local user.
 func (s *Store) GetUserByEmail(email string) (*models.User, error) {
 	email = strings.TrimSpace(email)
 
@@ -207,11 +212,20 @@ func (s *Store) GetUserByEmail(email string) (*models.User, error) {
 
 	// Fallback: legacy rows may have incidental whitespace in the stored
 	// value. This query bypasses the unique index but is only reached on a
-	// primary miss, so the cost stays bounded.
-	if err := s.db.Where("TRIM(email) = ?", email).First(&user).Error; err != nil {
+	// primary miss, so the cost stays bounded. Fetch up to two rows so we
+	// can distinguish unique legacy match from an ambiguous duplicate.
+	var matches []models.User
+	if err := s.db.Where("TRIM(email) = ?", email).Limit(2).Find(&matches).Error; err != nil {
 		return nil, err
 	}
-	return &user, nil
+	switch len(matches) {
+	case 0:
+		return nil, gorm.ErrRecordNotFound
+	case 1:
+		return &matches[0], nil
+	default:
+		return nil, ErrAmbiguousEmail
+	}
 }
 
 // CreateUser creates a new user

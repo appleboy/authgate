@@ -220,6 +220,45 @@ func TestAuthenticateWithOAuth_ExistingConnection_PromotesEmailVerified(t *testi
 	)
 }
 
+// TestAuthenticateWithOAuth_AmbiguousEmail_Rejects verifies that when two
+// legacy local rows share the same email modulo whitespace, an OAuth login
+// refuses to auto-link or auto-register rather than guessing which row to
+// bind — operators must deduplicate first.
+func TestAuthenticateWithOAuth_AmbiguousEmail_Rejects(t *testing.T) {
+	svc := newOAuthUserService(t)
+
+	require.NoError(t, svc.store.CreateUser(&models.User{
+		ID:         uuid.New().String(),
+		Username:   "dup-a",
+		Email:      " twin@example.com",
+		Role:       models.UserRoleUser,
+		IsActive:   true,
+		AuthSource: "local",
+	}))
+	require.NoError(t, svc.store.CreateUser(&models.User{
+		ID:         uuid.New().String(),
+		Username:   "dup-b",
+		Email:      "twin@example.com ",
+		Role:       models.UserRoleUser,
+		IsActive:   true,
+		AuthSource: "local",
+	}))
+
+	_, err := svc.AuthenticateWithOAuth(
+		context.Background(),
+		"github",
+		&auth.OAuthUserInfo{
+			ProviderUserID: uuid.New().String(),
+			Username:       "twin",
+			Email:          "twin@example.com",
+			EmailVerified:  true,
+		},
+		newOAuthToken(),
+	)
+	assert.ErrorIs(t, err, ErrAmbiguousEmail,
+		"ambiguous legacy duplicates must surface ErrAmbiguousEmail, not silently link or create")
+}
+
 // TestAuthenticateWithOAuth_ExistingConnection_LegacyWhitespaceEmail_Promotes
 // verifies that a pre-existing user row whose stored Email carries incidental
 // whitespace can still be promoted to EmailVerified=true when the (trimmed)

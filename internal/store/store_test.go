@@ -1619,6 +1619,37 @@ func TestUpsertExternalUser_EmptyAuthSource_Rejects(t *testing.T) {
 	assert.ErrorIs(t, err, ErrExternalUserMissingIdentity)
 }
 
+// TestGetUserByEmail_AmbiguousWhitespaceDuplicates_ReturnsError verifies that
+// when the TRIM fallback would match more than one legacy row the store
+// refuses to pick a non-deterministic winner and surfaces ErrAmbiguousEmail.
+// The OAuth auto-link path relies on this so it never links a verified
+// provider to the wrong local user.
+func TestGetUserByEmail_AmbiguousWhitespaceDuplicates_ReturnsError(t *testing.T) {
+	store, err := New(context.Background(), "sqlite", ":memory:", getTestConfig())
+	require.NoError(t, err)
+
+	require.NoError(t, store.CreateUser(&models.User{
+		ID:         uuid.New().String(),
+		Username:   "legacy-1",
+		Email:      "  dup@example.com  ",
+		Role:       models.UserRoleUser,
+		IsActive:   true,
+		AuthSource: "http_api",
+	}))
+	require.NoError(t, store.CreateUser(&models.User{
+		ID:         uuid.New().String(),
+		Username:   "legacy-2",
+		Email:      " dup@example.com", // differs by whitespace only
+		Role:       models.UserRoleUser,
+		IsActive:   true,
+		AuthSource: "http_api",
+	}))
+
+	_, err = store.GetUserByEmail("dup@example.com")
+	assert.ErrorIs(t, err, ErrAmbiguousEmail,
+		"ambiguous whitespace-variant duplicates must surface ErrAmbiguousEmail")
+}
+
 // TestGetUserByEmail_LegacyWhitespace_FallbackMatches verifies that a legacy
 // row whose stored Email contains incidental whitespace is still returned
 // when the caller looks it up with the trimmed address. Without the

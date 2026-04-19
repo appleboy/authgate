@@ -51,6 +51,9 @@ var (
 	ErrUserAlreadyActive       = errors.New("user is already active")
 	ErrUserAlreadyDisabled     = errors.New("user is already disabled")
 	ErrOAuthConnectionNotFound = errors.New("OAuth connection not found")
+	ErrAmbiguousEmail          = errors.New(
+		"multiple local users share this email; please deduplicate before signing in via OAuth",
+	)
 )
 
 type UserService struct {
@@ -380,6 +383,17 @@ func (s *UserService) AuthenticateWithOAuth(
 			return nil, ErrOAuthEmailNotVerified
 		}
 		return s.createUserWithOAuth(ctx, provider, oauthUserInfo, token)
+	}
+	// Surface ambiguous-email errors explicitly: auto-registering would create
+	// yet another duplicate, and silently linking is unsafe because we cannot
+	// tell which of the existing rows the provider is vouching for.
+	if errors.Is(err, store.ErrAmbiguousEmail) {
+		log.Printf(
+			"[OAuth] Ambiguous email for provider=%s email=%s — manual dedup required",
+			provider,
+			oauthUserInfo.Email,
+		)
+		return nil, ErrAmbiguousEmail
 	}
 
 	// 3. Check if auto-registration is enabled
