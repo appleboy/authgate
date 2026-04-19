@@ -490,7 +490,12 @@ templ clientRedirectURIPickerScript() {
 			});
 			textInput.addEventListener('blur', commitInput);
 			textInput.addEventListener('paste', function (e) {
-				var data = (e.clipboardData || window.clipboardData).getData('text');
+				var data = '';
+				if (e.clipboardData) {
+					data = e.clipboardData.getData('text/plain');
+				} else if (window.clipboardData) {
+					data = window.clipboardData.getData('Text');
+				}
 				if (data && /[,\r\n]/.test(data)) {
 					e.preventDefault();
 					addMany(data);
