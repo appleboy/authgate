@@ -40,15 +40,17 @@ func IsValidTokenProfile(v string) bool {
 	return false
 }
 
-// ResolveTokenProfile normalizes a stored or form-submitted profile name, treating
-// empty input as "standard" (the rule for pre-migration rows and older callers).
-// Unknown values pass through unchanged so callers can distinguish legitimate
-// defaults from bad data.
+// ResolveTokenProfile normalizes a stored or form-submitted profile name:
+// surrounding whitespace is trimmed (common from form posts and API clients),
+// empty input becomes "standard" (the rule for pre-migration rows and older
+// callers). Unknown values pass through unchanged so callers can distinguish
+// legitimate defaults from bad data.
 func ResolveTokenProfile(v string) string {
-	if strings.TrimSpace(v) == "" {
+	trimmed := strings.TrimSpace(v)
+	if trimmed == "" {
 		return TokenProfileStandard
 	}
-	return v
+	return trimmed
 }
 
 // Base32 characters, but lowercased.
