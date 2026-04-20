@@ -164,15 +164,17 @@ type UpdateClientRequest struct {
 
 // normalizeTokenProfile validates and defaults an incoming token profile value.
 // Empty input is treated as "standard" to keep behavior predictable for older
-// callers and migrated rows.
+// callers and migrated rows. Surrounding whitespace (common from form posts
+// and API clients) is trimmed before validation.
 func normalizeTokenProfile(p string) (string, error) {
-	if strings.TrimSpace(p) == "" {
+	trimmed := strings.TrimSpace(p)
+	if trimmed == "" {
 		return models.TokenProfileStandard, nil
 	}
-	if !models.IsValidTokenProfile(p) {
+	if !models.IsValidTokenProfile(trimmed) {
 		return "", ErrInvalidTokenProfile
 	}
-	return p, nil
+	return trimmed, nil
 }
 
 type ClientResponse struct {
@@ -379,7 +381,15 @@ func (s *ClientService) UpdateClient(
 
 	// Log client update. A TokenProfile change is security-relevant (it can
 	// extend or shorten every future token issued to this client) so flag it
-	// at WARNING severity when it differs from the previous value.
+	// at WARNING severity when the effective profile changes. Pre-migration
+	// rows may have previousTokenProfile == ""; normalize it the same way as
+	// the rest of the system ("" => standard) before comparing so "" → short/long
+	// still produces a WARNING. The raw previous value is recorded so the audit
+	// trail reflects actual stored data.
+	previousNormalized := previousTokenProfile
+	if previousNormalized == "" {
+		previousNormalized = models.TokenProfileStandard
+	}
 	severity := models.SeverityInfo
 	details := models.AuditDetails{
 		"client_name":   client.ClientName,
@@ -388,7 +398,7 @@ func (s *ClientService) UpdateClient(
 		"scopes":        client.Scopes,
 		"token_profile": client.TokenProfile,
 	}
-	if previousTokenProfile != "" && previousTokenProfile != client.TokenProfile {
+	if previousNormalized != client.TokenProfile {
 		severity = models.SeverityWarning
 		details["previous_token_profile"] = previousTokenProfile
 	}

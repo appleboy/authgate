@@ -162,9 +162,12 @@ type tokenPairParams struct {
 }
 
 // ttlForClient returns the access/refresh TTLs dictated by the given client's
-// TokenProfile. A zero value means "fall back to provider default" — used when
-// the client is nil or its profile name is unknown (shouldn't normally happen,
-// but keeps issuance resilient to bad data).
+// TokenProfile. A zero value means "fall back to provider default" — returned
+// when the client is nil, its profile name is unknown, or the profile's TTL
+// matches the base JWT/refresh config. The last case is important: the local
+// provider only applies JWT_EXPIRATION_JITTER when ttl == 0, so returning 0
+// for "standard" (which by default mirrors the base config) preserves jitter
+// for the common case while still honoring explicit short/long overrides.
 func (s *TokenService) ttlForClient(
 	client *models.OAuthApplication,
 ) (accessTTL, refreshTTL time.Duration) {
@@ -179,7 +182,15 @@ func (s *TokenService) ttlForClient(
 	if !ok {
 		return 0, 0
 	}
-	return profile.AccessTokenTTL, profile.RefreshTokenTTL
+	accessTTL = profile.AccessTokenTTL
+	refreshTTL = profile.RefreshTokenTTL
+	if accessTTL == s.config.JWTExpiration {
+		accessTTL = 0
+	}
+	if refreshTTL == s.config.RefreshTokenExpiration {
+		refreshTTL = 0
+	}
+	return accessTTL, refreshTTL
 }
 
 // resolveClientTTL fetches the client by ID and returns its profile TTLs.

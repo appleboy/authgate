@@ -89,14 +89,41 @@ func TestResolveClientTTL_EmptyProfileDefaultsToStandard(t *testing.T) {
 	s := setupTestStore(t)
 	svc := createTestTokenService(t, s, cfg)
 
-	// A client with TokenProfile == "" (e.g. pre-migration row) must resolve
-	// to the "standard" preset, matching what the GORM default would apply.
+	// A client with TokenProfile == "" (e.g. pre-migration row) resolves to
+	// the "standard" preset. When standard mirrors the base JWT/refresh config
+	// (the common case) ttlForClient returns 0,0 so the local provider takes
+	// its default path — including JWT_EXPIRATION_JITTER. Any explicit per-
+	// client override (short/long) still produces a non-zero TTL.
 	client := createTestClientWithProfile(t, svc, "")
 
 	accessTTL, refreshTTL := svc.resolveClientTTL(context.Background(), client.ClientID)
-	standard := cfg.TokenProfiles[models.TokenProfileStandard]
-	assert.Equal(t, standard.AccessTokenTTL, accessTTL)
-	assert.Equal(t, standard.RefreshTokenTTL, refreshTTL)
+	assert.Equal(
+		t, time.Duration(0), accessTTL,
+		"standard profile matching base JWTExpiration returns 0 to preserve jitter",
+	)
+	assert.Equal(
+		t, time.Duration(0), refreshTTL,
+		"standard profile matching base RefreshTokenExpiration returns 0",
+	)
+}
+
+func TestResolveClientTTL_StandardProfileDivergentFromBaseConfig(t *testing.T) {
+	// When TOKEN_PROFILE_STANDARD_* is explicitly set to values that diverge
+	// from JWT_EXPIRATION / REFRESH_TOKEN_EXPIRATION, the profile TTL takes
+	// effect (admins have opted into a specific lifetime for the preset).
+	cfg := configWithTokenProfiles()
+	cfg.TokenProfiles[models.TokenProfileStandard] = config.TokenProfile{
+		AccessTokenTTL:  5 * time.Hour,
+		RefreshTokenTTL: 500 * time.Hour,
+	}
+	s := setupTestStore(t)
+	svc := createTestTokenService(t, s, cfg)
+
+	client := createTestClientWithProfile(t, svc, models.TokenProfileStandard)
+
+	accessTTL, refreshTTL := svc.resolveClientTTL(context.Background(), client.ClientID)
+	assert.Equal(t, 5*time.Hour, accessTTL, "divergent standard access TTL")
+	assert.Equal(t, 500*time.Hour, refreshTTL, "divergent standard refresh TTL")
 }
 
 func TestResolveClientTTL_UnknownClientFallsBackToZero(t *testing.T) {
@@ -143,7 +170,10 @@ func TestResolveClientTTL_ReflectsLatestProfileFromStore(t *testing.T) {
 	client := createTestClientWithProfile(t, svc, models.TokenProfileStandard)
 
 	accessTTL, _ := svc.resolveClientTTL(context.Background(), client.ClientID)
-	assert.Equal(t, 10*time.Hour, accessTTL, "initial profile is standard")
+	assert.Equal(
+		t, time.Duration(0), accessTTL,
+		"standard profile matching base config returns 0 to preserve jitter",
+	)
 
 	// Update profile and invalidate the cache the way UpdateClient would.
 	client.TokenProfile = models.TokenProfileShort

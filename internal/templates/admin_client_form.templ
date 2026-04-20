@@ -30,16 +30,16 @@ templ AdminClientForm(props ClientFormPageProps) {
 							<label for="token_profile" class="admin-form-label">Token Lifetime</label>
 							<select id="token_profile" name="token_profile" class="admin-form-select">
 								<option value={ models.TokenProfileShort } selected?={ props.Client != nil && props.Client.TokenProfile == models.TokenProfileShort }>
-									Short — 15 min access / 1 day refresh (high-security apps)
+									Short — shorter configured lifetimes (high-security apps)
 								</option>
 								<option value={ models.TokenProfileStandard } selected?={ props.Client == nil || props.Client.TokenProfile == "" || props.Client.TokenProfile == models.TokenProfileStandard }>
-									Standard — default access / 30 day refresh (typical web/SPA)
+									Standard — uses configured defaults (typical web/SPA)
 								</option>
 								<option value={ models.TokenProfileLong } selected?={ props.Client != nil && props.Client.TokenProfile == models.TokenProfileLong }>
-									Long — 24 hr access / 90 day refresh (CLI, IoT, background jobs)
+									Long — longer configured lifetimes (CLI, IoT, background jobs)
 								</option>
 							</select>
-							<small class="admin-form-hint">Controls how long access and refresh tokens remain valid for this client. Changes take effect for tokens issued after saving.</small>
+							<small class="admin-form-hint">Controls how long access and refresh tokens remain valid for this client. Actual durations depend on server configuration, and changes take effect for tokens issued after saving.</small>
 						</div>
 						<!-- Status (edit only) -->
 						if props.IsEdit {
