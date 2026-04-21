@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/go-authgate/authgate/internal/cache"
 	"github.com/go-authgate/authgate/internal/config"
@@ -154,16 +155,95 @@ type tokenPairParams struct {
 	ClientID        string
 	Scopes          string
 	AuthorizationID *uint // nil when not linked to a UserAuthorization (e.g. device flow)
+	// Client is the already-loaded OAuth client, used to resolve the
+	// TokenProfile TTLs without an extra cached lookup. Both issuance callers
+	// (device flow, auth-code flow) load the client up front for other
+	// validation, so this is always populated.
+	Client *models.OAuthApplication
+}
+
+// ttlForClient returns the access/refresh TTLs dictated by the given client's
+// TokenProfile. Zero means "fall back to provider default" — returned when the
+// profile's TTL matches the base JWT/refresh config so that the local provider
+// still applies JWT_EXPIRATION_JITTER on the common path. Explicit short/long
+// overrides (and a standard profile diverged from base config) return the
+// profile's TTL exactly, no jitter.
+//
+// An unknown profile name on the client row is a data-integrity issue (GORM
+// default + admin UI should prevent it). We log a WARNING so the bad row can
+// be traced and fall back to the standard profile's TTLs; that's more
+// conservative than returning zero, which would silently grant base JWT
+// lifetime to a client the admin intended to restrict.
+func (s *TokenService) ttlForClient(
+	client *models.OAuthApplication,
+) (accessTTL, refreshTTL time.Duration) {
+	if client == nil {
+		return 0, 0
+	}
+	name := models.ResolveTokenProfile(client.TokenProfile)
+	profile, ok := s.config.TokenProfiles[name]
+	if !ok {
+		log.Printf(
+			"[Token] client %s has unknown token_profile=%q; falling back to standard",
+			client.ClientID,
+			client.TokenProfile,
+		)
+		name = models.TokenProfileStandard
+		profile, ok = s.config.TokenProfiles[name]
+		if !ok {
+			return 0, 0
+		}
+	}
+	accessTTL = profile.AccessTokenTTL
+	refreshTTL = profile.RefreshTokenTTL
+	// Only the standard profile zeroes out to let jitter apply. Short/long are
+	// explicit admin choices and must use their TTLs exactly, even if they
+	// coincidentally match the base JWT config.
+	if name == models.TokenProfileStandard {
+		if accessTTL == s.config.JWTExpiration {
+			accessTTL = 0
+		}
+		if refreshTTL == s.config.RefreshTokenExpiration {
+			refreshTTL = 0
+		}
+	}
+	return accessTTL, refreshTTL
+}
+
+// resolveClientTTL fetches the client by ID and returns its profile TTLs.
+// Use ttlForClient directly when the caller already has the client loaded.
+func (s *TokenService) resolveClientTTL(
+	ctx context.Context,
+	clientID string,
+) (accessTTL, refreshTTL time.Duration) {
+	if s.clientService == nil {
+		return 0, 0
+	}
+	client, err := s.clientService.GetClient(ctx, clientID)
+	if err != nil {
+		return 0, 0
+	}
+	return s.ttlForClient(client)
 }
 
 // generateAndPersistTokenPair generates access and refresh tokens via the
 // configured provider, builds database records, and persists them atomically.
+// The per-client TokenProfile is resolved here so that all issuance paths
+// (device flow, auth code flow) honor the current profile at issuance time.
 func (s *TokenService) generateAndPersistTokenPair(
 	ctx context.Context,
 	p tokenPairParams,
 ) (*models.AccessToken, *models.AccessToken, error) {
-	// Generate tokens via provider
-	accessResult, err := s.tokenProvider.GenerateToken(ctx, p.UserID, p.ClientID, p.Scopes)
+	var accessTTL, refreshTTL time.Duration
+	if p.Client != nil {
+		accessTTL, refreshTTL = s.ttlForClient(p.Client)
+	} else {
+		accessTTL, refreshTTL = s.resolveClientTTL(ctx, p.ClientID)
+	}
+
+	accessResult, err := s.tokenProvider.GenerateToken(
+		ctx, p.UserID, p.ClientID, p.Scopes, accessTTL,
+	)
 	if err != nil {
 		log.Printf(
 			"[Token] Access token generation failed provider=%s: %v",
@@ -172,7 +252,9 @@ func (s *TokenService) generateAndPersistTokenPair(
 		)
 		return nil, nil, fmt.Errorf("token generation failed: %w", err)
 	}
-	refreshResult, err := s.tokenProvider.GenerateRefreshToken(ctx, p.UserID, p.ClientID, p.Scopes)
+	refreshResult, err := s.tokenProvider.GenerateRefreshToken(
+		ctx, p.UserID, p.ClientID, p.Scopes, refreshTTL,
+	)
 	if err != nil {
 		log.Printf(
 			"[Token] Refresh token generation failed provider=%s: %v",

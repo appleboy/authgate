@@ -258,6 +258,55 @@ func TestIssueClientCredentialsToken_TokenPersisted(t *testing.T) {
 	assert.Equal(t, client.ClientID, result.ClientID)
 }
 
+// TestIssueClientCredentialsToken_IgnoresClientTokenProfile ensures M2M tokens
+// remain governed by CLIENT_CREDENTIALS_TOKEN_EXPIRATION even when the client
+// row declares a "short"/"long" TokenProfile. TokenProfile scopes user-delegated
+// tokens (device + authorization code flows); client_credentials is independent
+// so that M2M token lifetimes can be kept tight regardless of per-client
+// profile choices made for user-facing flows.
+func TestIssueClientCredentialsToken_IgnoresClientTokenProfile(t *testing.T) {
+	s := setupTestStore(t)
+	cfg := &config.Config{
+		JWTExpiration:                    10 * time.Hour,
+		RefreshTokenExpiration:           720 * time.Hour,
+		ClientCredentialsTokenExpiration: 30 * time.Minute,
+		JWTSecret:                        "test-secret",
+		BaseURL:                          "http://localhost:8080",
+		TokenProfiles: map[string]config.TokenProfile{
+			models.TokenProfileShort: {
+				AccessTokenTTL: 15 * time.Minute, RefreshTokenTTL: 24 * time.Hour,
+			},
+			models.TokenProfileStandard: {
+				AccessTokenTTL: 10 * time.Hour, RefreshTokenTTL: 720 * time.Hour,
+			},
+			models.TokenProfileLong: {
+				AccessTokenTTL: 24 * time.Hour, RefreshTokenTTL: 2160 * time.Hour,
+			},
+		},
+	}
+	localProvider, err := token.NewLocalTokenProvider(cfg)
+	require.NoError(t, err)
+	clientService := NewClientService(s, nil, nil, 0, nil, 0)
+	svc := NewTokenService(
+		s, cfg, nil, localProvider,
+		NewNoopAuditService(), metrics.NewNoopMetrics(),
+		cache.NewNoopCache[models.AccessToken](), clientService,
+	)
+
+	client, plainSecret := createConfidentialClientWithCCFlow(t, s, true)
+	client.TokenProfile = models.TokenProfileShort
+	require.NoError(t, s.UpdateClient(client))
+
+	tok, err := svc.IssueClientCredentialsToken(
+		context.Background(), client.ClientID, plainSecret, "",
+	)
+	require.NoError(t, err)
+
+	// Expires ~30m from now (CLIENT_CREDENTIALS_TOKEN_EXPIRATION), NOT ~15m
+	// from the short profile's AccessTokenTTL.
+	assert.WithinDuration(t, time.Now().Add(30*time.Minute), tok.ExpiresAt, 5*time.Second)
+}
+
 // --- Verify machine UserID prefix ---
 
 func TestIssueClientCredentialsToken_MachineUserIDPrefix(t *testing.T) {

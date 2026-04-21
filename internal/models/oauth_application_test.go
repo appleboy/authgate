@@ -252,3 +252,48 @@ func TestOAuthApplication_IsActive(t *testing.T) {
 		})
 	}
 }
+
+func TestIsValidTokenProfile(t *testing.T) {
+	tests := []struct {
+		in   string
+		want bool
+	}{
+		{in: TokenProfileShort, want: true},
+		{in: TokenProfileStandard, want: true},
+		{in: TokenProfileLong, want: true},
+		{in: "", want: false},
+		{in: "SHORT", want: false}, // case-sensitive
+		{in: "custom", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			if got := IsValidTokenProfile(tt.in); got != tt.want {
+				t.Errorf("IsValidTokenProfile(%q) = %v, want %v", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolveTokenProfile(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "empty defaults to standard", in: "", want: TokenProfileStandard},
+		{name: "whitespace defaults to standard", in: "   ", want: TokenProfileStandard},
+		{name: "short passes through", in: TokenProfileShort, want: TokenProfileShort},
+		{name: "long passes through", in: TokenProfileLong, want: TokenProfileLong},
+		{name: "surrounding whitespace trimmed", in: "  standard  ", want: TokenProfileStandard},
+		{name: "leading whitespace trimmed", in: "\tshort", want: TokenProfileShort},
+		{name: "trailing whitespace trimmed", in: "long\n", want: TokenProfileLong},
+		{name: "unknown value passes through trimmed", in: " custom ", want: "custom"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ResolveTokenProfile(tt.in); got != tt.want {
+				t.Errorf("ResolveTokenProfile(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}

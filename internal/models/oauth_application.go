@@ -23,6 +23,36 @@ const (
 	ClientStatusInactive ClientStatus = "inactive" // Admin rejected or disabled
 )
 
+// TokenProfile selects a named preset of access/refresh token lifetimes for a client.
+// The effective TTLs are resolved at token issuance via config.TokenProfiles.
+const (
+	TokenProfileShort    = "short"
+	TokenProfileStandard = "standard"
+	TokenProfileLong     = "long"
+)
+
+// IsValidTokenProfile reports whether v is a recognised token profile name.
+func IsValidTokenProfile(v string) bool {
+	switch v {
+	case TokenProfileShort, TokenProfileStandard, TokenProfileLong:
+		return true
+	}
+	return false
+}
+
+// ResolveTokenProfile normalizes a stored or form-submitted profile name:
+// surrounding whitespace is trimmed (common from form posts and API clients),
+// empty input becomes "standard" (the rule for pre-migration rows and older
+// callers). Unknown values pass through unchanged so callers can distinguish
+// legitimate defaults from bad data.
+func ResolveTokenProfile(v string) string {
+	trimmed := strings.TrimSpace(v)
+	if trimmed == "" {
+		return TokenProfileStandard
+	}
+	return trimmed
+}
+
 // Base32 characters, but lowercased.
 const lowerBase32Chars = "abcdefghijklmnopqrstuvwxyz234567"
 
@@ -42,8 +72,9 @@ type OAuthApplication struct {
 	ClientType                  string      `gorm:"not null;default:'public'"` // "confidential" or "public"
 	EnableDeviceFlow            bool        `gorm:"not null;default:true"`
 	EnableAuthCodeFlow          bool        `gorm:"not null;default:false"`
-	EnableClientCredentialsFlow bool        `gorm:"not null;default:false"`    // Client Credentials Grant (RFC 6749 §4.4); confidential clients only
-	Status                      string      `gorm:"not null;default:'active'"` // ClientStatusPending / ClientStatusActive / ClientStatusInactive
+	EnableClientCredentialsFlow bool        `gorm:"not null;default:false"`              // Client Credentials Grant (RFC 6749 §4.4); confidential clients only
+	Status                      string      `gorm:"not null;default:'active'"`           // ClientStatusPending / ClientStatusActive / ClientStatusInactive
+	TokenProfile                string      `gorm:"not null;default:'standard';size:20"` // "short" / "standard" / "long"; resolves to a TTL preset in config
 	CreatedBy                   string
 	CreatedAt                   time.Time
 	UpdatedAt                   time.Time

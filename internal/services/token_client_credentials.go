@@ -68,11 +68,17 @@ func (s *TokenService) IssueClientCredentialsToken(
 	start := time.Now()
 	machineUserID := "client:" + clientID
 
+	// TokenProfile governs user-delegated access/refresh tokens only.
+	// Passing ttl=0 here keeps CLIENT_CREDENTIALS_TOKEN_EXPIRATION as the
+	// dedicated authority for M2M token lifetime (independently constrained —
+	// typically shorter than user tokens because M2M secrets have a larger
+	// blast radius if leaked).
 	accessTokenResult, providerErr := s.tokenProvider.GenerateClientCredentialsToken(
 		ctx,
 		machineUserID,
 		clientID,
 		effectiveScopes,
+		0,
 	)
 	if providerErr != nil {
 		log.Printf(

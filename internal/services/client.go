@@ -63,6 +63,12 @@ var (
 	ErrInvalidClientStatus = errors.New(
 		"status must be \"active\", \"inactive\", or \"pending\"",
 	)
+	ErrInvalidTokenProfile = fmt.Errorf(
+		"token profile must be %q, %q, or %q",
+		models.TokenProfileShort,
+		models.TokenProfileStandard,
+		models.TokenProfileLong,
+	)
 )
 
 // validateRedirectURIs checks that every URI in the slice is an absolute http/https
@@ -139,10 +145,11 @@ type CreateClientRequest struct {
 	RedirectURIs                []string
 	CreatedBy                   string
 	ClientType                  core.ClientType
-	EnableDeviceFlow            bool // Enable Device Authorization Grant (RFC 8628)
-	EnableAuthCodeFlow          bool // Enable Authorization Code Flow (RFC 6749)
-	EnableClientCredentialsFlow bool // Enable Client Credentials Grant (RFC 6749 §4.4); confidential clients only
-	IsAdminCreated              bool // When true: Status=active; when false: Status=pending
+	EnableDeviceFlow            bool   // Enable Device Authorization Grant (RFC 8628)
+	EnableAuthCodeFlow          bool   // Enable Authorization Code Flow (RFC 6749)
+	EnableClientCredentialsFlow bool   // Enable Client Credentials Grant (RFC 6749 §4.4); confidential clients only
+	IsAdminCreated              bool   // When true: Status=active; when false: Status=pending
+	TokenProfile                string // "short" / "standard" / "long"; empty = standard
 }
 
 type UpdateClientRequest struct {
@@ -154,7 +161,19 @@ type UpdateClientRequest struct {
 	ClientType                  core.ClientType
 	EnableDeviceFlow            bool
 	EnableAuthCodeFlow          bool
-	EnableClientCredentialsFlow bool // Enable Client Credentials Grant (RFC 6749 §4.4); confidential clients only
+	EnableClientCredentialsFlow bool   // Enable Client Credentials Grant (RFC 6749 §4.4); confidential clients only
+	TokenProfile                string // "short" / "standard" / "long"; empty = standard
+}
+
+// normalizeTokenProfile validates and defaults an incoming token profile value.
+// Surrounding whitespace (common from form posts and API clients) is trimmed
+// before validation.
+func normalizeTokenProfile(p string) (string, error) {
+	resolved := models.ResolveTokenProfile(p)
+	if !models.IsValidTokenProfile(resolved) {
+		return "", ErrInvalidTokenProfile
+	}
+	return resolved, nil
 }
 
 type ClientResponse struct {
@@ -187,6 +206,11 @@ func (s *ClientService) CreateClient(
 	}
 
 	if err := validateRedirectURIs(req.RedirectURIs); err != nil {
+		return nil, err
+	}
+
+	tokenProfile, err := normalizeTokenProfile(req.TokenProfile)
+	if err != nil {
 		return nil, err
 	}
 
@@ -231,6 +255,7 @@ func (s *ClientService) CreateClient(
 		EnableAuthCodeFlow:          enableAuthCode,
 		EnableClientCredentialsFlow: enableClientCredentials,
 		Status:                      clientStatus,
+		TokenProfile:                tokenProfile,
 		CreatedBy:                   req.CreatedBy,
 	}
 
@@ -259,9 +284,10 @@ func (s *ClientService) CreateClient(
 		ResourceName: client.ClientName,
 		Action:       "OAuth client created",
 		Details: models.AuditDetails{
-			"client_name": client.ClientName,
-			"grant_types": client.GrantTypes,
-			"scopes":      client.Scopes,
+			"client_name":   client.ClientName,
+			"grant_types":   client.GrantTypes,
+			"scopes":        client.Scopes,
+			"token_profile": client.TokenProfile,
 		},
 		Success: true,
 	})
@@ -299,6 +325,11 @@ func (s *ClientService) UpdateClient(
 		return err
 	}
 
+	tokenProfile, err := normalizeTokenProfile(req.TokenProfile)
+	if err != nil {
+		return err
+	}
+
 	client, err := s.store.GetClient(clientID)
 	if err != nil {
 		return ErrClientNotFound
@@ -315,12 +346,15 @@ func (s *ClientService) UpdateClient(
 	pendingCountAffected := client.Status == models.ClientStatusPending ||
 		req.Status == models.ClientStatusPending
 
+	previousTokenProfile := client.TokenProfile
+
 	client.ClientName = strings.TrimSpace(req.ClientName)
 	client.Description = strings.TrimSpace(req.Description)
 	client.Scopes = strings.TrimSpace(req.Scopes)
 	client.RedirectURIs = models.StringArray(req.RedirectURIs)
 	client.Status = req.Status
 	client.ClientType = clientType.String()
+	client.TokenProfile = tokenProfile
 
 	// Rebuild GrantTypes from enablement flags
 	enableClientCredentials := req.EnableClientCredentialsFlow
@@ -344,22 +378,35 @@ func (s *ClientService) UpdateClient(
 		s.invalidatePendingCount(ctx)
 	}
 
-	// Log client update
+	// A TokenProfile change is security-relevant — it can extend or shorten
+	// every future token issued to this client — so flag it at WARNING when
+	// the effective value changes. Normalize the previous value the same way
+	// as the rest of the system so a pre-migration row moving "" → short/long
+	// still audits cleanly.
+	previousNormalized := models.ResolveTokenProfile(previousTokenProfile)
+	severity := models.SeverityInfo
+	details := models.AuditDetails{
+		"client_name":   client.ClientName,
+		"status":        client.Status,
+		"grant_types":   client.GrantTypes,
+		"scopes":        client.Scopes,
+		"token_profile": client.TokenProfile,
+	}
+	if previousNormalized != client.TokenProfile {
+		severity = models.SeverityWarning
+		details["previous_token_profile"] = previousNormalized
+	}
+
 	s.auditService.Log(ctx, core.AuditLogEntry{
 		EventType:    models.EventClientUpdated,
-		Severity:     models.SeverityInfo,
+		Severity:     severity,
 		ActorUserID:  actorUserID,
 		ResourceType: models.ResourceClient,
 		ResourceID:   clientID,
 		ResourceName: client.ClientName,
 		Action:       "OAuth client updated",
-		Details: models.AuditDetails{
-			"client_name": client.ClientName,
-			"status":      client.Status,
-			"grant_types": client.GrantTypes,
-			"scopes":      client.Scopes,
-		},
-		Success: true,
+		Details:      details,
+		Success:      true,
 	})
 
 	return nil
