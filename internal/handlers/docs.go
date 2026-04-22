@@ -18,10 +18,13 @@ var docsMeta = []struct {
 	Title string
 }{
 	{"getting-started", "Getting Started"},
-	{"device-flow", "Device Flow"},
 	{"auth-code-flow", "Auth Code Flow"},
+	{"device-flow", "Device Flow"},
 	{"client-credentials", "Client Credentials"},
+	{"oidc", "OpenID Connect"},
 	{"jwt-verification", "JWT Verification"},
+	{"tokens", "Tokens & Revocation"},
+	{"errors", "Errors"},
 }
 
 // parsedDoc holds the pre-rendered HTML for a single documentation page.

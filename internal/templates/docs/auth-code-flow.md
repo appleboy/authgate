@@ -2,16 +2,23 @@
 
 The **Authorization Code Flow** (RFC 6749) with **PKCE** (Proof Key for Code Exchange, RFC 7636) is the recommended OAuth 2.0 flow for web applications, single-page apps (SPAs), and mobile apps.
 
-PKCE replaces the need for a client secret, making it safe for **public clients** where the secret cannot be kept confidential.
-
 ## When to Use This Flow
 
 Use Authorization Code + PKCE when:
 
-- You are building a **web application** with a server-side backend
-- You are building a **single-page app** (React, Vue, Angular, etc.)
-- You are building a **mobile application**
+- You are building a **server-rendered web app** (confidential client — has a backend that can hold `client_secret`)
+- You are building a **single-page app** (public client — no secret)
+- You are building a **mobile or desktop app** (public client)
 - You need users to see a **consent screen** before granting access
+
+## Client Types
+
+| Type             | Credentials                | Typical examples                    | Must use PKCE?        |
+| ---------------- | -------------------------- | ----------------------------------- | --------------------- |
+| `confidential`   | `client_id` + `client_secret` | Rails / Django / Node backend    | Recommended           |
+| `public`         | `client_id` only (no secret)  | React SPA, iOS/Android, Electron | Yes — always          |
+
+> PKCE (S256) is **always safe to use** and is the only `code_challenge_method` AuthGate accepts. Confidential clients should also include it — defence-in-depth.
 
 ## How It Works
 
@@ -23,7 +30,7 @@ sequenceDiagram
 
     App->>App: (1) Generate code_verifier + code_challenge (PKCE)
 
-    App->>Browser: (2) Redirect to /oauth/authorize<br/>?code_challenge=...&client_id=...&state=...
+    App->>Browser: (2) Redirect to /oauth/authorize<br/>?code_challenge=...&client_id=...&state=...&nonce=...
     Browser->>AuthGate: GET /oauth/authorize
 
     AuthGate->>Browser: Show login page (if not logged in)
@@ -36,12 +43,12 @@ sequenceDiagram
     Browser->>App: Callback with AUTH_CODE
 
     App->>AuthGate: (4) POST /oauth/token (code + code_verifier)
-    AuthGate-->>App: (5) access_token + refresh_token
+    AuthGate-->>App: (5) access_token + refresh_token [+ id_token]
 ```
 
 ### Step 1: Generate PKCE Parameters
 
-Before redirecting, your app generates a cryptographically random `code_verifier` and derives a `code_challenge` from it:
+Generate a cryptographically random `code_verifier` (43–128 chars) and derive the `code_challenge`:
 
 **Go**
 
@@ -52,12 +59,10 @@ import (
     "encoding/base64"
 )
 
-// Generate code_verifier (32 random bytes → 43-char base64url string)
 buf := make([]byte, 32)
 _, _ = rand.Read(buf)
 codeVerifier := base64.RawURLEncoding.EncodeToString(buf)
 
-// Derive code_challenge = BASE64URL(SHA256(code_verifier))
 h := sha256.Sum256([]byte(codeVerifier))
 codeChallenge := base64.RawURLEncoding.EncodeToString(h[:])
 ```
@@ -65,134 +70,156 @@ codeChallenge := base64.RawURLEncoding.EncodeToString(h[:])
 **Python**
 
 ```python
-import hashlib
-import base64
-import secrets
+import hashlib, base64, secrets
 
-# Generate code_verifier (32 random bytes → 43-char base64url string)
 code_verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b"=").decode()
-
-# Derive code_challenge = BASE64URL(SHA256(code_verifier))
 digest = hashlib.sha256(code_verifier.encode()).digest()
 code_challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
 ```
 
-**JavaScript (Node.js)**
+**JavaScript (Node / Browser via `crypto.subtle`)**
 
 ```javascript
-// Generate code_verifier (43-128 random chars)
+// Node 16+:
 const codeVerifier = crypto.randomBytes(32).toString("base64url");
-
-// Derive code_challenge = BASE64URL(SHA256(code_verifier))
-const codeChallenge = crypto
-  .createHash("sha256")
-  .update(codeVerifier)
-  .digest("base64url");
+const codeChallenge = crypto.createHash("sha256").update(codeVerifier).digest("base64url");
 ```
 
-Store the `code_verifier` securely (session or memory) — you'll need it in Step 4.
+Store the `code_verifier` for use in Step 4:
+
+- **Confidential clients**: server-side session.
+- **SPAs**: prefer an in-memory variable. Only fall back to `sessionStorage` if you must survive a reload — note that any browser storage is reachable from XSS, and the real mitigation is a Backend-For-Frontend (BFF) pattern.
 
 ### Step 2: Redirect to Authorization Endpoint
-
-Build the authorization URL and redirect the user:
 
 ```
 GET /oauth/authorize
   ?client_id=YOUR_CLIENT_ID
-  &redirect_uri=https://yourapp.com/callback
+  &redirect_uri=https://yourapp.example/callback
   &response_type=code
-  &scope=openid profile email
+  &scope=openid profile email offline_access
   &state=RANDOM_STATE
+  &nonce=RANDOM_NONCE
   &code_challenge=CODE_CHALLENGE
   &code_challenge_method=S256
 ```
 
-> **Always include `state`** — a random value that you verify on callback to prevent CSRF attacks.
+| Parameter               | Required    | Notes                                                      |
+| ----------------------- | ----------- | ---------------------------------------------------------- |
+| `client_id`             | yes         | From the admin                                             |
+| `redirect_uri`          | yes         | **Exact string match** against a registered URI            |
+| `response_type`         | yes         | Must be `code` (the only type AuthGate supports)           |
+| `scope`                 | recommended | Space-separated; include `openid` for an ID token          |
+| `state`                 | yes (CSRF)  | Random value — validate on callback                        |
+| `nonce`                 | OIDC        | Required when `scope` contains `openid`; ends up in `id_token` for replay protection |
+| `code_challenge`        | PKCE        | Derived as above                                           |
+| `code_challenge_method` | PKCE        | Must be `S256` (`plain` is rejected)                       |
 
-The user will be prompted to log in (if not already) and then see a consent screen listing the requested scopes.
+> **State & nonce**: generate independently, random, and long enough (≥ 16 bytes base64url). Persist `state` and `code_verifier` against the user session keyed by `state`, so the callback can look them up.
+
+The user will be prompted to log in (if not already) and then see a consent screen listing requested scopes.
 
 ### Step 3: Handle the Callback
 
-After approval, AuthGate redirects to your `redirect_uri` with an authorization code:
-
 ```
-https://yourapp.com/callback?code=AUTH_CODE&state=RANDOM_STATE
+https://yourapp.example/callback?code=AUTH_CODE&state=RANDOM_STATE
 ```
 
-Verify that `state` matches what you sent in Step 2.
+Before using `code`, **verify `state` matches** what you sent. If it doesn't, abort.
+
+If the user denied consent, AuthGate redirects with an OAuth error instead:
+
+```
+https://yourapp.example/callback?error=access_denied&error_description=...&state=RANDOM_STATE
+```
+
+See [Errors](./errors) for the full list.
 
 ### Step 4: Exchange Code for Tokens
 
-Exchange the authorization code for tokens by including the `code_verifier`:
+The `/oauth/token` endpoint accepts **only** `application/x-www-form-urlencoded` — not JSON.
+
+**Public client (PKCE only):**
 
 ```bash
 curl -X POST https://your-authgate/oauth/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=authorization_code" \
   -d "code=AUTH_CODE" \
-  -d "redirect_uri=https://yourapp.com/callback" \
+  -d "redirect_uri=https://yourapp.example/callback" \
   -d "client_id=YOUR_CLIENT_ID" \
   -d "code_verifier=CODE_VERIFIER"
 ```
 
-Response:
+**Confidential client (HTTP Basic — recommended):**
+
+```bash
+curl -X POST https://your-authgate/oauth/token \
+  -u "$CLIENT_ID:$CLIENT_SECRET" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=authorization_code" \
+  -d "code=AUTH_CODE" \
+  -d "redirect_uri=https://yourapp.example/callback" \
+  -d "code_verifier=CODE_VERIFIER"
+```
+
+Or put the credentials in the form body (`client_id=...&client_secret=...`). HTTP Basic is preferred per RFC 6749 §2.3.1.
+
+**Response:**
 
 ```json
 {
   "access_token": "eyJhbG...",
   "refresh_token": "def502...",
+  "id_token": "eyJhbG...",
   "token_type": "Bearer",
   "expires_in": 3600,
-  "scope": "openid profile email"
+  "scope": "openid profile email offline_access"
 }
 ```
 
+`id_token` is only present when `openid` was in the requested `scope`. See [OpenID Connect](./oidc) for its claims and how to verify it.
+
+> The same `redirect_uri` you sent in Step 2 must be sent again here — AuthGate compares them exactly.
+
 ### Step 5: Refresh the Access Token
 
-When the access token expires, use the refresh token:
+When the access token nears expiry, trade the refresh token for a new pair. See [Tokens & Revocation §Refreshing Tokens](./tokens#refreshing-tokens) — pay special attention to the [rotation-mode reuse-detection gotcha](./tokens#rotation-mode-the-reuse-detection-gotcha), which revokes the entire token family if an old refresh token is used twice.
 
-```bash
-curl -X POST https://your-authgate/oauth/token \
-  -d "grant_type=refresh_token" \
-  -d "refresh_token=REFRESH_TOKEN" \
-  -d "client_id=YOUR_CLIENT_ID"
-```
+### Step 6: Sign Out
 
-## Registering an Auth Code Client
-
-In the admin panel (**Admin → OAuth Clients → New**):
-
-1. Set **Client Type**:
-   - `public` — for SPAs and mobile apps using PKCE (no client secret)
-   - `confidential` — for server-side web apps that can store a secret
-2. Enable **Authorization Code Flow**
-3. Add your **Redirect URIs** (one per line)
-4. Note the generated `client_id`
+On logout, **revoke the refresh token** (not just the local session) — see [Tokens & Revocation §Sign Out](./tokens#sign-out--oauthrevoke-rfc-7009). Dropping the cookie alone leaves a stolen token valid until it expires.
 
 ## Managing User Authorizations
 
-Users can review and revoke per-app access at **Account → Authorized Apps**.
+Users can review and revoke per-app access at **Account → Authorized Apps** in the AuthGate UI. Expect to see a user return to your app with an expired/revoked token — handle `invalid_grant` and restart the flow.
 
-Admins can force re-authentication for all users of a client at **Admin → OAuth Clients → [client] → Revoke All**.
+## Security Checklist
 
-## Security Considerations
+| Requirement               | Details                                                                   |
+| ------------------------- | ------------------------------------------------------------------------- |
+| Always validate `state`   | Prevents CSRF on the callback                                             |
+| Always validate `nonce`   | For OIDC — compare the `id_token` `nonce` claim to what you sent          |
+| Always use PKCE (S256)    | Defence-in-depth even for confidential clients                            |
+| Use HTTPS everywhere      | Tokens and codes must never cross the wire in cleartext                   |
+| Exact redirect URI        | AuthGate does exact-string match — watch for trailing slashes             |
+| Revoke on logout          | Call `/oauth/revoke` with the refresh token                               |
+| Short-lived access tokens | Honor `expires_in`; refresh proactively (e.g. 30s before expiry)          |
+| Validate `id_token`       | Signature, `iss`, `aud=client_id`, `exp`, `nonce` — see [OpenID Connect](./oidc) |
+| SPA token storage         | Prefer BFF. Otherwise: access token in memory only; refresh token in `HttpOnly; Secure; SameSite=Lax` cookie. **Never `localStorage`.** |
+| Native / CLI storage      | OS keychain / Credential Manager / Secret Service — see [Device Flow §Storing Tokens Locally](./device-flow#storing-tokens-locally) |
 
-| Requirement           | Details                                             |
-| --------------------- | --------------------------------------------------- |
-| Always use PKCE       | Prevents authorization code interception            |
-| Validate `state`      | Prevents CSRF attacks                               |
-| Use HTTPS             | Required in production; prevents token leakage      |
-| Short-lived codes     | Authorization codes expire after a few minutes      |
-| Rotate refresh tokens | Set `ENABLE_TOKEN_ROTATION=true` for extra security |
+## Example Clients
 
-## Example Client
-
-See [github.com/go-authgate/oauth-cli](https://github.com/go-authgate/oauth-cli) for a working Go implementation of Authorization Code + PKCE.
-
-For a hybrid CLI that auto-detects the environment and uses Device Flow over SSH or Auth Code Flow locally, see [github.com/go-authgate/cli](https://github.com/go-authgate/cli).
+- [github.com/go-authgate/oauth-cli](https://github.com/go-authgate/oauth-cli) — Auth Code + PKCE in Go
+- [github.com/go-authgate/cli](https://github.com/go-authgate/cli) — Hybrid CLI (Device Flow over SSH, Auth Code locally)
 
 ## Related
 
 - [Getting Started](./getting-started)
 - [Device Authorization Flow](./device-flow)
 - [Client Credentials Flow](./client-credentials)
+- [OpenID Connect](./oidc)
 - [JWT Verification](./jwt-verification)
+- [Tokens & Revocation](./tokens)
+- [Errors](./errors)

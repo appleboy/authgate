@@ -1,14 +1,14 @@
 # Device Authorization Flow
 
-The **Device Authorization Grant** (RFC 8628) lets CLI tools, scripts, and headless environments authenticate users without requiring a browser on the device itself. Instead, the user visits a short URL on any device (phone, laptop, etc.) to complete authentication.
+The **Device Authorization Grant** (RFC 8628) lets CLI tools, IoT devices, and headless environments authenticate a user without opening a browser on the device itself. The user completes the browser step on any other device (phone, laptop, etc.).
 
 ## When to Use This Flow
 
-Use the Device Flow when:
+- You are building a **CLI tool** (`my-tool login`)
+- Your environment is **headless** — remote server over SSH, Docker container, CI runner
+- Opening a browser programmatically is impossible or inconvenient
 
-- You are building a **CLI tool** (e.g., `my-tool login`)
-- Your environment is **headless** (e.g., a remote server over SSH)
-- Opening a browser automatically is not possible or desirable
+The client is always **public** (no `client_secret`). Use `code_challenge` only if you're doing the (rarer) PKCE-for-device variant — AuthGate does not require it here.
 
 ## How It Works
 
@@ -18,12 +18,12 @@ sequenceDiagram
     participant AuthGate
     participant Browser
 
-    CLI->>AuthGate: POST /oauth/device/code (client_id)
-    AuthGate-->>CLI: device_code, user_code, verification_uri
+    CLI->>AuthGate: POST /oauth/device/code (client_id, scope)
+    AuthGate-->>CLI: device_code, user_code, verification_uri, interval
 
     note over CLI: Display verification_uri + user_code to user
 
-    loop Poll every 5s
+    loop Poll every `interval` seconds
         CLI->>AuthGate: POST /oauth/token (device_code)
         AuthGate-->>CLI: authorization_pending
     end
@@ -37,14 +37,19 @@ sequenceDiagram
 
 ### Step 1: Request a Device Code
 
-Your CLI calls `POST /oauth/device/code` with its `client_id`:
-
 ```bash
 curl -X POST https://your-authgate/oauth/device/code \
-  -d "client_id=YOUR_CLIENT_ID"
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "client_id=YOUR_CLIENT_ID" \
+  -d "scope=openid profile email offline_access"
 ```
 
-Response:
+| Parameter   | Required | Notes                                                |
+| ----------- | -------- | ---------------------------------------------------- |
+| `client_id` | yes      | Public client with Device Flow enabled               |
+| `scope`     | no       | Space-separated; defaults to `email profile` if omitted. Include `openid` for an ID token |
+
+**Response:**
 
 ```json
 {
@@ -56,75 +61,101 @@ Response:
 }
 ```
 
+> `interval` is the **minimum** poll interval. Respect `slow_down` (see below) to back off further.
+
 ### Step 2: Display Instructions to the User
 
-Show the user where to go and what code to enter:
+```
+To sign in, visit:
+    https://your-authgate/device
 
+And enter the code:
+    WXYZ-1234
+
+Waiting for authorization…
 ```
-Open https://your-authgate/device in your browser.
-Enter code: WXYZ-1234
-Waiting for authorization...
+
+If a browser is available locally, open `verification_uri` automatically (but still print the URL and code in case auto-open fails):
+
+```go
+// Go
+_ = exec.Command("open", verificationURI).Start()      // macOS
+_ = exec.Command("xdg-open", verificationURI).Start()  // Linux
+_ = exec.Command("cmd", "/c", "start", verificationURI).Start() // Windows
 ```
+
+A QR code of `verification_uri` (plus displaying the code) is a friendly touch for mobile users.
 
 ### Step 3: Poll for the Token
 
-While the user completes the browser step, your CLI polls for the token:
-
 ```bash
 curl -X POST https://your-authgate/oauth/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=urn:ietf:params:oauth:grant-type:device_code" \
   -d "device_code=abc123..." \
   -d "client_id=YOUR_CLIENT_ID"
 ```
 
-Possible responses while polling:
+**Success** (user approved):
 
-| Response                | Meaning                                 |
-| ----------------------- | --------------------------------------- |
-| `authorization_pending` | User hasn't approved yet — keep polling |
-| `slow_down`             | Polling too fast — increase interval    |
-| `expired_token`         | Device code expired — restart flow      |
-| `access_denied`         | User rejected the request               |
-| `200 OK` + tokens       | Success!                                |
+```json
+{
+  "access_token": "eyJhbG...",
+  "refresh_token": "def502...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "scope": "openid profile email offline_access"
+}
+```
 
-### Step 4: Use and Refresh Tokens
+**Errors while polling** (HTTP 400, shape `{"error": "...", "error_description": "..."}`):
 
-Once you receive an `access_token`, include it in API requests:
+| `error`                 | HTTP | Meaning / Action                                            |
+| ----------------------- | ---- | ----------------------------------------------------------- |
+| `authorization_pending` | 400  | User hasn't approved yet — keep polling at `interval`       |
+| `slow_down`             | 400  | Polling too fast — **increase interval by ≥ 5 seconds**     |
+| `access_denied`         | 400  | User rejected the request — stop polling                    |
+| `expired_token`         | 400  | `device_code` past `expires_in` — restart from Step 1       |
+| `invalid_grant`         | 400  | `device_code` unknown or already used — restart from Step 1 |
+
+`429 Too Many Requests` is also possible — see [Tokens & Revocation §Rate Limits](./tokens#rate-limits). The full error catalog lives in [Errors](./errors).
+
+### Step 4: Use the Access Token
 
 ```bash
 curl -H "Authorization: Bearer ACCESS_TOKEN" https://api.example.com/resource
 ```
 
-When the access token expires, use the `refresh_token`:
+### Step 5: Refresh the Access Token
 
-```bash
-curl -X POST https://your-authgate/oauth/token \
-  -d "grant_type=refresh_token" \
-  -d "refresh_token=REFRESH_TOKEN" \
-  -d "client_id=YOUR_CLIENT_ID"
-```
+When the access token nears expiry, trade the refresh token — see [Tokens & Revocation §Refreshing Tokens](./tokens#refreshing-tokens). Read the [rotation-mode reuse-detection gotcha](./tokens#rotation-mode-the-reuse-detection-gotcha) before implementing retries.
 
-## Registering a Device Flow Client
+### Step 6: Sign Out
 
-In the admin panel (**Admin → OAuth Clients → New**):
+On `my-tool logout`, **revoke the refresh token** — deleting the local token file alone leaves a stolen token valid until expiry. See [Tokens & Revocation §Sign Out](./tokens#sign-out--oauthrevoke-rfc-7009).
 
-1. Set **Client Type** to `public` (no client secret required)
-2. Enable **Device Authorization Flow**
-3. Note the generated `client_id`
+## Storing Tokens Locally
 
-## Token Expiry and Rotation
+CLI conventions:
 
-| Setting                | Default    | Config                       |
-| ---------------------- | ---------- | ---------------------------- |
-| Access token lifetime  | 1 hour     | `JWT_EXPIRATION`             |
-| Device code lifetime   | 30 minutes | `DEVICE_CODE_EXPIRATION`     |
-| Refresh token rotation | Disabled   | `ENABLE_TOKEN_ROTATION=true` |
+- macOS: **Keychain** (e.g., `security add-generic-password`)
+- Linux: **Secret Service** (libsecret) or file in `$XDG_CONFIG_HOME/<app>/token.json` with `0600`
+- Windows: **Credential Manager**
 
-> When token rotation is enabled, each refresh invalidates the old refresh token and issues a new one. This limits the blast radius of a stolen refresh token.
+Never write refresh tokens to log output or debug traces.
+
+## Integration Checklist
+
+- [ ] `client_id` with Device Flow enabled by the admin
+- [ ] Respect `interval` and back off on `slow_down`
+- [ ] Restart flow on `expired_token` / `access_denied`
+- [ ] Store access & refresh tokens in OS-level secure storage
+- [ ] Revoke the refresh token on logout
+- [ ] Handle 429 rate-limit responses with backoff
 
 ## Example CLI Client
 
-See [github.com/go-authgate/device-cli](https://github.com/go-authgate/device-cli) for a working example in Go that implements the complete Device Flow.
+[github.com/go-authgate/device-cli](https://github.com/go-authgate/device-cli) — complete Device Flow in Go.
 
 ## Related
 
@@ -132,3 +163,5 @@ See [github.com/go-authgate/device-cli](https://github.com/go-authgate/device-cl
 - [Authorization Code Flow](./auth-code-flow)
 - [Client Credentials Flow](./client-credentials)
 - [JWT Verification](./jwt-verification)
+- [Tokens & Revocation](./tokens)
+- [Errors](./errors)

@@ -1,8 +1,10 @@
 # JWT Verification
 
-Verify AuthGate-issued JWT tokens at your resource servers using public keys — no callback to AuthGate needed.
+Verify AuthGate-issued **access tokens** at your resource servers using public keys — no callback to AuthGate needed.
 
-> **Important tradeoff**: Local JWT verification cannot detect server-side token revocation or status changes (revoked/disabled). Tokens remain valid until they expire. If you need real-time revocation enforcement, use AuthGate's `/oauth/tokeninfo` endpoint for online validation.
+> **This page covers access tokens only.** ID tokens (issued when `scope` contains `openid`) use JWKS the same way but have a different claim set and stricter validation rules — see [OpenID Connect](./oidc).
+
+> **Important tradeoff**: Local JWT verification cannot detect server-side revocation or status changes (revoked/disabled tokens remain technically valid until expiry). If you need real-time revocation enforcement, call `/oauth/introspect` (RFC 7662) or `/oauth/tokeninfo` instead — see [Tokens & Revocation](./tokens).
 
 ## When to Use
 
@@ -36,11 +38,11 @@ sequenceDiagram
     Client->>AuthGate: POST /oauth/token (authenticate)
     AuthGate-->>Client: access_token (JWT signed with RS256/ES256)
 
-    Client->>RS: GET /api/resource<br/>Authorization: Bearer JWT
+    Client->>RS: GET /api/resource (Authorization Bearer JWT)
 
     note over RS: First request or cache expired
     RS->>AuthGate: GET /.well-known/jwks.json
-    AuthGate-->>RS: {"keys": [{"kty":"RSA","kid":"...","n":"...","e":"..."}]}
+    AuthGate-->>RS: JWKS document (public keys by kid)
 
     note over RS: Cache JWKS (max-age=3600)
     note over RS: Verify JWT signature locally
@@ -50,24 +52,11 @@ sequenceDiagram
 
 After the initial JWKS fetch, all subsequent token verifications happen locally — no network call to AuthGate is needed.
 
-## Configure AuthGate
+## Confirm Your AuthGate Instance Uses Asymmetric Signing
 
-Generate a signing key and set the environment variables:
+JWKS-based verification only works when AuthGate is configured with **RS256** or **ES256**. Confirm via OIDC Discovery — if the `jwks_uri` field is absent or `/.well-known/jwks.json` returns an empty `keys` array, your deployment is using HS256 and you cannot verify tokens this way.
 
-```bash
-# RS256: Generate RSA 2048-bit key
-openssl genrsa -out rsa-private.pem 2048
-
-# ES256: Generate ECDSA P-256 key
-openssl ecparam -genkey -name prime256v1 -noout -out ec-private.pem
-```
-
-```bash
-# Environment variables
-JWT_SIGNING_ALGORITHM=RS256        # or ES256
-JWT_PRIVATE_KEY_PATH=/path/to/rsa-private.pem
-JWT_KEY_ID=                        # Optional: auto-generated from key fingerprint
-```
+If you hit that wall, ask your administrator to switch the deployment to RS256/ES256. Symmetric secrets are never exposed through JWKS.
 
 ## OIDC Discovery
 
@@ -158,17 +147,19 @@ The response includes `Cache-Control: public, max-age=3600` — cache for up to 
 
 | Claim       | Description                            |
 | ----------- | -------------------------------------- |
-| `user_id`   | End-user identifier, or `client:<client_id>` for `client_credentials` tokens |
+| `user_id`   | Same as `sub`                          |
 | `client_id` | OAuth client that requested the token  |
 | `scope`     | Space-separated granted scopes         |
-| `type`      | `access` or `refresh`      |
+| `type`      | Always `access` for tokens you receive as a Bearer. Refresh tokens also set `type=refresh` but aren't sent to resource servers — reject anything other than `access` |
 | `exp`       | Expiration time (Unix timestamp)       |
 | `iat`       | Issued-at time (Unix timestamp)        |
 | `iss`       | Issuer URL (AuthGate's BASE_URL)       |
-| `sub`       | Subject: user UUID for user tokens, or `client:<client_id>` for `client_credentials` tokens |
+| `sub`       | User UUID for user-delegated tokens, or `client:<client_id>` for `client_credentials` tokens |
 | `jti`       | Unique token identifier (UUID)         |
 
-> **Note:** For `client_credentials` tokens, there is no end user. Both `sub` and `user_id` are set to a synthetic machine identity (`client:<client_id>`).
+> **No `aud` claim**: AuthGate access tokens intentionally omit the `aud` (audience) claim. Do **not** configure your JWT library to require `aud` on access tokens — it will reject every token. (ID tokens **do** carry `aud=<client_id>`; validate `aud` only there. See [OpenID Connect](./oidc).)
+
+> **M2M tokens**: when `sub` starts with `client:` the token is from the Client Credentials flow — no end user is involved. Branch on this if your API treats service calls differently.
 
 ## Verification Steps
 
@@ -239,10 +230,10 @@ func main() {
 			return
 		}
 
-		// Check scopes
+		// Check scopes — replace "profile" with whatever your API requires.
 		scopeStr, _ := claims["scope"].(string)
 		scopes := strings.Fields(scopeStr)
-		if !slices.Contains(scopes, "read") {
+		if !slices.Contains(scopes, "profile") {
 			http.Error(w, "Insufficient scope", http.StatusForbidden)
 			return
 		}
@@ -300,9 +291,9 @@ def protected_resource():
     if payload.get("type") != "access":
         return jsonify({"error": "Invalid token type"}), 401
 
-    # Check scopes
+    # Check scopes — replace "profile" with whatever your API requires.
     scopes = payload.get("scope", "").split()
-    if "read" not in scopes:
+    if "profile" not in scopes:
         return jsonify({"error": "Insufficient scope"}), 403
 
     return jsonify({"message": f"Hello, user {payload['user_id']}!"})
@@ -342,9 +333,9 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    // Check scopes
+    // Check scopes — replace "profile" with whatever your API requires.
     const scopes = (payload.scope || "").trim().split(/\s+/).filter(Boolean);
-    if (!scopes.includes("read")) {
+    if (!scopes.includes("profile")) {
       res.writeHead(403);
       res.end(JSON.stringify({ error: "Insufficient scope" }));
       return;
@@ -400,6 +391,9 @@ server.listen(8081, () => console.log("Resource server on :8081"));
 ## Related
 
 - [Getting Started](./getting-started)
+- [OpenID Connect](./oidc) — Verify ID tokens and use `/oauth/userinfo`
+- [Tokens & Revocation](./tokens) — Online introspection when local verify isn't enough
 - [Device Authorization Flow](./device-flow)
-- [Auth Code Flow](./auth-code-flow)
+- [Authorization Code Flow](./auth-code-flow)
 - [Client Credentials Flow](./client-credentials)
+- [Errors](./errors)
