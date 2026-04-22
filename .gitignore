@@ -38,6 +38,10 @@ coverage.txt
 # Credentials file (generated on first run)
 authgate-credentials.txt
 
+# JWT signing keys (RS256/ES256)
+*.pem
+*.key
+
 # templ generated files
 *_templ.go
 api/*
