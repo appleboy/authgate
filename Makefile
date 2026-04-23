@@ -27,7 +27,7 @@ LDFLAGS ?= -X 'github.com/go-authgate/authgate/internal/version.Version=$(VERSIO
 all: generate build
 
 ## build: build the authgate binary
-build: $(EXECUTABLE)
+build: generate $(EXECUTABLE)
 
 $(EXECUTABLE): $(GOFILES)
 	$(GO) build -v -tags '$(TAGS)' -ldflags '$(EXTLDFLAGS)-s -w $(LDFLAGS)' -o bin/$@ .
@@ -94,7 +94,7 @@ clean:
 	rm -f internal/templates/asset_paths.go
 
 ## rebuild: clean and build
-rebuild: clean build
+rebuild: clean generate build
 
 .PHONY: help build build-all install test coverage fmt lint clean rebuild
 .PHONY: build_linux_amd64 build_linux_arm64
