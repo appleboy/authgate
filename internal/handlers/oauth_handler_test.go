@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/go-authgate/authgate/internal/auth"
+	"github.com/go-authgate/authgate/internal/config"
 	"github.com/go-authgate/authgate/internal/metrics"
 
 	"github.com/gin-contrib/sessions"
@@ -20,18 +21,31 @@ import (
 
 // newTestOAuthHandler creates an OAuthHandler with a fake GitHub provider and no-op metrics.
 func newTestOAuthHandler(baseURL string) *OAuthHandler {
+	return newTestOAuthHandlerWithRememberMe(baseURL, false, 0)
+}
+
+// newTestOAuthHandlerWithRememberMe creates an OAuthHandler with configurable
+// remember-me settings.
+func newTestOAuthHandlerWithRememberMe(
+	baseURL string,
+	rememberMeEnabled bool,
+	rememberMeMaxAge int,
+) *OAuthHandler {
 	provider := auth.NewGitHubProvider(auth.OAuthProviderConfig{
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
 		RedirectURL:  "http://localhost:8080/oauth/github/callback",
 	})
+	cfg := &config.Config{
+		BaseURL:                  baseURL,
+		SessionRememberMeEnabled: rememberMeEnabled,
+		SessionRememberMeMaxAge:  rememberMeMaxAge,
+	}
 	return NewOAuthHandler(
 		map[string]*auth.OAuthProvider{"github": provider},
 		nil, // userService not exercised in these tests
 		http.DefaultClient,
-		baseURL,
-		false, // session fingerprint disabled
-		false,
+		cfg,
 		metrics.NewNoopMetrics(),
 	)
 }
@@ -52,9 +66,10 @@ func setupOAuthRouter(h *OAuthHandler) *gin.Engine {
 	r.GET("/test-session", func(c *gin.Context) {
 		sess := sessions.Default(c)
 		c.JSON(http.StatusOK, gin.H{
-			"oauth_redirect": sess.Get("oauth_redirect"),
-			"oauth_state":    sess.Get("oauth_state"),
-			"oauth_provider": sess.Get("oauth_provider"),
+			"oauth_redirect":    sess.Get("oauth_redirect"),
+			"oauth_state":       sess.Get("oauth_state"),
+			"oauth_provider":    sess.Get("oauth_provider"),
+			"oauth_remember_me": sess.Get("oauth_remember_me"),
 		})
 	})
 
@@ -227,6 +242,80 @@ func TestLoginWithProvider_AbsoluteURLSameHost_StoredInSession(t *testing.T) {
 
 	sess := readSession(t, r, sessionCookies(w))
 	assert.Equal(t, "http://localhost:8080/device", sess["oauth_redirect"])
+}
+
+func TestLoginWithProvider_RememberMe(t *testing.T) {
+	cases := []struct {
+		name    string
+		enabled bool
+		query   string
+		want    any // expected session value for oauth_remember_me
+	}{
+		{"opted in", true, "?remember_me=1", true},
+		{"not set", true, "", nil},
+		{"feature disabled", false, "?remember_me=1", nil},
+		{"invalid value", true, "?remember_me=true", nil}, // only "1" opts in
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newTestOAuthHandlerWithRememberMe("http://localhost:8080", tc.enabled, 2592000)
+			r := setupOAuthRouter(h)
+
+			req, _ := http.NewRequestWithContext(
+				context.Background(),
+				http.MethodGet,
+				"/oauth/github"+tc.query,
+				nil,
+			)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			require.Equal(t, http.StatusTemporaryRedirect, w.Code)
+
+			sess := readSession(t, r, sessionCookies(w))
+			assert.Equal(t, tc.want, sess["oauth_remember_me"])
+		})
+	}
+}
+
+// Abandoning an OAuth attempt that opted into remember-me must not leak
+// into the next attempt if the user does not opt in again.
+func TestLoginWithProvider_RememberMe_ClearsStaleFlagOnNewAttempt(t *testing.T) {
+	h := newTestOAuthHandlerWithRememberMe("http://localhost:8080", true, 2592000)
+	r := setupOAuthRouter(h)
+
+	// First attempt: opted in, but abandoned (never reaches callback).
+	firstReq, _ := http.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		"/oauth/github?remember_me=1",
+		nil,
+	)
+	firstW := httptest.NewRecorder()
+	r.ServeHTTP(firstW, firstReq)
+	require.Equal(t, http.StatusTemporaryRedirect, firstW.Code)
+
+	cookies := sessionCookies(firstW)
+	require.Equal(t, true, readSession(t, r, cookies)["oauth_remember_me"])
+
+	// Second attempt on the same session: no remember_me query.
+	secondReq, _ := http.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		"/oauth/github",
+		nil,
+	)
+	for _, ck := range cookies {
+		secondReq.AddCookie(ck)
+	}
+	secondW := httptest.NewRecorder()
+	r.ServeHTTP(secondW, secondReq)
+	require.Equal(t, http.StatusTemporaryRedirect, secondW.Code)
+
+	sess := readSession(t, r, sessionCookies(secondW))
+	assert.Nil(t, sess["oauth_remember_me"],
+		"stale oauth_remember_me from previous attempt must be cleared")
 }
 
 func TestLoginWithProvider_HeaderInjectionRedirect_RejectedFromSession(t *testing.T) {

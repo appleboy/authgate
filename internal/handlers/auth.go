@@ -26,6 +26,10 @@ const (
 	SessionFingerprint  = middleware.SessionFingerprint
 )
 
+// formFieldRememberMe is the HTML form/query parameter name for the
+// "Remember me" checkbox, shared by local login and OAuth login.
+const formFieldRememberMe = "remember_me"
+
 // loginErrorMessages maps error query parameter keys to user-facing messages.
 var loginErrorMessages = map[string]string{
 	"session_timeout": "Your session has expired due to inactivity. Please sign in again.",
@@ -190,11 +194,8 @@ func (h *AuthHandler) Login(c *gin.Context,
 	}
 
 	// Handle "Remember Me" — extend session to configured duration
-	if h.cfg.SessionRememberMeEnabled && c.PostForm("remember_me") == "1" {
-		session.Set(middleware.SessionRememberMe, true)
-		session.Options(
-			middleware.SessionOptions(h.cfg.SessionRememberMeMaxAge, h.cfg.IsProduction),
-		)
+	if h.cfg.SessionRememberMeEnabled && c.PostForm(formFieldRememberMe) == "1" {
+		middleware.ApplyRememberMe(session, h.cfg.SessionRememberMeMaxAge, h.cfg.IsProduction)
 	}
 
 	if err := session.Save(); err != nil {

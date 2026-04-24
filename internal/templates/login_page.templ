@@ -149,7 +149,41 @@ templ LoginPage(props LoginPageProps) {
 						Sign In
 					</button>
 				</form>
+				if props.RememberMeEnabled && len(props.OAuthProviders) > 0 {
+					@oauthRememberMeScript()
+				}
 			</div>
 		</div>
 	}
+}
+
+// oauthRememberMeScript mirrors the remember_me checkbox state into each OAuth
+// login link's query string, since the <a> links bypass the form submission.
+templ oauthRememberMeScript() {
+	<script>
+		(function () {
+			var checkbox = document.getElementById('remember_me');
+			var links = document.querySelectorAll('.login-oauth-btn');
+			if (!checkbox || links.length === 0) return;
+
+			function sync() {
+				links.forEach(function (link) {
+					try {
+						var url = new URL(link.href, window.location.origin);
+						if (checkbox.checked) {
+							url.searchParams.set('remember_me', '1');
+						} else {
+							url.searchParams.delete('remember_me');
+						}
+						link.href = url.toString();
+					} catch (_) {
+						// Malformed href; skip.
+					}
+				});
+			}
+
+			checkbox.addEventListener('change', sync);
+			sync();
+		})();
+	</script>
 }

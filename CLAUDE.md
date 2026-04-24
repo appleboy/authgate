@@ -343,6 +343,10 @@ Secure communication with external APIs using `HTTP_API_AUTH_MODE`:
 
 ## Coding Conventions
 
+- **Avoid if/else chains** — prefer early returns (guard clauses), `switch`, or lookup tables. Reserve `else` for the rare case where both branches produce a value and extracting a helper is heavier than the `else`. Flatten nested conditionals into sequential guards so the happy path stays on the left margin. Examples:
+  - `if err != nil { return err }` → continue, not `if err != nil { ... } else { ... }`
+  - Dispatching on a string/enum → `switch`, not chained `if/else if`
+  - Two-branch value selection → extract a helper or use a map, not an inline `if/else`
 - Use `http.StatusOK`, `http.StatusBadRequest`, etc. instead of numeric status codes
 - Services return typed errors, handlers convert to appropriate HTTP responses
 - GORM models use `gorm.Model` for CreatedAt/UpdatedAt/DeletedAt (except custom timestamp models)

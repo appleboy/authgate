@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-authgate/authgate/internal/auth"
+	"github.com/go-authgate/authgate/internal/config"
 	"github.com/go-authgate/authgate/internal/core"
 	"github.com/go-authgate/authgate/internal/middleware"
 	"github.com/go-authgate/authgate/internal/services"
@@ -21,20 +22,19 @@ import (
 
 // OAuth-specific session keys.
 const (
-	sessionOAuthState    = "oauth_state"
-	sessionOAuthProvider = "oauth_provider"
-	sessionOAuthRedirect = "oauth_redirect"
+	sessionOAuthState      = "oauth_state"
+	sessionOAuthProvider   = "oauth_provider"
+	sessionOAuthRedirect   = "oauth_redirect"
+	sessionOAuthRememberMe = "oauth_remember_me"
 )
 
 // OAuthHandler handles OAuth authentication
 type OAuthHandler struct {
-	providers                   map[string]*auth.OAuthProvider
-	userService                 *services.UserService
-	httpClient                  *http.Client // Custom HTTP client for OAuth requests
-	baseURL                     string
-	sessionFingerprintEnabled   bool
-	sessionFingerprintIncludeIP bool
-	metrics                     core.Recorder
+	providers   map[string]*auth.OAuthProvider
+	userService *services.UserService
+	httpClient  *http.Client // Custom HTTP client for OAuth requests
+	cfg         *config.Config
+	metrics     core.Recorder
 }
 
 // NewOAuthHandler creates a new OAuth handler
@@ -42,19 +42,15 @@ func NewOAuthHandler(
 	providers map[string]*auth.OAuthProvider,
 	userService *services.UserService,
 	httpClient *http.Client,
-	baseURL string,
-	fingerprintEnabled bool,
-	fingerprintIncludeIP bool,
+	cfg *config.Config,
 	m core.Recorder,
 ) *OAuthHandler {
 	return &OAuthHandler{
-		providers:                   providers,
-		userService:                 userService,
-		httpClient:                  httpClient,
-		baseURL:                     baseURL,
-		sessionFingerprintEnabled:   fingerprintEnabled,
-		sessionFingerprintIncludeIP: fingerprintIncludeIP,
-		metrics:                     m,
+		providers:   providers,
+		userService: userService,
+		httpClient:  httpClient,
+		cfg:         cfg,
+		metrics:     m,
 	}
 }
 
@@ -90,9 +86,16 @@ func (h *OAuthHandler) LoginWithProvider(c *gin.Context) {
 	session.Set(sessionOAuthState, state)
 	session.Set(sessionOAuthProvider, provider)
 
-	// Save original redirect URL if present, validating it is safe first
-	if redirect := c.Query("redirect"); redirect != "" && util.IsRedirectSafe(redirect, h.baseURL) {
+	redirect := c.Query("redirect")
+	if redirect != "" && util.IsRedirectSafe(redirect, h.cfg.BaseURL) {
 		session.Set(sessionOAuthRedirect, redirect)
+	}
+
+	// Clear first so a previous abandoned attempt cannot silently opt this
+	// login into a 30-day session.
+	session.Delete(sessionOAuthRememberMe)
+	if h.cfg.SessionRememberMeEnabled && c.Query(formFieldRememberMe) == "1" {
+		session.Set(sessionOAuthRememberMe, true)
 	}
 
 	if err := session.Save(); err != nil {
@@ -239,14 +242,20 @@ func (h *OAuthHandler) OAuthCallback(c *gin.Context) {
 	session.Set(middleware.SessionUsername, user.Username)
 	session.Set(middleware.SessionLastActivity, time.Now().Unix()) // Set initial last activity time
 
+	if remember, _ := session.Get(sessionOAuthRememberMe).(bool); remember &&
+		h.cfg.SessionRememberMeEnabled {
+		middleware.ApplyRememberMe(session, h.cfg.SessionRememberMeMaxAge, h.cfg.IsProduction)
+	}
+	session.Delete(sessionOAuthRememberMe)
+
 	// Set session fingerprint if enabled
-	if h.sessionFingerprintEnabled {
+	if h.cfg.SessionFingerprint {
 		clientIP := c.GetString(middleware.ContextKeyClientIP) // Set by RequestContextMiddleware
 		userAgent := c.Request.UserAgent()
 		fingerprint := middleware.GenerateFingerprint(
 			clientIP,
 			userAgent,
-			h.sessionFingerprintIncludeIP,
+			h.cfg.SessionFingerprintIP,
 		)
 		session.Set(middleware.SessionFingerprint, fingerprint)
 	}
