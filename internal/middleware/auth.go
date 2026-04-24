@@ -35,6 +35,14 @@ func SessionOptions(maxAge int, isProduction bool) sessions.Options {
 	}
 }
 
+// ApplyRememberMe marks the session as a "remember me" session and extends
+// the cookie lifetime to maxAge. Downstream middleware reads SessionRememberMe
+// to keep the cookie alive (sliding expiration) and to bypass idle timeout.
+func ApplyRememberMe(session sessions.Session, maxAge int, isProduction bool) {
+	session.Set(SessionRememberMe, true)
+	session.Options(SessionOptions(maxAge, isProduction))
+}
+
 // GenerateFingerprint creates a SHA256 hash from IP (optional) and User-Agent.
 func GenerateFingerprint(ip, userAgent string, includeIP bool) string {
 	data := userAgent
