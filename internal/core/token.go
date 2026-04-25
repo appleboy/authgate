@@ -60,7 +60,7 @@ type TokenRefreshResult struct {
 // (typically derived from config). A non-zero ttl overrides the default and
 // disables any jitter the provider would normally apply.
 //
-// extraClaims (when non-empty) is merged into the generated JWT after standard
+// extraClaims (when non-empty) is merged into the generated JWT before standard
 // claims are set; standard claims (iss, sub, exp, iat, jti, aud, type, scope,
 // user_id, client_id) take precedence and cannot be overridden.
 type TokenProvider interface {

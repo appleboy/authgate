@@ -86,11 +86,11 @@ var (
 		models.TokenProfileLong,
 	)
 	ErrInvalidProject = errors.New(
-		"project must be 1–64 characters of letters, digits, underscore, dot, or hyphen, " +
+		"project must be empty or 1–64 characters of letters, digits, underscore, dot, or hyphen, " +
 			"and start/end with a letter or digit",
 	)
 	ErrInvalidServiceAccount = errors.New(
-		"service_account must be 1–255 characters of letters, digits, underscore, dot, at-sign, or hyphen",
+		"service_account must be empty or 1–255 characters of letters, digits, underscore, dot, at-sign, or hyphen",
 	)
 )
 

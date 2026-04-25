@@ -1242,6 +1242,33 @@ func TestGenerateToken_ExtraClaimsCannotOverrideStandard(t *testing.T) {
 	assert.Equal(t, TokenCategoryAccess, result.Claims["type"])
 }
 
+// When JWTAudience is unset, an extraClaims map that smuggles in an "aud" must
+// not leak into the signed JWT — config is the single source of truth for the
+// aud claim. Regression coverage for a bug where extraClaims["aud"] survived
+// because the standard-claim write was conditional on JWTAudience being set.
+func TestGenerateToken_ExtraClaimsAudIgnoredWhenAudienceUnset(t *testing.T) {
+	cfg := &config.Config{
+		JWTSecret:     "test-secret-key-for-jwt-signing",
+		JWTExpiration: 1 * time.Hour,
+		BaseURL:       "http://localhost:8080",
+		// JWTAudience deliberately left empty
+	}
+	provider, err := NewLocalTokenProvider(cfg)
+	require.NoError(t, err)
+
+	extra := map[string]any{"aud": "smuggled-tenant"}
+	result, err := provider.GenerateToken(
+		context.Background(), "u", "c", "read", 0, extra,
+	)
+	require.NoError(t, err)
+	_, present := result.Claims["aud"]
+	assert.False(
+		t,
+		present,
+		"aud must be omitted when JWTAudience is empty, even if extraClaims provides one",
+	)
+}
+
 func TestGenerateRefreshToken_ExtraClaimsInjected(t *testing.T) {
 	cfg := &config.Config{
 		JWTSecret:              "test-secret-key-for-jwt-signing",

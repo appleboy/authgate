@@ -209,6 +209,11 @@ func (p *LocalTokenProvider) generateJWT(
 	claims["iss"] = p.config.BaseURL
 	claims["sub"] = userID
 	claims["jti"] = uuid.New().String()
+	// "aud" is governed entirely by config. Drop any value an extraClaims caller
+	// may have copied in, then set it only when JWTAudience is configured —
+	// otherwise an empty config + a stray extraClaims["aud"] would silently
+	// leak into the signed JWT.
+	delete(claims, "aud")
 	if aud := audienceClaim(p.config.JWTAudience); aud != nil {
 		claims["aud"] = aud
 	}
