@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/go-authgate/authgate/internal/models"
+	"github.com/go-authgate/authgate/internal/token"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -26,14 +27,14 @@ func TestBuildClientClaims(t *testing.T) {
 			client: &models.OAuthApplication{
 				Project: "payments-prod",
 			},
-			want: map[string]any{"project": "payments-prod"},
+			want: map[string]any{token.ClaimProject: "payments-prod"},
 		},
 		{
 			name: "only service account set",
 			client: &models.OAuthApplication{
 				ServiceAccount: "sa-payments@example.com",
 			},
-			want: map[string]any{"service_account": "sa-payments@example.com"},
+			want: map[string]any{token.ClaimServiceAccount: "sa-payments@example.com"},
 		},
 		{
 			name: "both set",
@@ -42,8 +43,8 @@ func TestBuildClientClaims(t *testing.T) {
 				ServiceAccount: "sa-payments@example.com",
 			},
 			want: map[string]any{
-				"project":         "payments-prod",
-				"service_account": "sa-payments@example.com",
+				token.ClaimProject:        "payments-prod",
+				token.ClaimServiceAccount: "sa-payments@example.com",
 			},
 		},
 	}
