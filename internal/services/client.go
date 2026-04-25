@@ -91,7 +91,8 @@ var (
 			"and start/end with a letter or digit",
 	)
 	ErrInvalidServiceAccount = errors.New(
-		"service_account must be empty or 1–255 characters of letters, digits, underscore, dot, at-sign, or hyphen",
+		"service_account must be empty or 1–255 characters of letters, digits, underscore, dot, at-sign, or hyphen, " +
+			"starting with a letter or digit",
 	)
 )
 
