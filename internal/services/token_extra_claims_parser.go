@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/go-authgate/authgate/internal/config"
@@ -54,9 +55,16 @@ func (p *ExtraClaimsParser) Parse(raw string) (map[string]any, error) {
 		return nil, fmt.Errorf("extra_claims: invalid JSON: %w", err)
 	}
 	// Reject trailing data after the first object (e.g. `{"a":1} {"b":2}` or
-	// `{"a":1} junk`). Without this check, a malformed payload would silently
-	// parse only its first value.
-	if dec.More() {
+	// `{"a":1} junk`). dec.More() is defined for nested array/object iteration
+	// and is unreliable at the top level — a second Decode that doesn't return
+	// io.EOF is the documented way to detect leftover bytes.
+	var rest json.RawMessage
+	switch err := dec.Decode(&rest); {
+	case errors.Is(err, io.EOF):
+		// expected: stream is fully consumed
+	case err != nil:
+		return nil, fmt.Errorf("extra_claims: invalid JSON: %w", err)
+	default:
 		return nil, errors.New("extra_claims: invalid JSON: unexpected trailing data")
 	}
 	if out == nil {

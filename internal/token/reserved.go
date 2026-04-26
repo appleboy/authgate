@@ -17,12 +17,13 @@ var ErrReservedClaimKey = errors.New("reserved claim key")
 //  1. Primary — ParseExtraClaims/ValidateExtraClaims reject these keys at the
 //     handler edge before the request reaches the token provider.
 //  2. Supplementary — generateJWT explicitly overwrites the standard claims it
-//     manages (iss/sub/aud/exp/iat/jti/type/scope/user_id/client_id) and drops
-//     the OIDC-only ID-token claims (nbf/azp/amr/acr/auth_time/nonce/at_hash)
-//     that have no place in an access token. This is not a universal override
-//     of every entry in this list — AuthGate-internal client metadata claims
-//     (project, service_account) are intentionally left alone so the service
-//     layer can set them via buildClientClaims.
+//     manages (iss/sub/aud/exp/iat/jti/type/scope/user_id/client_id), and
+//     drops claims that have no place in an access token: the registered JWT
+//     claim nbf and the OIDC ID-token claims (azp/amr/acr/auth_time/nonce/
+//     at_hash). This is not a universal override of every entry in this list
+//     — AuthGate-internal client metadata claims (project, service_account)
+//     are intentionally left alone so the service layer can set them via
+//     buildClientClaims.
 var reservedClaimKeys = map[string]struct{}{
 	// RFC 7519 §4.1 registered claim names
 	"iss": {},

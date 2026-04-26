@@ -605,6 +605,28 @@ func (c *Config) Validate() error {
 			c.JWTExpirationJitter,
 		)
 	}
+
+	// Validate caller-supplied extra-claims size limits. 0 means "disabled";
+	// negative values would silently disable the check too because every limit
+	// is gated on `> 0`, so reject them up-front to avoid surprises.
+	if c.ExtraClaimsMaxRawSize < 0 {
+		return fmt.Errorf(
+			"EXTRA_CLAIMS_MAX_RAW_SIZE must be non-negative (got %d)",
+			c.ExtraClaimsMaxRawSize,
+		)
+	}
+	if c.ExtraClaimsMaxKeys < 0 {
+		return fmt.Errorf(
+			"EXTRA_CLAIMS_MAX_KEYS must be non-negative (got %d)",
+			c.ExtraClaimsMaxKeys,
+		)
+	}
+	if c.ExtraClaimsMaxValSize < 0 {
+		return fmt.Errorf(
+			"EXTRA_CLAIMS_MAX_VAL_SIZE must be non-negative (got %d)",
+			c.ExtraClaimsMaxValSize,
+		)
+	}
 	if c.JWTExpirationJitter > 0 && c.JWTExpirationJitter >= c.JWTExpiration {
 		return fmt.Errorf(
 			"JWT_EXPIRATION_JITTER must be less than JWT_EXPIRATION (%s >= %s)",
