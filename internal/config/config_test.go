@@ -691,6 +691,66 @@ func TestConfig_Validate_JWTExpirationJitter(t *testing.T) {
 	}
 }
 
+func TestConfig_Validate_ExtraClaimsLimits(t *testing.T) {
+	tests := []struct {
+		name        string
+		mutate      func(*Config)
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "defaults are accepted",
+			mutate:      func(*Config) {},
+			expectError: false,
+		},
+		{
+			name: "zero limits accepted (means disabled)",
+			mutate: func(c *Config) {
+				c.ExtraClaimsMaxRawSize = 0
+				c.ExtraClaimsMaxKeys = 0
+				c.ExtraClaimsMaxValSize = 0
+			},
+			expectError: false,
+		},
+		{
+			name:        "negative max raw size rejected",
+			mutate:      func(c *Config) { c.ExtraClaimsMaxRawSize = -1 },
+			expectError: true,
+			errorMsg:    "EXTRA_CLAIMS_MAX_RAW_SIZE must be non-negative",
+		},
+		{
+			name:        "negative max keys rejected",
+			mutate:      func(c *Config) { c.ExtraClaimsMaxKeys = -1 },
+			expectError: true,
+			errorMsg:    "EXTRA_CLAIMS_MAX_KEYS must be non-negative",
+		},
+		{
+			name:        "negative max val size rejected",
+			mutate:      func(c *Config) { c.ExtraClaimsMaxValSize = -1 },
+			expectError: true,
+			errorMsg:    "EXTRA_CLAIMS_MAX_VAL_SIZE must be non-negative",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validBaseConfig()
+			cfg.ExtraClaimsEnabled = true
+			cfg.ExtraClaimsMaxRawSize = 4096
+			cfg.ExtraClaimsMaxKeys = 16
+			cfg.ExtraClaimsMaxValSize = 512
+			tt.mutate(&cfg)
+			err := cfg.Validate()
+			if tt.expectError {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errorMsg)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 // ============================================================
 // Authorization Code Flow config (RFC 6749 + RFC 7636)
 // ============================================================

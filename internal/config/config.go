@@ -126,6 +126,15 @@ type Config struct {
 	// Client Credentials Flow settings (RFC 6749 §4.4)
 	ClientCredentialsTokenExpiration time.Duration // Access token lifetime for client_credentials grant (default: 1h, same as JWTExpiration)
 
+	// Caller-supplied JWT extra claims (extra_claims parameter on /oauth/token).
+	// Enabled by default. Reserved JWT/OIDC keys are always rejected regardless
+	// of these limits. Custom claims are NOT persisted, so callers must
+	// re-supply extra_claims on every refresh to retain them.
+	ExtraClaimsEnabled    bool // EXTRA_CLAIMS_ENABLED (default: true)
+	ExtraClaimsMaxRawSize int  // EXTRA_CLAIMS_MAX_RAW_SIZE in bytes (default: 4096; 0 disables the check)
+	ExtraClaimsMaxKeys    int  // EXTRA_CLAIMS_MAX_KEYS (default: 16; 0 disables the check)
+	ExtraClaimsMaxValSize int  // EXTRA_CLAIMS_MAX_VAL_SIZE in bytes per value (default: 512; 0 disables the check)
+
 	// OAuth settings
 	// GitHub OAuth
 	GitHubOAuthEnabled     bool
@@ -365,6 +374,14 @@ func Load() *Config {
 			time.Hour,
 		), // 1 hour default; keep short — no refresh token means no rotation mechanism
 
+		// Caller-supplied JWT extra claims (extra_claims on /oauth/token).
+		// Enabled by default — reserved JWT/OIDC keys are still rejected, and
+		// the issuer's standard claims always override any caller value.
+		ExtraClaimsEnabled:    getEnvBool("EXTRA_CLAIMS_ENABLED", true),
+		ExtraClaimsMaxRawSize: getEnvInt("EXTRA_CLAIMS_MAX_RAW_SIZE", 4096),
+		ExtraClaimsMaxKeys:    getEnvInt("EXTRA_CLAIMS_MAX_KEYS", 16),
+		ExtraClaimsMaxValSize: getEnvInt("EXTRA_CLAIMS_MAX_VAL_SIZE", 512),
+
 		// OAuth settings
 		// GitHub OAuth
 		GitHubOAuthEnabled:     getEnvBool("GITHUB_OAUTH_ENABLED", false),
@@ -586,6 +603,28 @@ func (c *Config) Validate() error {
 		return fmt.Errorf(
 			"JWT_EXPIRATION_JITTER must be non-negative (got %s)",
 			c.JWTExpirationJitter,
+		)
+	}
+
+	// Validate caller-supplied extra-claims size limits. 0 means "disabled";
+	// negative values would silently disable the check too because every limit
+	// is gated on `> 0`, so reject them up-front to avoid surprises.
+	if c.ExtraClaimsMaxRawSize < 0 {
+		return fmt.Errorf(
+			"EXTRA_CLAIMS_MAX_RAW_SIZE must be non-negative (got %d)",
+			c.ExtraClaimsMaxRawSize,
+		)
+	}
+	if c.ExtraClaimsMaxKeys < 0 {
+		return fmt.Errorf(
+			"EXTRA_CLAIMS_MAX_KEYS must be non-negative (got %d)",
+			c.ExtraClaimsMaxKeys,
+		)
+	}
+	if c.ExtraClaimsMaxValSize < 0 {
+		return fmt.Errorf(
+			"EXTRA_CLAIMS_MAX_VAL_SIZE must be non-negative (got %d)",
+			c.ExtraClaimsMaxValSize,
 		)
 	}
 	if c.JWTExpirationJitter > 0 && c.JWTExpirationJitter >= c.JWTExpiration {

@@ -200,6 +200,17 @@ func (p *LocalTokenProvider) generateJWT(
 ) (*Result, error) {
 	claims := jwt.MapClaims{}
 	maps.Copy(claims, extraClaims)
+	// Drop claims AuthGate intentionally strips from access/refresh tokens
+	// because generateJWT does not set or preserve them for those token
+	// types: the registered JWT claim nbf (RFC 7519) and the OIDC ID-token
+	// claims azp/amr/acr/auth_time/nonce/at_hash. A caller that smuggles
+	// any of them past the parser would otherwise leak them into the signed
+	// token. project / service_account intentionally remain — they are
+	// AuthGate-internal client metadata legitimately set by the service
+	// layer via buildClientClaims.
+	for _, k := range []string{"nbf", "azp", "amr", "acr", "auth_time", "nonce", "at_hash"} {
+		delete(claims, k)
+	}
 	claims["user_id"] = userID
 	claims["client_id"] = clientID
 	claims["scope"] = scopes
