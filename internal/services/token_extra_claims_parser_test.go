@@ -144,3 +144,25 @@ func TestExtraClaimsParser_ZeroLimitsDisableChecks(t *testing.T) {
 		t.Fatalf("expected nil error with limits disabled, got %v", err)
 	}
 }
+
+func TestExtraClaimsParser_RejectsTrailingData(t *testing.T) {
+	// json.Decoder parses one value at a time, so a payload like
+	// `{"a":1} {"b":2}` would silently succeed without an explicit More()
+	// check. Guard the trailing-data rejection.
+	p := newTestExtraClaimsParser(t, nil)
+	cases := []string{
+		`{"tenant":"acme"} {"trace_id":"x"}`,
+		`{"tenant":"acme"} junk`,
+		`{"tenant":"acme"}{"trace_id":"x"}`,
+	}
+	for _, raw := range cases {
+		_, err := p.Parse(raw)
+		if err == nil {
+			t.Fatalf("expected error for trailing data in %q, got nil", raw)
+		}
+		if !strings.Contains(err.Error(), "trailing data") &&
+			!strings.Contains(err.Error(), "invalid JSON") {
+			t.Errorf("expected trailing-data error for %q, got %v", raw, err)
+		}
+	}
+}

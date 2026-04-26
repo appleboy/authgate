@@ -70,7 +70,7 @@ func TestExtraClaims_ClientCredentials_HappyPath(t *testing.T) {
 }
 
 func TestExtraClaims_RejectedWhenFeatureDisabled(t *testing.T) {
-	// Default config does not opt into extra_claims; a non-empty parameter
+	// When the feature is disabled, a non-empty extra_claims parameter
 	// must surface a clear error rather than be silently ignored.
 	r, s, _ := setupExtraClaimsTestEnv(t, false)
 	client, plainSecret := createCCClient(t, s, true, core.ClientTypeConfidential)

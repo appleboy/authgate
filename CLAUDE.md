@@ -298,7 +298,7 @@ Key configuration categories (see `.env.example` and `docs/CONFIGURATION.md` for
 
 - `EXTRA_CLAIMS_ENABLED` - Master switch for the `extra_claims` form parameter on `/oauth/token` (default: true; set to false to refuse any non-empty `extra_claims`)
 - `EXTRA_CLAIMS_MAX_RAW_SIZE` / `EXTRA_CLAIMS_MAX_KEYS` / `EXTRA_CLAIMS_MAX_VAL_SIZE` - Size guards (defaults: 4096 bytes / 16 keys / 512 bytes per value; `0` disables each check)
-- Applies to all four grants (`authorization_code`, `device_code`, `client_credentials`, `refresh_token`); reserved JWT/OIDC keys are rejected upfront and overridden by `generateJWT` as second-line defence; system claims (`project`, `service_account`) on the OAuth client also override caller values
+- Applies to all four grants (`authorization_code`, `device_code`, `client_credentials`, `refresh_token`); reserved JWT/OIDC keys are rejected at parse time, and the standard claims `generateJWT` manages (`iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `type`, `scope`, `user_id`, `client_id`) plus the OIDC-only ID-token keys it drops (`nbf`, `azp`, `amr`, `acr`, `auth_time`, `nonce`, `at_hash`) cannot survive signing. System claims (`project`, `service_account`) on the OAuth client also override caller values when present
 - Stateless: claims are NOT persisted, so callers must re-supply `extra_claims` on every refresh request to retain them
 - Trust model: caller-supplied claims are self-asserted — downstream resource servers must not treat them as authority-attested
 

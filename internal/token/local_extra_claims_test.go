@@ -143,3 +143,34 @@ func TestRefreshAccessToken_AppliesFreshExtraClaims(t *testing.T) {
 	_, hasTenant := refreshed2.AccessToken.Claims["tenant"]
 	assert.False(t, hasTenant, "expected stateless refresh, but old tenant claim leaked through")
 }
+
+func TestGenerateToken_DropsOIDCOnlyKeysFromAccessToken(t *testing.T) {
+	// OIDC-only ID-token claims (nbf/azp/amr/acr/auth_time/nonce/at_hash) have
+	// no place in an access token. Even if a caller smuggles them past the
+	// parser, generateJWT must drop them before signing.
+	provider, err := NewLocalTokenProvider(extraClaimsTestConfig())
+	require.NoError(t, err)
+
+	smuggled := map[string]any{
+		"nbf":       9999999999,
+		"azp":       "evil-azp",
+		"amr":       []any{"pwd"},
+		"acr":       "0",
+		"auth_time": 1234567890,
+		"nonce":     "spoofed-nonce",
+		"at_hash":   "spoofed-hash",
+		"tenant":    "acme", // legitimate custom claim should still survive
+	}
+
+	result, err := provider.GenerateToken(
+		context.Background(),
+		"user-1", "client-1", "read", 0, smuggled,
+	)
+	require.NoError(t, err)
+
+	for _, k := range []string{"nbf", "azp", "amr", "acr", "auth_time", "nonce", "at_hash"} {
+		_, ok := result.Claims[k]
+		assert.False(t, ok, "OIDC-only claim %q must not appear in access token", k)
+	}
+	assert.Equal(t, "acme", result.Claims["tenant"], "non-reserved claim should survive")
+}

@@ -501,7 +501,7 @@ curl -X POST https://authgate.example/oauth/token \
   --data-urlencode 'extra_claims={"tenant":"acme","trace_id":"abc-123","feature_flags":["beta"]}'
 ```
 
-The supplied JSON object is merged into the JWT alongside standard claims. Reserved JWT/OIDC claim keys (`iss`, `sub`, `exp`, `iat`, `jti`, `aud`, `nbf`, `type`, `scope`, `user_id`, `client_id`, `azp`, `amr`, `acr`, `auth_time`, `nonce`, `at_hash`, `project`, `service_account`) are rejected with `invalid_request`; `generateJWT` additionally overrides them at sign time so callers cannot impersonate the issuer's authority. System claims set on the OAuth client (`project`, `service_account`) also override caller values on collision — admins always win.
+The supplied JSON object is merged into the JWT alongside standard claims. Reserved JWT/OIDC claim keys (`iss`, `sub`, `exp`, `iat`, `jti`, `aud`, `nbf`, `type`, `scope`, `user_id`, `client_id`, `azp`, `amr`, `acr`, `auth_time`, `nonce`, `at_hash`, `project`, `service_account`) are rejected with `invalid_request` at the parser. As a supplementary guard, `generateJWT` also overwrites the standard claims it manages (`iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `type`, `scope`, `user_id`, `client_id`) and drops the OIDC-only ID-token keys (`nbf`, `azp`, `amr`, `acr`, `auth_time`, `nonce`, `at_hash`) that have no place in an access token — so a caller-supplied value for any of those cannot survive signing even if it bypasses the parser. System claims set on the OAuth client (`project`, `service_account`) override caller values on collision — admins always win.
 
 ### Configuration
 

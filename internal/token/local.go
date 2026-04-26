@@ -200,6 +200,15 @@ func (p *LocalTokenProvider) generateJWT(
 ) (*Result, error) {
 	claims := jwt.MapClaims{}
 	maps.Copy(claims, extraClaims)
+	// Drop OIDC ID-token-only standard claims that generateJWT does not set.
+	// These are valid only on ID tokens (issued by GenerateIDToken); a caller
+	// that smuggles them past the parser would otherwise leak them into
+	// access/refresh tokens. project / service_account intentionally remain —
+	// they are AuthGate-internal client metadata legitimately set by the
+	// service layer via buildClientClaims.
+	for _, k := range []string{"nbf", "azp", "amr", "acr", "auth_time", "nonce", "at_hash"} {
+		delete(claims, k)
+	}
 	claims["user_id"] = userID
 	claims["client_id"] = clientID
 	claims["scope"] = scopes

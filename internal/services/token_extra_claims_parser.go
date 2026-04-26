@@ -53,6 +53,12 @@ func (p *ExtraClaimsParser) Parse(raw string) (map[string]any, error) {
 	if err := dec.Decode(&out); err != nil {
 		return nil, fmt.Errorf("extra_claims: invalid JSON: %w", err)
 	}
+	// Reject trailing data after the first object (e.g. `{"a":1} {"b":2}` or
+	// `{"a":1} junk`). Without this check, a malformed payload would silently
+	// parse only its first value.
+	if dec.More() {
+		return nil, errors.New("extra_claims: invalid JSON: unexpected trailing data")
+	}
 	if out == nil {
 		// JSON "null" decodes to a nil map — treat as no-op rather than error.
 		return nil, nil

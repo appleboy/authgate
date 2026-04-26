@@ -6,18 +6,23 @@ import (
 )
 
 // ErrReservedClaimKey is returned when caller-supplied extra claims attempt
-// to set a reserved JWT/OIDC standard claim. The issuer owns these claims;
-// generateJWT also overrides them after the extra-claims merge as a
-// second-line defence.
+// to set a reserved JWT/OIDC standard claim. The issuer owns these claims
+// and callers must not provide them via extra_claims.
 var ErrReservedClaimKey = errors.New("reserved claim key")
 
 // reservedClaimKeys lists the JWT/OIDC standard claim keys plus the
 // AuthGate-internal claims that callers must not set via extra_claims.
 //
-// Two-layer defence:
-//  1. ParseExtraClaims rejects requests at the handler edge.
-//  2. generateJWT writes standard claims after the extra-claims merge, so
-//     even if a key slips past validation, the issuer's value wins.
+// Defence layering:
+//  1. Primary — ParseExtraClaims/ValidateExtraClaims reject these keys at the
+//     handler edge before the request reaches the token provider.
+//  2. Supplementary — generateJWT explicitly overwrites the standard claims it
+//     manages (iss/sub/aud/exp/iat/jti/type/scope/user_id/client_id) and drops
+//     the OIDC-only ID-token claims (nbf/azp/amr/acr/auth_time/nonce/at_hash)
+//     that have no place in an access token. This is not a universal override
+//     of every entry in this list — AuthGate-internal client metadata claims
+//     (project, service_account) are intentionally left alone so the service
+//     layer can set them via buildClientClaims.
 var reservedClaimKeys = map[string]struct{}{
 	// RFC 7519 §4.1 registered claim names
 	"iss": {},
@@ -55,7 +60,9 @@ func IsReservedClaimKey(key string) bool {
 }
 
 // ValidateExtraClaims rejects empty keys and reserved JWT/OIDC claim keys.
-// Returns the first violation; nil for an empty or nil map.
+// Returns the first violation found; nil for an empty or nil map. No
+// additional key-format validation (length, character set, namespacing) is
+// performed — callers that need stricter input rules must layer them on top.
 func ValidateExtraClaims(m map[string]any) error {
 	for k := range m {
 		if k == "" {
