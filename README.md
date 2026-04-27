@@ -345,7 +345,7 @@ sequenceDiagram
 | Endpoint                            | Method   | Purpose                                                                                    |
 | ----------------------------------- | -------- | ------------------------------------------------------------------------------------------ |
 | `/.well-known/openid-configuration` | GET      | OIDC Discovery metadata                                                                    |
-| `/.well-known/jwks.json`           | GET      | JWKS public keys for RS256/ES256 verification (RFC 7517)                                   |
+| `/.well-known/jwks.json`            | GET      | JWKS public keys for RS256/ES256 verification (RFC 7517)                                   |
 | `/oauth/device/code`                | POST     | Request device code (CLI)                                                                  |
 | `/oauth/authorize`                  | GET      | Authorization consent page (web apps)                                                      |
 | `/oauth/authorize`                  | POST     | Submit consent decision                                                                    |
