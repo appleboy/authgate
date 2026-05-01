@@ -88,7 +88,7 @@ var (
 )
 
 // validateProject returns nil for an empty value (the field is optional) and
-// otherwise checks against the shared util.ProjectIdentifierPattern. The trim
+// otherwise checks the value against util.IsValidProjectIdentifier. The trim
 // happens at the caller so "  " is treated as empty rather than as an invalid
 // value.
 func validateProject(p string) error {
