@@ -333,9 +333,9 @@ func TestJWTPrivateClaimPrefix_StartupValidation(t *testing.T) {
 // the collision branch only fires if a future PrivateClaim adds a logical
 // name (e.g. "time") that composes to a reserved static key. Genuine
 // collision-rejection coverage lives in
-// internal/config/TestJWTPrivateClaimPrefix_CollisionRejected_Synthetic,
-// which has direct access to the package-level registry mirror and can
-// inject a synthetic logical name.
+// internal/config/TestDetectPrefixCollision_Synthetic, which calls the
+// pure detectPrefixCollision helper with a synthetic logical-name list
+// and so doesn't need to mutate any package-level state.
 func TestJWTPrivateClaimPrefix_AuthPrefixDoesNotCollide(t *testing.T) {
 	cfg := minimalValidConfig()
 	cfg.JWTPrivateClaimPrefix = "auth"

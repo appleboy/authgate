@@ -92,8 +92,9 @@ func StaticReservedClaimKeys() []string {
 }
 
 // jwtPrivateClaimLogicalNames mirrors the logical names of the registry in
-// internal/token/types.go (PrivateClaims). Replicated here only for the
-// startup collision check; the canonical registry lives in the token package.
+// internal/token/types.go (the unexported privateClaims slice, exposed via
+// token.PrivateClaimRegistry()). Replicated here only for the startup
+// collision check; the canonical registry lives in the token package.
 // Keep these two lists in sync.
 var jwtPrivateClaimLogicalNames = []string{
 	"domain",
