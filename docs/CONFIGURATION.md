@@ -101,13 +101,13 @@ JWT_EXPIRATION_JITTER=30m            # Max random jitter on access token expiry 
 # JWT Private Claim Prefix — namespace token AuthGate prepends to every
 # server-attested private claim. With the default "extra" prefix, JWTs carry
 # "extra_domain", "extra_project", "extra_service_account". Setting
-# JWT_PRIVATE_CLAIM_PREFIX=mtk would emit "mtk_domain", "mtk_project",
-# "mtk_service_account".
+# JWT_PRIVATE_CLAIM_PREFIX=acme would emit "acme_domain", "acme_project",
+# "acme_service_account".
 # Validation: must match ^[a-zA-Z][a-zA-Z0-9_]*$, 1–15 characters, no trailing
 # underscore, and no composed <prefix>_<logical> may collide with RFC 7519 /
 # OIDC / AuthGate-internal claim keys.
 # JWT_PRIVATE_CLAIM_PREFIX=extra     # Default: extra
-# JWT_PRIVATE_CLAIM_PREFIX=mtk       # → mtk_domain, mtk_project, mtk_service_account
+# JWT_PRIVATE_CLAIM_PREFIX=acme       # → acme_domain, acme_project, acme_service_account
 
 # Refresh Token Configuration
 REFRESH_TOKEN_EXPIRATION=720h        # Refresh token lifetime (default: 30 days)
@@ -555,7 +555,7 @@ AuthGate emits three server-attested private claims on every issued JWT under a 
 | `project`         | `OAuthApplication.Project` (admin)    | `extra_project`          |
 | `service_account` | `OAuthApplication.ServiceAccount`     | `extra_service_account`  |
 
-The composed key is `<JWT_PRIVATE_CLAIM_PREFIX>_<logical>`. AuthGate adds the separating underscore itself; setting `JWT_PRIVATE_CLAIM_PREFIX=mtk` produces `mtk_domain` / `mtk_project` / `mtk_service_account`.
+The composed key is `<JWT_PRIVATE_CLAIM_PREFIX>_<logical>`. AuthGate adds the separating underscore itself; setting `JWT_PRIVATE_CLAIM_PREFIX=acme` produces `acme_domain` / `acme_project` / `acme_service_account`.
 
 ### Configuration
 

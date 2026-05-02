@@ -209,7 +209,7 @@ func TestDiscovery_ReturnsCorrectMetadata(t *testing.T) {
 	// Per OIDC Discovery 1.0, claims_supported lists claims emitted in ID
 	// tokens / UserInfo only. AuthGate's access/refresh JWT claims — both
 	// the bare logical names and the deployment-prefixed forms (e.g.
-	// extra_*, mtk_*) — are documented in docs/JWT_VERIFICATION.md and
+	// extra_*, acme_*) — are documented in docs/JWT_VERIFICATION.md and
 	// must not leak in here.
 	for _, jwtOnly := range []string{
 		"user_id", "client_id", "scope", "type",

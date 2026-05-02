@@ -86,9 +86,9 @@ func TestBuildServerClaims(t *testing.T) {
 			want: map[string]any{domainKey: "OA"},
 		},
 		{
-			name: "custom prefix produces mtk_domain",
-			cfg:  &config.Config{JWTDomain: "oa", JWTPrivateClaimPrefix: "mtk"},
-			want: map[string]any{token.EmittedName("mtk", "domain"): "oa"},
+			name: "custom prefix produces acme_domain",
+			cfg:  &config.Config{JWTDomain: "oa", JWTPrivateClaimPrefix: "acme"},
+			want: map[string]any{token.EmittedName("acme", "domain"): "oa"},
 		},
 	}
 	for _, tt := range tests {

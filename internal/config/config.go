@@ -54,7 +54,7 @@ var jwtPrivateClaimPrefixPattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]*$`)
 
 // jwtPrivateClaimPrefixMaxLen is the upper bound on the configured prefix.
 // 15 keeps `<prefix>_<longest-logical-name>` well under practical JWT key-size
-// limits (e.g. extra_service_account is 21 chars, mtk_service_account is 19).
+// limits (e.g. extra_service_account is 21 chars, acme_service_account is 20).
 const jwtPrivateClaimPrefixMaxLen = 15
 
 // jwtPrivateClaimStaticReservedKeys is the static set of claim keys (RFC 7519,

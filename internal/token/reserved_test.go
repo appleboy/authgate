@@ -45,18 +45,18 @@ func TestBuildReservedClaimKeys_DefaultPrefix(t *testing.T) {
 }
 
 func TestBuildReservedClaimKeys_CustomPrefix(t *testing.T) {
-	got := BuildReservedClaimKeys("mtk")
+	got := BuildReservedClaimKeys("acme")
 	for _, pc := range PrivateClaims {
-		want := "mtk_" + pc.LogicalName
+		want := "acme_" + pc.LogicalName
 		if _, ok := got[want]; !ok {
 			t.Errorf("expected %q to be reserved under custom prefix", want)
 		}
 	}
-	// extra_* are NOT reserved under the mtk deployment.
+	// extra_* are NOT reserved under the acme deployment.
 	for _, pc := range PrivateClaims {
 		stale := "extra_" + pc.LogicalName
 		if _, ok := got[stale]; ok {
-			t.Errorf("%q must NOT be reserved when prefix=mtk", stale)
+			t.Errorf("%q must NOT be reserved when prefix=acme", stale)
 		}
 	}
 }
@@ -66,7 +66,7 @@ func TestEmittedName(t *testing.T) {
 		prefix, logical, want string
 	}{
 		{"extra", "domain", "extra_domain"},
-		{"mtk", "project", "mtk_project"},
+		{"acme", "project", "acme_project"},
 		{"acme", "service_account", "acme_service_account"},
 		{"x", "domain", "x_domain"},
 	}

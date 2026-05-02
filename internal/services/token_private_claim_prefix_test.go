@@ -71,12 +71,12 @@ func TestPrivateClaimPrefix_DefaultPrefix_HappyPath(t *testing.T) {
 	}
 }
 
-// TestPrivateClaimPrefix_CustomPrefix verifies that JWT_PRIVATE_CLAIM_PREFIX=mtk
-// produces mtk_domain / mtk_project / mtk_service_account, with no extra_*
+// TestPrivateClaimPrefix_CustomPrefix verifies that JWT_PRIVATE_CLAIM_PREFIX=acme
+// produces acme_domain / acme_project / acme_service_account, with no extra_*
 // or bare-name leakage.
 func TestPrivateClaimPrefix_CustomPrefix(t *testing.T) {
 	s := setupTestStore(t)
-	cfg := privateClaimPrefixConfig("mtk")
+	cfg := privateClaimPrefixConfig("acme")
 	svc := createTestTokenService(t, s, cfg)
 
 	client, plainSecret := createConfidentialClientWithCCFlow(t, s, true)
@@ -90,16 +90,16 @@ func TestPrivateClaimPrefix_CustomPrefix(t *testing.T) {
 	require.NoError(t, err)
 
 	claims := decodeJWTClaims(t, tok.RawToken)
-	assert.Equal(t, "auth.example.com", claims["mtk_domain"])
-	assert.Equal(t, "p1", claims["mtk_project"])
-	assert.Equal(t, "sa1", claims["mtk_service_account"])
+	assert.Equal(t, "auth.example.com", claims["acme_domain"])
+	assert.Equal(t, "p1", claims["acme_project"])
+	assert.Equal(t, "sa1", claims["acme_service_account"])
 
 	for _, absent := range []string{
 		"domain", "project", "service_account",
 		"extra_domain", "extra_project", "extra_service_account",
 	} {
 		_, present := claims[absent]
-		assert.False(t, present, "key %q must NOT appear when prefix=mtk", absent)
+		assert.False(t, present, "key %q must NOT appear when prefix=acme", absent)
 	}
 }
 
@@ -172,7 +172,7 @@ func TestPrivateClaimPrefix_RefreshContinuity(t *testing.T) {
 // consistently. Adding a new claim to the registry automatically picks up
 // coverage as long as the source is wired in either builder.
 func TestPrivateClaimPrefix_RegistryTableDriven(t *testing.T) {
-	prefixes := []string{"extra", "mtk", "x", "co_v2"}
+	prefixes := []string{"extra", "acme", "x", "co_v2"}
 	for _, prefix := range prefixes {
 		t.Run(prefix, func(t *testing.T) {
 			for _, pc := range token.PrivateClaims {
@@ -197,9 +197,8 @@ func TestJWTPrivateClaimPrefix_StartupValidation(t *testing.T) {
 	}
 	cases := []tc{
 		{name: "default extra", prefix: "extra", wantErr: false},
-		{name: "mtk", prefix: "mtk", wantErr: false},
-		{name: "single x", prefix: "x", wantErr: false},
 		{name: "acme", prefix: "acme", wantErr: false},
+		{name: "single x", prefix: "x", wantErr: false},
 		{name: "internal underscore co_v2", prefix: "co_v2", wantErr: false},
 
 		{name: "empty rejected", prefix: "", wantErr: true, errSub: "must not be empty"},

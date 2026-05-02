@@ -252,7 +252,7 @@ The `kid` (Key ID) header identifies which key was used to sign the token. Use t
 
 ## Custom Claims
 
-In addition to the standard JWT claims, AuthGate may optionally populate the standard `aud` claim and may also emit three server-attested private claims under the deployment-configured prefix `JWT_PRIVATE_CLAIM_PREFIX` (default `extra`): `<prefix>_project`, `<prefix>_service_account`, `<prefix>_domain`. With the default prefix this means `extra_project`, `extra_service_account`, `extra_domain`. With `JWT_PRIVATE_CLAIM_PREFIX=mtk` it would be `mtk_project`, `mtk_service_account`, `mtk_domain`. All four are **optional** — they only appear when configured.
+In addition to the standard JWT claims, AuthGate may optionally populate the standard `aud` claim and may also emit three server-attested private claims under the deployment-configured prefix `JWT_PRIVATE_CLAIM_PREFIX` (default `extra`): `<prefix>_project`, `<prefix>_service_account`, `<prefix>_domain`. With the default prefix this means `extra_project`, `extra_service_account`, `extra_domain`. With `JWT_PRIVATE_CLAIM_PREFIX=acme` it would be `acme_project`, `acme_service_account`, `acme_domain`. All four are **optional** — they only appear when configured.
 
 | Claim                      | Classification        | Type                   | Source                                                  | When present                                           |
 | -------------------------- | --------------------- | ---------------------- | ------------------------------------------------------- | ------------------------------------------------------ |
@@ -291,12 +291,12 @@ type AuthGateClaims struct {
 tok, _ := jwt.ParseWithClaims(raw, &AuthGateClaims{}, keyFn)
 ```
 
-`jwt.ParseWithClaims` + `encoding/json` populate everything automatically. For a deployment using `JWT_PRIVATE_CLAIM_PREFIX=mtk`, replace `extra_*` in the struct tags with `mtk_*`.
+`jwt.ParseWithClaims` + `encoding/json` populate everything automatically. For a deployment using `JWT_PRIVATE_CLAIM_PREFIX=acme`, replace `extra_*` in the struct tags with `acme_*`.
 
 #### Pattern 2 — Dynamic `map[string]any` lookup (most flexible)
 
 ```go
-prefix := "mtk" // from the consumer's config
+prefix := "acme" // from the consumer's config
 domain, _ := claims[prefix+"_domain"].(string)
 project, _ := claims[prefix+"_project"].(string)
 serviceAccount, _ := claims[prefix+"_service_account"].(string)
