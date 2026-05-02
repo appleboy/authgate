@@ -207,10 +207,13 @@ func TestDiscovery_ReturnsCorrectMetadata(t *testing.T) {
 	assert.Contains(t, claims, "updated_at")
 
 	// Per OIDC Discovery 1.0, claims_supported lists claims emitted in ID
-	// tokens / UserInfo only. AuthGate's access/refresh JWT claims — both
-	// the bare logical names and the deployment-prefixed forms (e.g.
-	// extra_*, acme_*) — are documented in docs/JWT_VERIFICATION.md and
-	// must not leak in here.
+	// tokens / UserInfo only. AuthGate's access/refresh JWT claims — bare
+	// logical names and any deployment-prefixed forms — are documented in
+	// docs/JWT_VERIFICATION.md and must not leak in here. The default
+	// handler runs with prefix=extra (the cfg above leaves it unset, which
+	// the rest of the suite documents as default-equivalent), so the assertion
+	// list covers bare + extra_*. The custom-prefix variant is covered by
+	// TestDiscovery_OmitsPrivateClaims_CustomPrefix below.
 	for _, jwtOnly := range []string{
 		"user_id", "client_id", "scope", "type",
 		"project", "service_account", "domain",
@@ -228,32 +231,70 @@ func TestDiscovery_ReturnsCorrectMetadata(t *testing.T) {
 
 // TestDiscovery_OmitsDomainEvenWhenSet asserts the server-attested `domain`
 // claim never appears in OIDC `claims_supported`, even after an operator sets
-// JWT_DOMAIN. domain is an access/refresh-token-only claim — the same trust
-// model as project / service_account — and OIDC discovery must not advertise
-// it.
+// JWT_DOMAIN. The check covers the default prefix path (extra_*), the
+// explicit-default path, and a custom-prefix deployment (acme_*) so the
+// "AuthGate-private claims must not leak into discovery" invariant holds
+// regardless of operator-chosen prefix. domain is an access/refresh-token-only
+// claim — same trust model as project / service_account — and OIDC discovery
+// must not advertise it under any prefix.
 func TestDiscovery_OmitsDomainEvenWhenSet(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	cfg := &config.Config{BaseURL: "https://auth.example.com", JWTDomain: "oa"}
-	handler := NewOIDCHandler(nil, nil, cfg, false, true)
+	cases := []struct {
+		name   string
+		prefix string
+		// absent is the set of claim keys that must NOT appear in
+		// claims_supported under this deployment configuration. We always
+		// check bare names and the default-prefixed forms; custom-prefix
+		// runs additionally check the composed key for that prefix.
+		absent []string
+	}{
+		{
+			name:   "prefix unset (default-equivalent)",
+			prefix: "",
+			absent: []string{"domain", "extra_domain"},
+		},
+		{
+			name:   "explicit default prefix",
+			prefix: "extra",
+			absent: []string{"domain", "extra_domain"},
+		},
+		{
+			name:   "custom prefix acme",
+			prefix: "acme",
+			absent: []string{"domain", "extra_domain", "acme_domain"},
+		},
+	}
 
-	r := gin.New()
-	r.GET("/.well-known/openid-configuration", handler.Discovery)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &config.Config{
+				BaseURL:               "https://auth.example.com",
+				JWTDomain:             "oa",
+				JWTPrivateClaimPrefix: tc.prefix,
+			}
+			handler := NewOIDCHandler(nil, nil, cfg, false, true)
 
-	req := httptest.NewRequest(http.MethodGet, "/.well-known/openid-configuration", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+			r := gin.New()
+			r.GET("/.well-known/openid-configuration", handler.Discovery)
 
-	require.Equal(t, http.StatusOK, w.Code)
+			req := httptest.NewRequest(http.MethodGet, "/.well-known/openid-configuration", nil)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
 
-	var meta map[string]any
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &meta))
+			require.Equal(t, http.StatusOK, w.Code)
 
-	claims, ok := meta["claims_supported"].([]any)
-	require.True(t, ok)
-	for _, k := range []string{"domain", "extra_domain"} {
-		assert.NotContains(t, claims, k,
-			"claims_supported must not advertise the access-token-only %q claim", k)
+			var meta map[string]any
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &meta))
+
+			claims, ok := meta["claims_supported"].([]any)
+			require.True(t, ok)
+			for _, k := range tc.absent {
+				assert.NotContains(t, claims, k,
+					"claims_supported must not advertise the access-token-only %q claim",
+					k)
+			}
+		})
 	}
 }
 
