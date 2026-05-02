@@ -10,26 +10,34 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestJWTPrivateClaimPrefix_CollisionRejected_Synthetic genuinely exercises
-// the collision branch in validateJWTPrivateClaimPrefix by temporarily
-// extending the package-level registry mirror with a synthetic logical name
-// ("time") so that prefix="auth" composes to "auth_time" — a key already in
-// staticReservedClaimKeys. Without this manipulation the registry-as-shipped
-// has no logical name that would collide with any RFC/OIDC/AuthGate-internal
-// key for any plausible prefix, so the branch is unreachable.
-func TestJWTPrivateClaimPrefix_CollisionRejected_Synthetic(t *testing.T) {
-	original := jwtPrivateClaimLogicalNames
-	jwtPrivateClaimLogicalNames = append([]string{}, original...)
-	jwtPrivateClaimLogicalNames = append(jwtPrivateClaimLogicalNames, "time")
-	t.Cleanup(func() { jwtPrivateClaimLogicalNames = original })
-
-	cfg := validBaseConfig()
-	cfg.JWTPrivateClaimPrefix = "auth"
-	err := cfg.Validate()
+// TestDetectPrefixCollision_Synthetic genuinely exercises the collision
+// branch by passing a synthetic logical-name list directly to the helper.
+// Pure-function call: no package-level state is mutated, so the test is
+// safe under t.Parallel() and unaffected by other tests' Validate() calls.
+//
+// "time" is the synthetic addition: with prefix="auth", it composes to
+// "auth_time" — already in staticReservedClaimKeys. The registry as
+// shipped has no logical name that would collide for any plausible prefix,
+// so the branch is otherwise unreachable.
+func TestDetectPrefixCollision_Synthetic(t *testing.T) {
+	logicalNames := append([]string{}, jwtPrivateClaimLogicalNames...)
+	logicalNames = append(logicalNames, "time")
+	err := detectPrefixCollision("auth", logicalNames, staticReservedClaimKeys)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `"auth_time"`,
 		"error must name the colliding composed key")
 	assert.Contains(t, err.Error(), "JWT_PRIVATE_CLAIM_PREFIX")
+}
+
+// TestDetectPrefixCollision_NoCollision pins the negative case alongside
+// the positive one, so a future change to the helper that breaks the
+// "no collision" path is caught.
+func TestDetectPrefixCollision_NoCollision(t *testing.T) {
+	err := detectPrefixCollision(
+		"auth", jwtPrivateClaimLogicalNames, staticReservedClaimKeys,
+	)
+	assert.NoError(t, err,
+		"prefix=auth must not collide with the as-shipped logical names")
 }
 
 // validBaseConfig returns a Config that passes all Validate() checks.

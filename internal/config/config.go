@@ -897,11 +897,22 @@ func (c *Config) validateJWTPrivateClaimPrefix() error {
 		)
 	}
 
-	reserved := make(map[string]struct{}, len(staticReservedClaimKeys))
-	for _, k := range staticReservedClaimKeys {
+	return detectPrefixCollision(
+		prefix, jwtPrivateClaimLogicalNames, staticReservedClaimKeys,
+	)
+}
+
+// detectPrefixCollision returns an error if any composed key
+// `<prefix>_<logical>` (for logical in logicalNames) collides with a key
+// in reservedKeys. Pure function, no globals — pass in the lists so the
+// test can exercise the collision branch with a synthetic logicalNames
+// slice without mutating any package-level state.
+func detectPrefixCollision(prefix string, logicalNames, reservedKeys []string) error {
+	reserved := make(map[string]struct{}, len(reservedKeys))
+	for _, k := range reservedKeys {
 		reserved[k] = struct{}{}
 	}
-	for _, logical := range jwtPrivateClaimLogicalNames {
+	for _, logical := range logicalNames {
 		composed := prefix + "_" + logical
 		if _, clash := reserved[composed]; clash {
 			return fmt.Errorf(
