@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-authgate/authgate/internal/config"
 	"github.com/go-authgate/authgate/internal/models"
 	"github.com/go-authgate/authgate/internal/token"
 
@@ -11,7 +12,7 @@ import (
 )
 
 func TestBuildClientClaims(t *testing.T) {
-	const prefix = "extra"
+	const prefix = config.DefaultJWTPrivateClaimPrefix
 	projectKey := token.EmittedName(prefix, "project")
 	saKey := token.EmittedName(prefix, "service_account")
 

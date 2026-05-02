@@ -35,7 +35,7 @@ var jwtStripKeys = []string{"nbf", "azp", "amr", "acr", "auth_time", "nonce", "a
 // Computed once at provider construction so the hot path (every issued
 // token) walks a fixed slice without per-call allocation.
 func computeStripList(configuredPrefix string) []string {
-	out := make([]string, 0, len(jwtStripKeys)+2*len(privateClaims))
+	out := make([]string, 0, len(jwtStripKeys)+3*len(privateClaims))
 	out = append(out, jwtStripKeys...)
 	for _, pc := range privateClaims {
 		out = append(out, pc.LogicalName)
