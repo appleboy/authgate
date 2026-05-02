@@ -20,6 +20,7 @@ func newTestExtraClaimsParser(t *testing.T, override func(*config.Config)) *Extr
 		ExtraClaimsMaxRawSize: 4096,
 		ExtraClaimsMaxKeys:    16,
 		ExtraClaimsMaxValSize: 512,
+		JWTPrivateClaimPrefix: config.DefaultJWTPrivateClaimPrefix,
 	}
 	if override != nil {
 		override(cfg)

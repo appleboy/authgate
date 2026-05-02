@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -39,6 +40,47 @@ const (
 	AlgES256 = "ES256"
 )
 
+// DefaultJWTPrivateClaimPrefix is the namespace token AuthGate prepends to
+// every server-attested private JWT claim when JWT_PRIVATE_CLAIM_PREFIX is
+// unset. Composed keys: extra_domain, extra_project, extra_service_account.
+const DefaultJWTPrivateClaimPrefix = "extra"
+
+// jwtPrivateClaimPrefixPattern is the canonical shape for the configurable
+// private-claim prefix: starts with a letter, then letters/digits/underscores.
+// Length is bounded separately (1–15). A trailing underscore is rejected
+// separately because AuthGate adds the separating underscore itself —
+// disallowing one in the configured value prevents accidental "extra__domain".
+var jwtPrivateClaimPrefixPattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]*$`)
+
+// jwtPrivateClaimPrefixMaxLen is the upper bound on the configured prefix.
+// 15 keeps `<prefix>_<longest-logical-name>` well under practical JWT key-size
+// limits (e.g. extra_service_account is 21 chars, mtk_service_account is 19).
+const jwtPrivateClaimPrefixMaxLen = 15
+
+// jwtPrivateClaimStaticReservedKeys is the static set of claim keys (RFC 7519,
+// OIDC Core 1.0, AuthGate-internal) that the configured prefix's composed
+// keys must not collide with. Mirrors the static portion of
+// internal/token/reserved.go — keep the two lists in sync. Used only for
+// startup validation.
+var jwtPrivateClaimStaticReservedKeys = []string{
+	// RFC 7519 §4.1
+	"iss", "sub", "aud", "exp", "nbf", "iat", "jti",
+	// AuthGate-internal claims set unconditionally by generateJWT
+	"type", "scope", "user_id", "client_id",
+	// OIDC Core 1.0 §2 (ID token)
+	"azp", "amr", "acr", "auth_time", "nonce", "at_hash",
+}
+
+// jwtPrivateClaimLogicalNames mirrors the logical names of the registry in
+// internal/token/types.go (PrivateClaims). Replicated here only for the
+// startup collision check; the canonical registry lives in the token package.
+// Keep these two lists in sync.
+var jwtPrivateClaimLogicalNames = []string{
+	"domain",
+	"project",
+	"service_account",
+}
+
 // TokenProfile defines the access and refresh token lifetimes for a named preset.
 // Clients reference a profile by name via OAuthApplication.TokenProfile (see
 // models.TokenProfile* constants) and the TTL is resolved at token issuance.
@@ -67,6 +109,14 @@ type Config struct {
 	JWTExpirationJitter time.Duration // Max random jitter added to access token expiry (default: 30m)
 	JWTAudience         []string      // "aud" claim values for issued access/refresh tokens (comma-separated env). Single entry → string, multiple → array. Empty → claim omitted.
 	JWTDomain           string        // Server-attested "domain" claim emitted on every issued JWT. Empty → claim omitted (default). Validated at startup via util.IsValidProjectIdentifier.
+	// JWTPrivateClaimPrefix is the namespace token AuthGate prepends (with an
+	// underscore separator AuthGate adds itself) to every server-attested
+	// private JWT claim. With the default "extra", JWTs carry "extra_domain",
+	// "extra_project", "extra_service_account". Validated at startup: must
+	// match ^[a-zA-Z][a-zA-Z0-9_]*$, 1–15 chars, no trailing underscore, and
+	// none of the composed "<prefix>_<logical>" keys may collide with any
+	// RFC 7519 / OIDC / AuthGate-internal claim key.
+	JWTPrivateClaimPrefix string
 
 	// Session settings
 	SessionSecret            string
@@ -326,10 +376,13 @@ func Load() *Config {
 		JWTExpirationJitter: getEnvDuration("JWT_EXPIRATION_JITTER", 30*time.Minute),
 		JWTAudience:         getEnvSlice("JWT_AUDIENCE", nil),
 		JWTDomain:           strings.TrimSpace(getEnv("JWT_DOMAIN", "")),
-		SessionSecret:       getEnv("SESSION_SECRET", "session-secret-change-in-production"),
-		SessionMaxAge:       getEnvInt("SESSION_MAX_AGE", 3600),      // 1 hour default
-		SessionIdleTimeout:  getEnvInt("SESSION_IDLE_TIMEOUT", 1800), // 30 minutes default
-		SessionFingerprint:  getEnvBool("SESSION_FINGERPRINT", true), // Enabled by default
+		JWTPrivateClaimPrefix: strings.TrimSpace(
+			getEnv("JWT_PRIVATE_CLAIM_PREFIX", "extra"),
+		),
+		SessionSecret:      getEnv("SESSION_SECRET", "session-secret-change-in-production"),
+		SessionMaxAge:      getEnvInt("SESSION_MAX_AGE", 3600),      // 1 hour default
+		SessionIdleTimeout: getEnvInt("SESSION_IDLE_TIMEOUT", 1800), // 30 minutes default
+		SessionFingerprint: getEnvBool("SESSION_FINGERPRINT", true), // Enabled by default
 		SessionFingerprintIP: getEnvBool(
 			"SESSION_FINGERPRINT_IP",
 			false,
@@ -649,6 +702,10 @@ func (c *Config) Validate() error {
 		)
 	}
 
+	if err := c.validateJWTPrivateClaimPrefix(); err != nil {
+		return err
+	}
+
 	// Validate JWT secret minimum length for HS256
 	if (c.JWTSigningAlgorithm == "" || c.JWTSigningAlgorithm == AlgHS256) && len(c.JWTSecret) < 32 {
 		return fmt.Errorf(
@@ -785,6 +842,56 @@ func (c *Config) Validate() error {
 	}
 
 	return c.validateTokenProfiles()
+}
+
+// validateJWTPrivateClaimPrefix enforces the prefix shape and ensures no
+// composed `<prefix>_<logical>` key collides with a static reserved claim key.
+// Trailing-underscore is rejected explicitly (not via the regex) so the error
+// message can name the cause.
+func (c *Config) validateJWTPrivateClaimPrefix() error {
+	prefix := c.JWTPrivateClaimPrefix
+	if prefix == "" {
+		return errors.New(
+			"JWT_PRIVATE_CLAIM_PREFIX must not be empty " +
+				"(default \"extra\"; set explicitly to override)",
+		)
+	}
+	if len(prefix) > jwtPrivateClaimPrefixMaxLen {
+		return fmt.Errorf(
+			"JWT_PRIVATE_CLAIM_PREFIX must be at most %d characters (got %d: %q)",
+			jwtPrivateClaimPrefixMaxLen, len(prefix), prefix,
+		)
+	}
+	if strings.HasSuffix(prefix, "_") {
+		return fmt.Errorf(
+			"JWT_PRIVATE_CLAIM_PREFIX must not end with an underscore "+
+				"(AuthGate adds the separator itself; trailing _ would produce "+
+				"a double underscore in claim names): %q",
+			prefix,
+		)
+	}
+	if !jwtPrivateClaimPrefixPattern.MatchString(prefix) {
+		return fmt.Errorf(
+			"JWT_PRIVATE_CLAIM_PREFIX must match %s (got %q)",
+			jwtPrivateClaimPrefixPattern.String(), prefix,
+		)
+	}
+
+	reserved := make(map[string]struct{}, len(jwtPrivateClaimStaticReservedKeys))
+	for _, k := range jwtPrivateClaimStaticReservedKeys {
+		reserved[k] = struct{}{}
+	}
+	for _, logical := range jwtPrivateClaimLogicalNames {
+		composed := prefix + "_" + logical
+		if _, clash := reserved[composed]; clash {
+			return fmt.Errorf(
+				"JWT_PRIVATE_CLAIM_PREFIX %q produces composed claim key %q "+
+					"which collides with a reserved RFC/OIDC/AuthGate-internal claim",
+				prefix, composed,
+			)
+		}
+	}
+	return nil
 }
 
 // validateTokenProfiles checks that every profile has positive TTLs and that

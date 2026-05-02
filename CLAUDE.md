@@ -269,7 +269,8 @@ Key configuration categories (see `.env.example` and `docs/CONFIGURATION.md` for
 - `JWT_SECRET`, `SESSION_SECRET` - Must be changed in production (use `openssl rand -hex 32`)
 - `JWT_SIGNING_ALGORITHM` - HS256 (default), RS256, or ES256; asymmetric keys require `JWT_PRIVATE_KEY_PATH`
 - `JWT_EXPIRATION` - Access token lifetime (default: 1h); `JWT_EXPIRATION_JITTER` - Random expiry offset to prevent thundering herd
-- `JWT_DOMAIN` - Server-attested `domain` claim emitted on every issued JWT (default: empty = claim omitted). Server-set, validated at startup, re-resolved on refresh; not spoofable via `extra_claims` and not exposed in OIDC `claims_supported`
+- `JWT_DOMAIN` - Server-attested domain claim emitted on every issued JWT under the `JWT_PRIVATE_CLAIM_PREFIX` namespace (default emitted key: `extra_domain`). Default empty = claim omitted. Server-set, validated at startup, re-resolved on refresh; not spoofable via `extra_claims` and not exposed in OIDC `claims_supported`
+- `JWT_PRIVATE_CLAIM_PREFIX` - Namespace prefix AuthGate prepends (with an underscore separator AuthGate adds itself) to every server-attested private claim. Default `extra` → `extra_domain`, `extra_project`, `extra_service_account`. Setting `JWT_PRIVATE_CLAIM_PREFIX=mtk` → `mtk_domain`, `mtk_project`, `mtk_service_account`. Validated at startup: matches `^[a-zA-Z][a-zA-Z0-9_]*$`, 1–15 chars, no trailing underscore, no composed-key collisions with RFC/OIDC/AuthGate-internal claims. **Breaking change vs pre-prefix releases:** bare names `domain` / `project` / `service_account` are no longer emitted; downstream consumers must update at the same time as the AuthGate upgrade and flush the token cache
 - `DATABASE_DRIVER` (sqlite/postgres), `DATABASE_DSN` - Database configuration
 
 **Authentication & Authorization**
@@ -299,7 +300,7 @@ Key configuration categories (see `.env.example` and `docs/CONFIGURATION.md` for
 
 - `EXTRA_CLAIMS_ENABLED` - Master switch for the `extra_claims` form parameter on `/oauth/token` (default: true; set to false to refuse any non-empty `extra_claims`)
 - `EXTRA_CLAIMS_MAX_RAW_SIZE` / `EXTRA_CLAIMS_MAX_KEYS` / `EXTRA_CLAIMS_MAX_VAL_SIZE` - Size guards (defaults: 4096 bytes / 16 keys / 512 bytes per value; `0` disables each check)
-- Applies to all four grants (`authorization_code`, `device_code`, `client_credentials`, `refresh_token`); reserved JWT/OIDC keys are rejected at parse time, and the standard claims `generateJWT` manages (`iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `type`, `scope`, `user_id`, `client_id`) plus the OIDC-only ID-token keys it drops (`nbf`, `azp`, `amr`, `acr`, `auth_time`, `nonce`, `at_hash`) cannot survive signing. System claims (`project`, `service_account`) on the OAuth client also override caller values when present
+- Applies to all four grants (`authorization_code`, `device_code`, `client_credentials`, `refresh_token`); reserved keys are rejected at parse time. The reserved set is the static RFC/OIDC/AuthGate-internal keys plus the prefixed server-attested private claims (default: `extra_domain`, `extra_project`, `extra_service_account`). The standard claims `generateJWT` manages (`iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `type`, `scope`, `user_id`, `client_id`) plus the OIDC-only ID-token keys it drops (`nbf`, `azp`, `amr`, `acr`, `auth_time`, `nonce`, `at_hash`) cannot survive signing. System claims (`<prefix>_project`, `<prefix>_service_account`) on the OAuth client also override caller values when present
 - Stateless: claims are NOT persisted, so callers must re-supply `extra_claims` on every refresh request to retain them
 - Trust model: caller-supplied claims are self-asserted — downstream resource servers must not treat them as authority-attested
 

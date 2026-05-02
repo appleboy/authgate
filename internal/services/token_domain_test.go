@@ -34,17 +34,20 @@ func domainTestConfig(domain string) *config.Config {
 		RefreshTokenExpiration:           24 * time.Hour,
 		ClientCredentialsTokenExpiration: time.Hour,
 		JWTDomain:                        domain,
+		JWTPrivateClaimPrefix:            config.DefaultJWTPrivateClaimPrefix,
 	}
 }
 
-// assertDomainClaim asserts the issued JWT carries `domain: want` when want is
-// non-empty, or that the claim is absent when want is empty.
-func assertDomainClaim(t *testing.T, raw, want string) {
+// assertDomainClaim asserts the issued JWT carries the prefixed domain claim
+// (`<prefix>_domain: want`) when want is non-empty, or that the claim is
+// absent when want is empty.
+func assertDomainClaim(t *testing.T, cfg *config.Config, raw, want string) {
 	t.Helper()
 	claims := decodeJWTClaims(t, raw)
-	got, ok := claims[token.ClaimDomain]
+	key := token.EmittedName(cfg.JWTPrivateClaimPrefix, "domain")
+	got, ok := claims[key]
 	if want == "" {
-		assert.False(t, ok, "expected `domain` claim to be omitted, got %v", got)
+		assert.False(t, ok, "expected %q claim to be omitted, got %v", key, got)
 		return
 	}
 	assert.Equal(t, want, got)
@@ -64,7 +67,8 @@ func TestDeviceCodeFlow_DomainClaim(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := setupTestStore(t)
-			svc := createTestTokenService(t, s, domainTestConfig(tt.domain))
+			cfg := domainTestConfig(tt.domain)
+			svc := createTestTokenService(t, s, cfg)
 
 			client := createTestClient(t, s, true)
 			dc := createAuthorizedDeviceCode(t, s, client.ClientID)
@@ -74,15 +78,16 @@ func TestDeviceCodeFlow_DomainClaim(t *testing.T) {
 			)
 			require.NoError(t, err)
 
-			assertDomainClaim(t, access.RawToken, tt.domain)
-			assertDomainClaim(t, refresh.RawToken, tt.domain)
+			assertDomainClaim(t, cfg, access.RawToken, tt.domain)
+			assertDomainClaim(t, cfg, refresh.RawToken, tt.domain)
 		})
 	}
 }
 
 func TestAuthCodeFlow_EmitsDomainClaim(t *testing.T) {
 	s := setupTestStore(t)
-	svc := createTestTokenService(t, s, domainTestConfig("oa"))
+	cfg := domainTestConfig("oa")
+	svc := createTestTokenService(t, s, cfg)
 
 	client := createTestClient(t, s, true)
 	authCode := createTestAuthCodeRecord(t, s, client, "test-user-id")
@@ -92,8 +97,8 @@ func TestAuthCodeFlow_EmitsDomainClaim(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	assertDomainClaim(t, access.RawToken, "oa")
-	assertDomainClaim(t, refresh.RawToken, "oa")
+	assertDomainClaim(t, cfg, access.RawToken, "oa")
+	assertDomainClaim(t, cfg, refresh.RawToken, "oa")
 }
 
 // TestRefresh_ReResolvesJWTDomain pins the live-config behavior: flipping
@@ -120,8 +125,8 @@ func TestRefresh_ReResolvesJWTDomain(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	assertDomainClaim(t, newAccess.RawToken, "swrd")
-	assertDomainClaim(t, newRefresh.RawToken, "swrd")
+	assertDomainClaim(t, cfg, newAccess.RawToken, "swrd")
+	assertDomainClaim(t, cfg, newRefresh.RawToken, "swrd")
 }
 
 func TestClientCredentialsFlow_DomainClaim(t *testing.T) {
@@ -135,7 +140,8 @@ func TestClientCredentialsFlow_DomainClaim(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := setupTestStore(t)
-			svc := createTestTokenService(t, s, domainTestConfig(tt.domain))
+			cfg := domainTestConfig(tt.domain)
+			svc := createTestTokenService(t, s, cfg)
 
 			client, plainSecret := createConfidentialClientWithCCFlow(t, s, true)
 
@@ -144,25 +150,26 @@ func TestClientCredentialsFlow_DomainClaim(t *testing.T) {
 			)
 			require.NoError(t, err)
 
-			assertDomainClaim(t, tok.RawToken, tt.domain)
+			assertDomainClaim(t, cfg, tok.RawToken, tt.domain)
 		})
 	}
 }
 
 // TestServerDomainOverridesCallerExtraClaims is a defense-in-depth check: the
-// reserved-key parser already blocks caller-supplied `domain`, but if it ever
-// regressed the service-layer applyServerClaims must still write last.
+// reserved-key parser already blocks caller-supplied `<prefix>_domain`, but if
+// it ever regressed the service-layer applyServerClaims must still write last.
 func TestServerDomainOverridesCallerExtraClaims(t *testing.T) {
 	cfg := domainTestConfig("oa")
 	provider, err := token.NewLocalTokenProvider(cfg)
 	require.NoError(t, err)
 
-	merged := mergeCallerExtraClaims(nil, map[string]any{token.ClaimDomain: "evil"})
+	domainKey := token.EmittedName(cfg.JWTPrivateClaimPrefix, "domain")
+	merged := mergeCallerExtraClaims(nil, map[string]any{domainKey: "evil"})
 	merged = applyServerClaims(merged, buildServerClaims(cfg))
 
 	result, err := provider.GenerateToken(
 		context.Background(), "u", "c", "read", 0, merged,
 	)
 	require.NoError(t, err)
-	assert.Equal(t, "oa", result.Claims[token.ClaimDomain])
+	assert.Equal(t, "oa", result.Claims[domainKey])
 }

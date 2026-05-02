@@ -234,20 +234,22 @@ func (s *TokenService) resolveClientTTL(
 }
 
 // buildClientClaims returns the JWT extra claims sourced from the OAuth
-// application: project and service_account. Empty fields are omitted so we
-// never write meaningless empty-string claims into the JWT, and the map is
-// only allocated when at least one field has a value — this is on the token
+// application: project and service_account, emitted under the configured
+// private-claim prefix (e.g. "extra_project", "extra_service_account" with
+// the default prefix "extra"). Empty fields are omitted so we never write
+// meaningless empty-string claims into the JWT, and the map is only
+// allocated when at least one field has a value — this is on the token
 // issuance hot path and most clients won't set either field.
-func buildClientClaims(client *models.OAuthApplication) map[string]any {
+func buildClientClaims(client *models.OAuthApplication, prefix string) map[string]any {
 	if client == nil || (client.Project == "" && client.ServiceAccount == "") {
 		return nil
 	}
 	claims := make(map[string]any, 2)
 	if client.Project != "" {
-		claims[token.ClaimProject] = client.Project
+		claims[token.EmittedName(prefix, "project")] = client.Project
 	}
 	if client.ServiceAccount != "" {
-		claims[token.ClaimServiceAccount] = client.ServiceAccount
+		claims[token.EmittedName(prefix, "service_account")] = client.ServiceAccount
 	}
 	return claims
 }
@@ -267,13 +269,17 @@ func mergeCallerExtraClaims(system, caller map[string]any) map[string]any {
 }
 
 // buildServerClaims returns the JWT claims sourced from the AuthGate process
-// configuration (currently just `domain` from JWT_DOMAIN). Returns nil when no
-// server-wide claim is configured so callers skip an empty allocation.
+// configuration (currently just `domain` from JWT_DOMAIN), emitted under the
+// configured private-claim prefix (e.g. "extra_domain" with the default
+// prefix). Returns nil when no server-wide claim is configured so callers
+// skip an empty allocation.
 func buildServerClaims(cfg *config.Config) map[string]any {
 	if cfg == nil || cfg.JWTDomain == "" {
 		return nil
 	}
-	return map[string]any{token.ClaimDomain: cfg.JWTDomain}
+	return map[string]any{
+		token.EmittedName(cfg.JWTPrivateClaimPrefix, "domain"): cfg.JWTDomain,
+	}
 }
 
 // applyServerClaims overlays server-attested claims onto an already-merged
@@ -302,7 +308,8 @@ func (s *TokenService) composeIssuanceClaims(
 	client *models.OAuthApplication,
 	caller map[string]any,
 ) map[string]any {
-	claims := mergeCallerExtraClaims(buildClientClaims(client), caller)
+	prefix := s.config.JWTPrivateClaimPrefix
+	claims := mergeCallerExtraClaims(buildClientClaims(client, prefix), caller)
 	return applyServerClaims(claims, buildServerClaims(s.config))
 }
 

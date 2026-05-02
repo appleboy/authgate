@@ -5,28 +5,81 @@ import (
 	"testing"
 )
 
-func TestIsReservedClaimKey(t *testing.T) {
-	reserved := []string{
+func TestBuildReservedClaimKeys_DefaultPrefix(t *testing.T) {
+	got := BuildReservedClaimKeys("extra")
+
+	// Static RFC/OIDC/AuthGate-internal keys must always be reserved.
+	staticKeys := []string{
 		"iss", "sub", "aud", "exp", "nbf", "iat", "jti",
 		"type", "scope", "user_id", "client_id",
 		"azp", "amr", "acr", "auth_time", "nonce", "at_hash",
-		ClaimProject, ClaimServiceAccount, ClaimDomain,
 	}
-	for _, k := range reserved {
-		if !IsReservedClaimKey(k) {
-			t.Errorf("expected %q to be reserved", k)
+	for _, k := range staticKeys {
+		if _, ok := got[k]; !ok {
+			t.Errorf("expected %q to be reserved (static key)", k)
 		}
 	}
 
-	allowed := []string{"tenant", "trace_id", "department", "role", "feature_flags"}
-	for _, k := range allowed {
-		if IsReservedClaimKey(k) {
-			t.Errorf("expected %q to NOT be reserved", k)
+	// Every PrivateClaim entry contributes <prefix>_<logical>.
+	for _, pc := range PrivateClaims {
+		composed := EmittedName("extra", pc.LogicalName)
+		if _, ok := got[composed]; !ok {
+			t.Errorf("expected %q (composed) to be reserved", composed)
+		}
+	}
+
+	// Bare logical names must NOT be reserved under the new contract — the
+	// only namespacing is via the prefix.
+	for _, bare := range []string{"domain", "project", "service_account"} {
+		if _, ok := got[bare]; ok {
+			t.Errorf("bare %q must NOT be reserved (only prefixed names are)", bare)
+		}
+	}
+
+	// Sanity: arbitrary non-reserved keys remain free.
+	for _, allowed := range []string{"tenant", "trace_id", "department", "role", "feature_flags"} {
+		if _, ok := got[allowed]; ok {
+			t.Errorf("expected %q to NOT be reserved", allowed)
+		}
+	}
+}
+
+func TestBuildReservedClaimKeys_CustomPrefix(t *testing.T) {
+	got := BuildReservedClaimKeys("mtk")
+	for _, pc := range PrivateClaims {
+		want := "mtk_" + pc.LogicalName
+		if _, ok := got[want]; !ok {
+			t.Errorf("expected %q to be reserved under custom prefix", want)
+		}
+	}
+	// extra_* are NOT reserved under the mtk deployment.
+	for _, pc := range PrivateClaims {
+		stale := "extra_" + pc.LogicalName
+		if _, ok := got[stale]; ok {
+			t.Errorf("%q must NOT be reserved when prefix=mtk", stale)
+		}
+	}
+}
+
+func TestEmittedName(t *testing.T) {
+	cases := []struct {
+		prefix, logical, want string
+	}{
+		{"extra", "domain", "extra_domain"},
+		{"mtk", "project", "mtk_project"},
+		{"acme", "service_account", "acme_service_account"},
+		{"x", "domain", "x_domain"},
+	}
+	for _, c := range cases {
+		if got := EmittedName(c.prefix, c.logical); got != c.want {
+			t.Errorf("EmittedName(%q, %q) = %q, want %q",
+				c.prefix, c.logical, got, c.want)
 		}
 	}
 }
 
 func TestValidateExtraClaims(t *testing.T) {
+	reserved := BuildReservedClaimKeys("extra")
 	tests := []struct {
 		name    string
 		input   map[string]any
@@ -50,14 +103,21 @@ func TestValidateExtraClaims(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "rejects project (system claim)",
-			input:   map[string]any{ClaimProject: "fake"},
+			name:    "rejects prefixed project",
+			input:   map[string]any{EmittedName("extra", "project"): "fake"},
 			wantErr: true,
 		},
 		{
-			name:    "rejects domain (server claim)",
-			input:   map[string]any{ClaimDomain: "evil"},
+			name:    "rejects prefixed domain",
+			input:   map[string]any{EmittedName("extra", "domain"): "evil"},
 			wantErr: true,
+		},
+		{
+			name: "bare project allowed (only prefixed name is reserved)",
+			input: map[string]any{
+				"project": "user-set",
+			},
+			wantErr: false,
 		},
 		{
 			name:    "rejects empty key",
@@ -67,7 +127,7 @@ func TestValidateExtraClaims(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateExtraClaims(tt.input)
+			err := ValidateExtraClaims(tt.input, reserved)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error, got nil")

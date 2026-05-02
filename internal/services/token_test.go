@@ -20,6 +20,12 @@ import (
 
 func createTestTokenService(t *testing.T, s *store.Store, cfg *config.Config) *TokenService {
 	t.Helper()
+	// Mirror Load()'s default so tests that build *Config{} ad-hoc don't end
+	// up with an empty prefix that would compose private-claim keys as
+	// "_domain" / "_project" / "_service_account".
+	if cfg.JWTPrivateClaimPrefix == "" {
+		cfg.JWTPrivateClaimPrefix = config.DefaultJWTPrivateClaimPrefix
+	}
 	clientService := NewClientService(s, NewNoopAuditService(), nil, 0, nil, 0)
 	deviceService := NewDeviceService(
 		s,

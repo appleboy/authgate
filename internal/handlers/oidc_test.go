@@ -207,9 +207,15 @@ func TestDiscovery_ReturnsCorrectMetadata(t *testing.T) {
 	assert.Contains(t, claims, "updated_at")
 
 	// Per OIDC Discovery 1.0, claims_supported lists claims emitted in ID
-	// tokens / UserInfo only. AuthGate's access/refresh JWT claims are
-	// documented in docs/JWT_VERIFICATION.md and must not leak in here.
-	for _, jwtOnly := range []string{"user_id", "client_id", "scope", "type", "project", "service_account", "domain"} {
+	// tokens / UserInfo only. AuthGate's access/refresh JWT claims — both
+	// the bare logical names and the deployment-prefixed forms (e.g.
+	// extra_*, mtk_*) — are documented in docs/JWT_VERIFICATION.md and
+	// must not leak in here.
+	for _, jwtOnly := range []string{
+		"user_id", "client_id", "scope", "type",
+		"project", "service_account", "domain",
+		"extra_project", "extra_service_account", "extra_domain",
+	} {
 		assert.NotContains(
 			t,
 			claims,
@@ -245,8 +251,10 @@ func TestDiscovery_OmitsDomainEvenWhenSet(t *testing.T) {
 
 	claims, ok := meta["claims_supported"].([]any)
 	require.True(t, ok)
-	assert.NotContains(t, claims, "domain",
-		"claims_supported must not advertise the access-token-only `domain` claim")
+	for _, k := range []string{"domain", "extra_domain"} {
+		assert.NotContains(t, claims, k,
+			"claims_supported must not advertise the access-token-only %q claim", k)
+	}
 }
 
 func TestDiscovery_StripsTrailingSlashFromBaseURL(t *testing.T) {

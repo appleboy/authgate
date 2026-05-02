@@ -14,16 +14,17 @@ import (
 // Tests override specific fields to trigger the validation they want to test.
 func validBaseConfig() Config {
 	return Config{
-		JWTSecret:            "test-secret-that-is-at-least-32b",
-		JWTExpiration:        time.Hour,
-		RateLimitStore:       RateLimitStoreMemory,
-		MetricsCacheType:     CacheTypeMemory,
-		UserCacheType:        CacheTypeMemory,
-		UserCacheTTL:         5 * time.Minute,
-		ClientCountCacheType: CacheTypeMemory,
-		ClientCountCacheTTL:  time.Minute,
-		ClientCacheType:      CacheTypeMemory,
-		ClientCacheTTL:       5 * time.Minute,
+		JWTSecret:             "test-secret-that-is-at-least-32b",
+		JWTExpiration:         time.Hour,
+		RateLimitStore:        RateLimitStoreMemory,
+		MetricsCacheType:      CacheTypeMemory,
+		UserCacheType:         CacheTypeMemory,
+		UserCacheTTL:          5 * time.Minute,
+		ClientCountCacheType:  CacheTypeMemory,
+		ClientCountCacheTTL:   time.Minute,
+		ClientCacheType:       CacheTypeMemory,
+		ClientCacheTTL:        5 * time.Minute,
+		JWTPrivateClaimPrefix: DefaultJWTPrivateClaimPrefix,
 	}
 }
 

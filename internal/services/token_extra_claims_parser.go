@@ -22,12 +22,24 @@ var ErrExtraClaimsTooLarge = errors.New("extra_claims exceeds configured size li
 // ExtraClaimsParser decodes the caller-supplied extra_claims payload from
 // /oauth/token, applying size limits and the reserved-key guard.
 type ExtraClaimsParser struct {
-	cfg *config.Config
+	cfg      *config.Config
+	reserved map[string]struct{}
 }
 
-// NewExtraClaimsParser returns a parser bound to the given config.
+// NewExtraClaimsParser returns a parser bound to the given config. The
+// reserved-keys set (static RFC/OIDC/AuthGate-internal keys plus the
+// composed private-claim keys for cfg.JWTPrivateClaimPrefix) is precomputed
+// once here so per-request validation is a hash-lookup instead of a fresh
+// allocation.
 func NewExtraClaimsParser(cfg *config.Config) *ExtraClaimsParser {
-	return &ExtraClaimsParser{cfg: cfg}
+	prefix := ""
+	if cfg != nil {
+		prefix = cfg.JWTPrivateClaimPrefix
+	}
+	return &ExtraClaimsParser{
+		cfg:      cfg,
+		reserved: token.BuildReservedClaimKeys(prefix),
+	}
 }
 
 // Parse decodes the raw JSON payload, enforces size limits, and rejects
@@ -77,7 +89,7 @@ func (p *ExtraClaimsParser) Parse(raw string) (map[string]any, error) {
 			ErrExtraClaimsTooLarge, len(out), limit)
 	}
 
-	if err := token.ValidateExtraClaims(out); err != nil {
+	if err := token.ValidateExtraClaims(out, p.reserved); err != nil {
 		return nil, err
 	}
 

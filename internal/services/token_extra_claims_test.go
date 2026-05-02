@@ -12,6 +12,10 @@ import (
 )
 
 func TestBuildClientClaims(t *testing.T) {
+	const prefix = "extra"
+	projectKey := token.EmittedName(prefix, "project")
+	saKey := token.EmittedName(prefix, "service_account")
+
 	tests := []struct {
 		name   string
 		client *models.OAuthApplication
@@ -28,14 +32,14 @@ func TestBuildClientClaims(t *testing.T) {
 			client: &models.OAuthApplication{
 				Project: "payments-prod",
 			},
-			want: map[string]any{token.ClaimProject: "payments-prod"},
+			want: map[string]any{projectKey: "payments-prod"},
 		},
 		{
 			name: "only service account set",
 			client: &models.OAuthApplication{
 				ServiceAccount: "sa-payments@example.com",
 			},
-			want: map[string]any{token.ClaimServiceAccount: "sa-payments@example.com"},
+			want: map[string]any{saKey: "sa-payments@example.com"},
 		},
 		{
 			name: "both set",
@@ -44,21 +48,22 @@ func TestBuildClientClaims(t *testing.T) {
 				ServiceAccount: "sa-payments@example.com",
 			},
 			want: map[string]any{
-				token.ClaimProject:        "payments-prod",
-				token.ClaimServiceAccount: "sa-payments@example.com",
+				projectKey: "payments-prod",
+				saKey:      "sa-payments@example.com",
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := buildClientClaims(tt.client)
+			got := buildClientClaims(tt.client, prefix)
 			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestBuildServerClaims(t *testing.T) {
+	domainKey := token.EmittedName("extra", "domain")
 	tests := []struct {
 		name string
 		cfg  *config.Config
@@ -67,18 +72,23 @@ func TestBuildServerClaims(t *testing.T) {
 		{name: "nil config returns nil", cfg: nil, want: nil},
 		{
 			name: "empty JWTDomain returns nil",
-			cfg:  &config.Config{},
+			cfg:  &config.Config{JWTPrivateClaimPrefix: "extra"},
 			want: nil,
 		},
 		{
-			name: "populated JWTDomain returns domain claim",
-			cfg:  &config.Config{JWTDomain: "oa"},
-			want: map[string]any{token.ClaimDomain: "oa"},
+			name: "populated JWTDomain returns prefixed domain claim",
+			cfg:  &config.Config{JWTDomain: "oa", JWTPrivateClaimPrefix: "extra"},
+			want: map[string]any{domainKey: "oa"},
 		},
 		{
 			name: "verbatim case preserved",
-			cfg:  &config.Config{JWTDomain: "OA"},
-			want: map[string]any{token.ClaimDomain: "OA"},
+			cfg:  &config.Config{JWTDomain: "OA", JWTPrivateClaimPrefix: "extra"},
+			want: map[string]any{domainKey: "OA"},
+		},
+		{
+			name: "custom prefix produces mtk_domain",
+			cfg:  &config.Config{JWTDomain: "oa", JWTPrivateClaimPrefix: "mtk"},
+			want: map[string]any{token.EmittedName("mtk", "domain"): "oa"},
 		},
 	}
 	for _, tt := range tests {
@@ -92,22 +102,24 @@ func TestApplyServerClaims_ServerWinsOnCollision(t *testing.T) {
 	// Server-attested claims are the absolute floor — they override anything
 	// caller- or client-supplied. A future per-client `domain` field could not
 	// silently shadow JWT_DOMAIN without changing this precedence.
+	domainKey := token.EmittedName("extra", "domain")
 	merged := mergeCallerExtraClaims(
-		map[string]any{token.ClaimDomain: "client-set"}, // pretend per-client
-		map[string]any{token.ClaimDomain: "caller-set"}, // caller extra_claims
+		map[string]any{domainKey: "client-set"}, // pretend per-client
+		map[string]any{domainKey: "caller-set"}, // caller extra_claims
 	)
-	final := applyServerClaims(merged, map[string]any{token.ClaimDomain: "server-set"})
-	assert.Equal(t, "server-set", final[token.ClaimDomain])
+	final := applyServerClaims(merged, map[string]any{domainKey: "server-set"})
+	assert.Equal(t, "server-set", final[domainKey])
 }
 
 func TestApplyServerClaims_NilServerLeavesMapUntouched(t *testing.T) {
 	// When JWT_DOMAIN is empty, applyServerClaims must not allocate or mutate
 	// — existing deployments that don't set the env var see byte-for-byte
 	// identical JWT payloads.
+	domainKey := token.EmittedName("extra", "domain")
 	in := map[string]any{"tenant": "acme"}
 	out := applyServerClaims(in, nil)
 	assert.Equal(t, in, out)
-	_, hasDomain := out[token.ClaimDomain]
+	_, hasDomain := out[domainKey]
 	assert.False(t, hasDomain)
 
 	// Nil base + nil server stays nil — no stray empty allocation.
@@ -115,8 +127,9 @@ func TestApplyServerClaims_NilServerLeavesMapUntouched(t *testing.T) {
 }
 
 func TestApplyServerClaims_NilBaseAllocates(t *testing.T) {
-	out := applyServerClaims(nil, map[string]any{token.ClaimDomain: "oa"})
-	assert.Equal(t, map[string]any{token.ClaimDomain: "oa"}, out)
+	domainKey := token.EmittedName("extra", "domain")
+	out := applyServerClaims(nil, map[string]any{domainKey: "oa"})
+	assert.Equal(t, map[string]any{domainKey: "oa"}, out)
 }
 
 func TestValidateProject(t *testing.T) {
