@@ -28,11 +28,13 @@ func TestBuildReservedClaimKeys_DefaultPrefix(t *testing.T) {
 		}
 	}
 
-	// Bare logical names must NOT be reserved under the new contract — the
-	// only namespacing is via the prefix.
+	// Bare logical names MUST also be reserved so callers cannot smuggle a
+	// legacy claim name (`domain` / `project` / `service_account`) past the
+	// parser. Without this, an attacker could re-introduce the pre-prefix
+	// keys that an un-migrated downstream consumer might still trust.
 	for _, bare := range []string{"domain", "project", "service_account"} {
-		if _, ok := got[bare]; ok {
-			t.Errorf("bare %q must NOT be reserved (only prefixed names are)", bare)
+		if _, ok := got[bare]; !ok {
+			t.Errorf("bare %q must be reserved (legacy-name impersonation guard)", bare)
 		}
 	}
 
@@ -113,11 +115,19 @@ func TestValidateExtraClaims(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "bare project allowed (only prefixed name is reserved)",
-			input: map[string]any{
-				"project": "user-set",
-			},
-			wantErr: false,
+			name:    "rejects bare project (legacy-name impersonation guard)",
+			input:   map[string]any{"project": "user-set"},
+			wantErr: true,
+		},
+		{
+			name:    "rejects bare domain (legacy-name impersonation guard)",
+			input:   map[string]any{"domain": "evil"},
+			wantErr: true,
+		},
+		{
+			name:    "rejects bare service_account (legacy-name impersonation guard)",
+			input:   map[string]any{"service_account": "evil"},
+			wantErr: true,
 		},
 		{
 			name:    "rejects empty key",

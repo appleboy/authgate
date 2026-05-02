@@ -10,6 +10,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestJWTPrivateClaimPrefix_CollisionRejected_Synthetic genuinely exercises
+// the collision branch in validateJWTPrivateClaimPrefix by temporarily
+// extending the package-level registry mirror with a synthetic logical name
+// ("time") so that prefix="auth" composes to "auth_time" — a key already in
+// staticReservedClaimKeys. Without this manipulation the registry-as-shipped
+// has no logical name that would collide with any RFC/OIDC/AuthGate-internal
+// key for any plausible prefix, so the branch is unreachable.
+func TestJWTPrivateClaimPrefix_CollisionRejected_Synthetic(t *testing.T) {
+	original := jwtPrivateClaimLogicalNames
+	jwtPrivateClaimLogicalNames = append([]string{}, original...)
+	jwtPrivateClaimLogicalNames = append(jwtPrivateClaimLogicalNames, "time")
+	t.Cleanup(func() { jwtPrivateClaimLogicalNames = original })
+
+	cfg := validBaseConfig()
+	cfg.JWTPrivateClaimPrefix = "auth"
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `"auth_time"`,
+		"error must name the colliding composed key")
+	assert.Contains(t, err.Error(), "JWT_PRIVATE_CLAIM_PREFIX")
+}
+
 // validBaseConfig returns a Config that passes all Validate() checks.
 // Tests override specific fields to trigger the validation they want to test.
 func validBaseConfig() Config {

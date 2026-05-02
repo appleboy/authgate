@@ -46,17 +46,25 @@ var staticReservedClaimKeys = []string{
 // BuildReservedClaimKeys returns the set of JWT claim keys that callers must
 // not supply via extra_claims for a deployment configured with the given
 // private-claim prefix. It includes the static RFC/OIDC/AuthGate-internal
-// keys plus the composed `<prefix>_<logical>` key for every entry in
-// PrivateClaims.
+// keys, the composed `<prefix>_<logical>` key for every entry in
+// PrivateClaims, AND the bare logical name itself.
+//
+// Reserving the bare logical names is what enforces the hard cutover: without
+// it, a caller could submit extra_claims={"domain":"evil"} and the bare
+// `domain` claim would survive into the signed JWT (generateJWT only strips
+// nbf/azp/amr/acr/auth_time/nonce/at_hash). An un-migrated downstream
+// consumer still reading claims["domain"] would then trust an
+// attacker-controlled value during the rolling-upgrade window.
 //
 // Build once at parser construction time and reuse — the result is intended
 // to be passed into ValidateExtraClaims rather than recomputed per request.
 func BuildReservedClaimKeys(prefix string) map[string]struct{} {
-	out := make(map[string]struct{}, len(staticReservedClaimKeys)+len(PrivateClaims))
+	out := make(map[string]struct{}, len(staticReservedClaimKeys)+2*len(PrivateClaims))
 	for _, k := range staticReservedClaimKeys {
 		out[k] = struct{}{}
 	}
 	for _, pc := range PrivateClaims {
+		out[pc.LogicalName] = struct{}{}
 		out[EmittedName(prefix, pc.LogicalName)] = struct{}{}
 	}
 	return out

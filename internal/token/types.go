@@ -43,6 +43,12 @@ type PrivateClaim struct {
 //
 // No other wiring sites need to change — reserved-key derivation, parser
 // validation, and tests all read from this registry.
+//
+// READ-ONLY at runtime. The slice is exported so other packages can iterate
+// it (token, services, config-mirror), but it must not be mutated after
+// package initialization. Mutation would silently change reserved-key
+// derivation and claim emission for every subsequent token. If a caller
+// needs a private copy, copy the slice — never append in place.
 var PrivateClaims = []PrivateClaim{
 	{LogicalName: "domain"},
 	{LogicalName: "project"},

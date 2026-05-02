@@ -30,10 +30,14 @@ type ExtraClaimsParser struct {
 // reserved-keys set (static RFC/OIDC/AuthGate-internal keys plus the
 // composed private-claim keys for cfg.JWTPrivateClaimPrefix) is precomputed
 // once here so per-request validation is a hash-lookup instead of a fresh
-// allocation.
+// allocation. An empty prefix is normalized to DefaultJWTPrivateClaimPrefix
+// to match production semantics: ad-hoc test configs that build Config{}
+// directly without going through Load() would otherwise reserve composed
+// keys with a leading underscore (e.g. "_domain") and silently allow
+// callers to submit "extra_domain" via extra_claims.
 func NewExtraClaimsParser(cfg *config.Config) *ExtraClaimsParser {
-	prefix := ""
-	if cfg != nil {
+	prefix := config.DefaultJWTPrivateClaimPrefix
+	if cfg != nil && cfg.JWTPrivateClaimPrefix != "" {
 		prefix = cfg.JWTPrivateClaimPrefix
 	}
 	return &ExtraClaimsParser{

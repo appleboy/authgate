@@ -377,7 +377,7 @@ func Load() *Config {
 		JWTAudience:         getEnvSlice("JWT_AUDIENCE", nil),
 		JWTDomain:           strings.TrimSpace(getEnv("JWT_DOMAIN", "")),
 		JWTPrivateClaimPrefix: strings.TrimSpace(
-			getEnv("JWT_PRIVATE_CLAIM_PREFIX", "extra"),
+			getEnv("JWT_PRIVATE_CLAIM_PREFIX", DefaultJWTPrivateClaimPrefix),
 		),
 		SessionSecret:      getEnv("SESSION_SECRET", "session-secret-change-in-production"),
 		SessionMaxAge:      getEnvInt("SESSION_MAX_AGE", 3600),      // 1 hour default

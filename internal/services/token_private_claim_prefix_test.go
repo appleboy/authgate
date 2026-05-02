@@ -134,6 +134,45 @@ func TestPrivateClaimPrefix_CallerCannotImpersonatePrefixedClaim(t *testing.T) {
 	assert.Equal(t, cfg.JWTDomain, result.Claims[domainKey])
 }
 
+// TestPrivateClaimPrefix_CallerCannotInjectBareLegacyName is the regression
+// guard for the hard cutover: even with the parser bypassed, bare logical
+// names (the legacy pre-prefix keys) must not survive into the signed JWT.
+// Without the generateJWT denylist + reserved-set entries for bare names,
+// a caller could re-introduce the legacy `domain` claim that an
+// un-migrated downstream consumer might still trust.
+func TestPrivateClaimPrefix_CallerCannotInjectBareLegacyName(t *testing.T) {
+	cfg := privateClaimPrefixConfig(config.DefaultJWTPrivateClaimPrefix)
+
+	// Defense layer 1: parser rejects bare names too.
+	parser := NewExtraClaimsParser(cfg)
+	for _, bare := range []string{"domain", "project", "service_account"} {
+		_, err := parser.Parse(`{"` + bare + `":"evil"}`)
+		require.Error(t, err, "parser must reject bare %q", bare)
+		require.ErrorIs(t, err, token.ErrReservedClaimKey)
+	}
+
+	// Defense layer 2: bypassing the parser, generateJWT must still strip
+	// bare names so they cannot land in the signed token.
+	provider, err := token.NewLocalTokenProvider(cfg)
+	require.NoError(t, err)
+	smuggled := map[string]any{
+		"domain":          "evil-domain",
+		"project":         "evil-project",
+		"service_account": "evil-sa",
+	}
+	result, err := provider.GenerateToken(
+		context.Background(), "u", "c", "read", 0, smuggled,
+	)
+	require.NoError(t, err)
+	for _, bare := range []string{"domain", "project", "service_account"} {
+		_, present := result.Claims[bare]
+		assert.False(t, present,
+			"bare %q must NOT appear in signed JWT even when smuggled past the parser",
+			bare,
+		)
+	}
+}
+
 // TestPrivateClaimPrefix_RefreshContinuity verifies refreshing a token
 // re-emits the prefixed claims correctly. Mirrors the refresh-coverage case
 // in token_domain_test.go but exercises both project and service_account
@@ -245,22 +284,18 @@ func TestJWTPrivateClaimPrefix_StartupValidation(t *testing.T) {
 	}
 }
 
-// TestJWTPrivateClaimPrefix_CollisionRejected exercises the synthetic
-// collision branch: a prefix whose composed key would shadow a static
-// reserved claim must fail validation. None of the real PrivateClaims
-// (domain / project / service_account) compose into a static reserved key
-// for any plausible prefix, so we widen the check by temporarily appending
-// a synthetic logical name that does collide.
-func TestJWTPrivateClaimPrefix_CollisionRejected(t *testing.T) {
-	// Reserved-key list contains "auth_time" — choosing prefix="auth" and a
-	// hypothetical logical name "time" composes to "auth_time" which is the
-	// OIDC ID-token reserved claim. We can't easily inject a synthetic claim
-	// from outside the package, so simulate by validating directly.
+// TestJWTPrivateClaimPrefix_AuthPrefixDoesNotCollide pins that prefix="auth"
+// is accepted even though the static reserved set contains "auth_time".
+// It is a regression guard, not a positive test of the collision branch:
+// the collision branch only fires if a future PrivateClaim adds a logical
+// name (e.g. "time") that composes to a reserved static key. Genuine
+// collision-rejection coverage lives in
+// internal/config/TestJWTPrivateClaimPrefix_CollisionRejected_Synthetic,
+// which has direct access to the package-level registry mirror and can
+// inject a synthetic logical name.
+func TestJWTPrivateClaimPrefix_AuthPrefixDoesNotCollide(t *testing.T) {
 	cfg := minimalValidConfig()
 	cfg.JWTPrivateClaimPrefix = "auth"
-
-	// `auth` itself doesn't collide for the default registry, so this
-	// passes — confirming the validation only fires on actual collisions.
 	require.NoError(t, cfg.Validate(),
 		"auth prefix is valid because no PrivateClaim has logical name 'time'")
 }
