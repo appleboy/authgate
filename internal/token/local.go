@@ -212,11 +212,7 @@ func (p *LocalTokenProvider) generateJWT(
 	// rolling-upgrade window. The server layer emits these claims under the
 	// configured prefix via buildClientClaims / buildServerClaims, and those
 	// prefixed keys are written after this strip step so they survive.
-	denylist := []string{"nbf", "azp", "amr", "acr", "auth_time", "nonce", "at_hash"}
-	for _, pc := range PrivateClaims {
-		denylist = append(denylist, pc.LogicalName)
-	}
-	for _, k := range denylist {
+	for _, k := range generateJWTStripList {
 		delete(claims, k)
 	}
 	claims["user_id"] = userID

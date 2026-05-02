@@ -33,8 +33,8 @@ type PrivateClaim struct {
 	LogicalName string
 }
 
-// PrivateClaims is the registry of server-attested private claims AuthGate
-// may emit on issued JWTs. The list order is significant only for
+// privateClaims is the canonical registry of server-attested private claims
+// AuthGate may emit on issued JWTs. The list order is significant only for
 // deterministic iteration (tests, validation messages); emission and lookup
 // are key-based. Adding a new claim here requires:
 //  1. Appending the entry to this slice, AND
@@ -44,15 +44,26 @@ type PrivateClaim struct {
 // No other wiring sites need to change — reserved-key derivation, parser
 // validation, and tests all read from this registry.
 //
-// READ-ONLY at runtime. The slice is exported so other packages can iterate
-// it (token, services, config-mirror), but it must not be mutated after
-// package initialization. Mutation would silently change reserved-key
-// derivation and claim emission for every subsequent token. If a caller
-// needs a private copy, copy the slice — never append in place.
-var PrivateClaims = []PrivateClaim{
+// Unexported so other packages cannot accidentally append/mutate it at
+// runtime — that would silently change reserved-key derivation and claim
+// stripping for every subsequent token, including in parallel tests.
+// External callers must go through PrivateClaimRegistry which returns a
+// defensive copy.
+var privateClaims = []PrivateClaim{
 	{LogicalName: "domain"},
 	{LogicalName: "project"},
 	{LogicalName: "service_account"},
+}
+
+// PrivateClaimRegistry returns a defensive copy of the server-attested
+// private-claim registry. Callers that need to iterate the registry from
+// outside this package (tests, downstream tooling) must use this accessor;
+// the underlying slice is intentionally unexported to prevent cross-package
+// mutation.
+func PrivateClaimRegistry() []PrivateClaim {
+	out := make([]PrivateClaim, len(privateClaims))
+	copy(out, privateClaims)
+	return out
 }
 
 // EmittedName composes the JWT key written for a private claim:

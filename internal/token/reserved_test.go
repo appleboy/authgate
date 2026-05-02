@@ -21,20 +21,21 @@ func TestBuildReservedClaimKeys_DefaultPrefix(t *testing.T) {
 	}
 
 	// Every PrivateClaim entry contributes <prefix>_<logical>.
-	for _, pc := range PrivateClaims {
+	for _, pc := range privateClaims {
 		composed := EmittedName("extra", pc.LogicalName)
 		if _, ok := got[composed]; !ok {
 			t.Errorf("expected %q (composed) to be reserved", composed)
 		}
 	}
 
-	// Bare logical names MUST also be reserved so callers cannot smuggle a
-	// legacy claim name (`domain` / `project` / `service_account`) past the
-	// parser. Without this, an attacker could re-introduce the pre-prefix
-	// keys that an un-migrated downstream consumer might still trust.
-	for _, bare := range []string{"domain", "project", "service_account"} {
-		if _, ok := got[bare]; !ok {
-			t.Errorf("bare %q must be reserved (legacy-name impersonation guard)", bare)
+	// Every PrivateClaim entry's bare logical name MUST also be reserved so
+	// callers cannot smuggle a legacy claim name past the parser. Iterating
+	// the registry (rather than hardcoding domain/project/service_account)
+	// keeps the test in lockstep with future additions to privateClaims.
+	for _, pc := range privateClaims {
+		if _, ok := got[pc.LogicalName]; !ok {
+			t.Errorf("bare %q must be reserved (legacy-name impersonation guard)",
+				pc.LogicalName)
 		}
 	}
 
@@ -48,14 +49,14 @@ func TestBuildReservedClaimKeys_DefaultPrefix(t *testing.T) {
 
 func TestBuildReservedClaimKeys_CustomPrefix(t *testing.T) {
 	got := BuildReservedClaimKeys("acme")
-	for _, pc := range PrivateClaims {
+	for _, pc := range privateClaims {
 		want := "acme_" + pc.LogicalName
 		if _, ok := got[want]; !ok {
 			t.Errorf("expected %q to be reserved under custom prefix", want)
 		}
 	}
 	// extra_* are NOT reserved under the acme deployment.
-	for _, pc := range PrivateClaims {
+	for _, pc := range privateClaims {
 		stale := "extra_" + pc.LogicalName
 		if _, ok := got[stale]; ok {
 			t.Errorf("%q must NOT be reserved when prefix=acme", stale)

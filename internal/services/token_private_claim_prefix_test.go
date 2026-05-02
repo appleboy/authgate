@@ -214,7 +214,7 @@ func TestPrivateClaimPrefix_RegistryTableDriven(t *testing.T) {
 	prefixes := []string{"extra", "acme", "x", "co_v2"}
 	for _, prefix := range prefixes {
 		t.Run(prefix, func(t *testing.T) {
-			for _, pc := range token.PrivateClaims {
+			for _, pc := range token.PrivateClaimRegistry() {
 				want := prefix + "_" + pc.LogicalName
 				got := token.EmittedName(prefix, pc.LogicalName)
 				assert.Equal(t, want, got,

@@ -10,10 +10,31 @@ import (
 // and callers must not provide them via extra_claims.
 var ErrReservedClaimKey = errors.New("reserved claim key")
 
+// generateJWTStripList enumerates claim keys that generateJWT must always
+// strip from access/refresh tokens, regardless of the deployment prefix:
+//
+//   - nbf, azp, amr, acr, auth_time, nonce, at_hash — RFC 7519 / OIDC
+//     ID-token claims AuthGate does not set or preserve on access tokens.
+//   - the bare logical names from the private-claim registry — the
+//     legacy pre-prefix keys. Stripping them ensures that even if a caller
+//     bypasses the parser's reserved-key check, a smuggled `domain` /
+//     `project` / `service_account` cannot land in the signed JWT and
+//     mislead an un-migrated downstream consumer.
+//
+// Precomputed once at package init so the hot path (every issued token)
+// just walks a fixed slice instead of allocating one per call.
+var generateJWTStripList = func() []string {
+	out := []string{"nbf", "azp", "amr", "acr", "auth_time", "nonce", "at_hash"}
+	for _, pc := range privateClaims {
+		out = append(out, pc.LogicalName)
+	}
+	return out
+}()
+
 // staticReservedClaimKeys lists the JWT/OIDC standard claim keys plus the
 // AuthGate-internal claims that are reserved on every deployment regardless of
 // the configured private-claim prefix. Server-attested private claims
-// (composed from PrivateClaims + the runtime prefix) are merged on top by
+// (composed from privateClaims + the runtime prefix) are merged on top by
 // BuildReservedClaimKeys.
 //
 // Defence layering:
@@ -47,7 +68,7 @@ var staticReservedClaimKeys = []string{
 // not supply via extra_claims for a deployment configured with the given
 // private-claim prefix. It includes the static RFC/OIDC/AuthGate-internal
 // keys, the composed `<prefix>_<logical>` key for every entry in
-// PrivateClaims, AND the bare logical name itself.
+// privateClaims, AND the bare logical name itself.
 //
 // Reserving the bare logical names is what enforces the hard cutover: without
 // it, a caller could submit extra_claims={"domain":"evil"} and the bare
@@ -59,11 +80,11 @@ var staticReservedClaimKeys = []string{
 // Build once at parser construction time and reuse — the result is intended
 // to be passed into ValidateExtraClaims rather than recomputed per request.
 func BuildReservedClaimKeys(prefix string) map[string]struct{} {
-	out := make(map[string]struct{}, len(staticReservedClaimKeys)+2*len(PrivateClaims))
+	out := make(map[string]struct{}, len(staticReservedClaimKeys)+2*len(privateClaims))
 	for _, k := range staticReservedClaimKeys {
 		out[k] = struct{}{}
 	}
-	for _, pc := range PrivateClaims {
+	for _, pc := range privateClaims {
 		out[pc.LogicalName] = struct{}{}
 		out[EmittedName(prefix, pc.LogicalName)] = struct{}{}
 	}
