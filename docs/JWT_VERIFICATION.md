@@ -252,33 +252,70 @@ The `kid` (Key ID) header identifies which key was used to sign the token. Use t
 
 ## Custom Claims
 
-In addition to the standard JWT claims, AuthGate may optionally populate the standard `aud` claim and may also emit three custom claims (`project`, `service_account`, `domain`) that gateways and resource servers can use for routing and per-request authorization. All four are **optional** — they only appear when configured.
+In addition to the standard JWT claims, AuthGate may optionally populate the standard `aud` claim and may also emit three AuthGate-private claims under the deployment-configured prefix `JWT_PRIVATE_CLAIM_PREFIX` (default `extra`): `<prefix>_project`, `<prefix>_service_account`, `<prefix>_domain`. Of these, only `<prefix>_domain` is **server-attested** (sourced from deployment config); `<prefix>_project` and `<prefix>_service_account` are **owner-set** per-client metadata — see the trust model below. With the default prefix this means `extra_project`, `extra_service_account`, `extra_domain`. With `JWT_PRIVATE_CLAIM_PREFIX=acme` it would be `acme_project`, `acme_service_account`, `acme_domain`. All four are **optional** — they only appear when configured.
 
-| Claim             | Classification        | Type                   | Source                                                  | When present                                           |
-| ----------------- | --------------------- | ---------------------- | ------------------------------------------------------- | ------------------------------------------------------ |
-| `aud`             | Standard JWT claim    | `string` or `[]string` | `JWT_AUDIENCE` env var (deployment-wide)                | When `JWT_AUDIENCE` is non-empty                       |
-| `project`         | Custom AuthGate claim | `string`               | `OAuthApplication.Project` (per-client metadata)        | When the client has a non-empty `Project` value        |
-| `service_account` | Custom AuthGate claim | `string`               | `OAuthApplication.ServiceAccount` (per-client)          | When the client has a non-empty `ServiceAccount` value |
-| `domain`          | Custom AuthGate claim | `string`               | `JWT_DOMAIN` env var (deployment-wide, server-attested) | When `JWT_DOMAIN` is non-empty                         |
+| Claim                      | Classification        | Type                   | Source                                                  | When present                                           |
+| -------------------------- | --------------------- | ---------------------- | ------------------------------------------------------- | ------------------------------------------------------ |
+| `aud`                      | Standard JWT claim    | `string` or `[]string` | `JWT_AUDIENCE` env var (deployment-wide)                | When `JWT_AUDIENCE` is non-empty                       |
+| `<prefix>_project`         | Custom AuthGate claim | `string`               | `OAuthApplication.Project` (per-client metadata)        | When the client has a non-empty `Project` value        |
+| `<prefix>_service_account` | Custom AuthGate claim | `string`               | `OAuthApplication.ServiceAccount` (per-client)          | When the client has a non-empty `ServiceAccount` value |
+| `<prefix>_domain`          | Custom AuthGate claim | `string`               | `JWT_DOMAIN` env var (deployment-wide, server-attested) | When `JWT_DOMAIN` is non-empty                         |
 
 `aud` is the standard registered JWT claim defined by RFC 7519 §4.1.3. It is a single string when `JWT_AUDIENCE` has one entry and a `[]string` when it has multiple — verifiers must handle both shapes. Many JWT libraries (e.g. `golang-jwt/jwt`) normalize this for you via their `WithAudience` option.
 
-`project` and `service_account` are AuthGate-specific custom claims that reflect the OAuth client's current admin- or owner-configured metadata at issuance time. On refresh, AuthGate re-resolves these values from the database, so changes propagate to the next refreshed access token rather than being pinned to the values present when the original refresh token was issued.
+`<prefix>_project` and `<prefix>_service_account` are AuthGate-specific custom claims that reflect the OAuth client's current admin- or owner-configured metadata at issuance time. On refresh, AuthGate re-resolves these values from the database, so changes propagate to the next refreshed access token rather than being pinned to the values present when the original refresh token was issued.
 
-`domain` is set from the AuthGate process configuration (`JWT_DOMAIN`), not from per-client metadata. Like `project` / `service_account`, it is re-resolved on each refresh, so flipping the env var propagates on the next refresh request. Unlike them, it cannot be set per-client and cannot be supplied by the caller via `extra_claims` — see the trust model below.
+`<prefix>_domain` is set from the AuthGate process configuration (`JWT_DOMAIN`), not from per-client metadata. Like `<prefix>_project` / `<prefix>_service_account`, it is re-resolved on each refresh, so flipping the env var propagates on the next refresh request. Unlike them, it cannot be set per-client and cannot be supplied by the caller via `extra_claims` — see the trust model below.
+
+> **Breaking change vs pre-prefix releases.** Earlier AuthGate releases emitted these claims as bare names (`project`, `service_account`, `domain`). With the prefix feature, the bare names are gone — downstream services that read `claims["domain"]` directly must update to `claims["extra_domain"]` (or the operator-chosen prefix) at the same time as the AuthGate upgrade.
+
+### Decoding the prefixed claims (downstream)
+
+The prefix is a runtime config value, so Go struct tags — which are compile-time constants — cannot adapt automatically. Three patterns, in order of recommended use:
+
+#### Pattern 1 — Single-deployment, hardcoded prefix (recommended default)
+
+When a downstream service consumes tokens from exactly one AuthGate deployment, hardcode the prefix in struct tags. This is the path the feature is optimized for: one organization, one prefix, all downstream struct definitions agree.
+
+```go
+type AuthGateClaims struct {
+    jwt.RegisteredClaims                                  // iss/sub/aud/exp/iat/jti
+    Email          string   `json:"email"`
+    PreferredName  string   `json:"preferred_username"`
+    Groups         []string `json:"groups"`
+    Domain         string   `json:"extra_domain"`         // <-- prefix hardcoded
+    Project        string   `json:"extra_project"`
+    ServiceAccount string   `json:"extra_service_account"`
+}
+
+tok, _ := jwt.ParseWithClaims(raw, &AuthGateClaims{}, keyFn)
+```
+
+`jwt.ParseWithClaims` + `encoding/json` populate everything automatically. For a deployment using `JWT_PRIVATE_CLAIM_PREFIX=acme`, replace `extra_*` in the struct tags with `acme_*`.
+
+#### Pattern 2 — Dynamic `map[string]any` lookup (most flexible)
+
+```go
+prefix := "acme" // from the consumer's config
+domain, _ := claims[prefix+"_domain"].(string)
+project, _ := claims[prefix+"_project"].(string)
+serviceAccount, _ := claims[prefix+"_service_account"].(string)
+```
+
+Use when struct tags are impractical (e.g. shared libraries that must support multiple AuthGate deployments with different prefixes, generic policy engines).
 
 ### Trust model
 
-`project` and `service_account` are **set by the OAuth client owner** (admin or end-user, depending on your deployment). Treat them as untrusted assertions: a successful JWT signature only proves AuthGate emitted the token, not that the asserted project/service account ownership has been independently verified.
+`<prefix>_project` and `<prefix>_service_account` are **set by the OAuth client owner** (admin or end-user, depending on your deployment). Treat them as untrusted assertions: a successful JWT signature only proves AuthGate emitted the token, not that the asserted project/service account ownership has been independently verified.
 
-`domain` is **server-attested**: it is sourced from the AuthGate process's `JWT_DOMAIN` environment variable and cannot be set per-client or supplied by the caller. A successful JWT signature is sufficient evidence that the token was issued by an AuthGate instance configured with that domain — there is no equivalent to "owner-set" for this claim. Operators control the value through deployment configuration, so trust in the claim is exactly trust in your deployment's operator process.
+`<prefix>_domain` is **server-attested**: it is sourced from the AuthGate process's `JWT_DOMAIN` environment variable and cannot be set per-client or supplied by the caller. A successful JWT signature is sufficient evidence that the token was issued by an AuthGate instance configured with that domain — there is no equivalent to "owner-set" for this claim. Operators control the value through deployment configuration, so trust in the claim is exactly trust in your deployment's operator process.
 
 If your downstream service uses these claims to make access decisions:
 
 - Always verify the JWT signature first (everything below assumes a valid signature).
-- Apply your own access policies (e.g. an allowlist of `(client_id, project)` pairs) on top of the claim values.
-- Do not assume `service_account: "sa-prod@example.com"` proves anything about the operator behind the token; it only proves the OAuth client metadata was set to that value.
-- `domain` may be used directly for cross-issuer pinning (e.g. an `Domains` allowlist on the consumer SDK) because it is server-attested. Even so, always verify the signature — the trust derives from "this signed token came from an AuthGate configured with `JWT_DOMAIN=X`", not from the claim value alone.
+- Apply your own access policies (e.g. an allowlist of `(client_id, <prefix>_project)` pairs) on top of the claim values.
+- Do not assume `<prefix>_service_account: "sa-prod@example.com"` proves anything about the operator behind the token; it only proves the OAuth client metadata was set to that value.
+- `<prefix>_domain` may be used directly for cross-issuer pinning (e.g. a `Domains` allowlist on the consumer SDK) because it is server-attested. Even so, always verify the signature — the trust derives from "this signed token came from an AuthGate configured with `JWT_DOMAIN=X`", not from the claim value alone.
 
 For deployments that share AuthGate across multiple teams, consider configuring per-user whitelists outside this PR's scope, or restricting `Project` / `ServiceAccount` editing to admins only via your deployment process.
 

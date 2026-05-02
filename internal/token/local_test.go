@@ -1189,21 +1189,31 @@ func TestGenerateToken_ExtraClaimsInjected(t *testing.T) {
 	provider, err := NewLocalTokenProvider(cfg)
 	require.NoError(t, err)
 
+	// Use prefixed keys directly — the token provider merges whatever the
+	// service layer hands it; key composition is the service layer's job.
 	extra := map[string]any{
-		ClaimProject:        "payments-prod",
-		ClaimServiceAccount: "sa-payments@example.com",
+		EmittedName("extra", "project"):         "payments-prod",
+		EmittedName("extra", "service_account"): "sa-payments@example.com",
 	}
 	result, err := provider.GenerateToken(
 		context.Background(), "u", "c", "read", 0, extra,
 	)
 	require.NoError(t, err)
-	assert.Equal(t, "payments-prod", result.Claims[ClaimProject])
-	assert.Equal(t, "sa-payments@example.com", result.Claims[ClaimServiceAccount])
+	assert.Equal(t, "payments-prod", result.Claims[EmittedName("extra", "project")])
+	assert.Equal(
+		t,
+		"sa-payments@example.com",
+		result.Claims[EmittedName("extra", "service_account")],
+	)
 
 	val, err := provider.ValidateToken(context.Background(), result.TokenString)
 	require.NoError(t, err)
-	assert.Equal(t, "payments-prod", val.Claims[ClaimProject])
-	assert.Equal(t, "sa-payments@example.com", val.Claims[ClaimServiceAccount])
+	assert.Equal(t, "payments-prod", val.Claims[EmittedName("extra", "project")])
+	assert.Equal(
+		t,
+		"sa-payments@example.com",
+		val.Claims[EmittedName("extra", "service_account")],
+	)
 }
 
 // Standard claims must not be silently overridden by extraClaims — that would
@@ -1279,12 +1289,12 @@ func TestGenerateRefreshToken_ExtraClaimsInjected(t *testing.T) {
 	provider, err := NewLocalTokenProvider(cfg)
 	require.NoError(t, err)
 
-	extra := map[string]any{ClaimProject: "payments-prod"}
+	extra := map[string]any{EmittedName("extra", "project"): "payments-prod"}
 	result, err := provider.GenerateRefreshToken(
 		context.Background(), "u", "c", "read", 0, extra,
 	)
 	require.NoError(t, err)
-	assert.Equal(t, "payments-prod", result.Claims[ClaimProject])
+	assert.Equal(t, "payments-prod", result.Claims[EmittedName("extra", "project")])
 	assert.Equal(t, TokenCategoryRefresh, result.Claims["type"])
 }
 
@@ -1297,12 +1307,18 @@ func TestGenerateClientCredentialsToken_ExtraClaimsInjected(t *testing.T) {
 	provider, err := NewLocalTokenProvider(cfg)
 	require.NoError(t, err)
 
-	extra := map[string]any{ClaimServiceAccount: "sa-batch@example.com"}
+	extra := map[string]any{
+		EmittedName("extra", "service_account"): "sa-batch@example.com",
+	}
 	result, err := provider.GenerateClientCredentialsToken(
 		context.Background(), "client:abc", "abc", "read", 0, extra,
 	)
 	require.NoError(t, err)
-	assert.Equal(t, "sa-batch@example.com", result.Claims[ClaimServiceAccount])
+	assert.Equal(
+		t,
+		"sa-batch@example.com",
+		result.Claims[EmittedName("extra", "service_account")],
+	)
 }
 
 // RefreshAccessToken must thread the caller-supplied extraClaims into the new
@@ -1320,10 +1336,12 @@ func TestRefreshAccessToken_AppliesExtraClaims(t *testing.T) {
 	provider, err := NewLocalTokenProvider(cfg)
 	require.NoError(t, err)
 
+	projectKey := EmittedName("extra", "project")
+
 	// Original refresh token issued with one project value
 	original, err := provider.GenerateRefreshToken(
 		context.Background(), "u", "c", "read", 0,
-		map[string]any{ClaimProject: "old-project"},
+		map[string]any{projectKey: "old-project"},
 	)
 	require.NoError(t, err)
 
@@ -1332,12 +1350,12 @@ func TestRefreshAccessToken_AppliesExtraClaims(t *testing.T) {
 		context.Background(),
 		original.TokenString,
 		0, 0,
-		map[string]any{ClaimProject: "new-project"},
+		map[string]any{projectKey: "new-project"},
 	)
 	require.NoError(t, err)
-	assert.Equal(t, "new-project", refreshed.AccessToken.Claims[ClaimProject])
+	assert.Equal(t, "new-project", refreshed.AccessToken.Claims[projectKey])
 	require.NotNil(t, refreshed.RefreshToken, "rotation mode should produce a new refresh token")
-	assert.Equal(t, "new-project", refreshed.RefreshToken.Claims[ClaimProject])
+	assert.Equal(t, "new-project", refreshed.RefreshToken.Claims[projectKey])
 }
 
 // audienceClaim is exercised indirectly via TestGenerateToken_AudienceClaim, but

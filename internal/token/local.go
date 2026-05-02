@@ -27,6 +27,11 @@ type LocalTokenProvider struct {
 	signKey   any               // []byte (HS256) / *rsa.PrivateKey / *ecdsa.PrivateKey
 	verifyKey any               // []byte (HS256) / *rsa.PublicKey / *ecdsa.PublicKey
 	keyID     string            // "kid" header value (empty for HS256)
+	// stripList is the per-deployment list of claim keys generateJWT must
+	// strip from caller-supplied extraClaims before signing. Computed once
+	// at construction time from the configured private-claim prefix — see
+	// computeStripList for the contents and rationale.
+	stripList []string
 }
 
 // Option configures a LocalTokenProvider.
@@ -146,6 +151,17 @@ func NewLocalTokenProvider(cfg *config.Config, opts ...Option) (*LocalTokenProvi
 		)
 	}
 
+	// Mirror Load()'s default so ad-hoc test configs that build Config{}
+	// directly (without going through Load) get production-equivalent
+	// strip semantics. Without this fallback, an empty prefix would
+	// trigger the cross-prefix strip and delete legitimate "extra_*"
+	// extra-claims callers passed verbatim.
+	prefix := cfg.JWTPrivateClaimPrefix
+	if prefix == "" {
+		prefix = config.DefaultJWTPrivateClaimPrefix
+	}
+	p.stripList = computeStripList(prefix)
+
 	return p, nil
 }
 
@@ -202,13 +218,17 @@ func (p *LocalTokenProvider) generateJWT(
 	maps.Copy(claims, extraClaims)
 	// Drop claims AuthGate intentionally strips from access/refresh tokens
 	// because generateJWT does not set or preserve them for those token
-	// types: the registered JWT claim nbf (RFC 7519) and the OIDC ID-token
-	// claims azp/amr/acr/auth_time/nonce/at_hash. A caller that smuggles
-	// any of them past the parser would otherwise leak them into the signed
-	// token. project / service_account intentionally remain — they are
-	// AuthGate-internal client metadata legitimately set by the service
-	// layer via buildClientClaims.
-	for _, k := range []string{"nbf", "azp", "amr", "acr", "auth_time", "nonce", "at_hash"} {
+	// types: the registered JWT claim nbf (RFC 7519), the OIDC ID-token
+	// claims azp/amr/acr/auth_time/nonce/at_hash, and the bare logical
+	// names of the AuthGate-emitted private-claim registry. A caller that
+	// smuggles any of them past the parser would otherwise leak them into
+	// the signed token — bare logical names in particular would let a
+	// caller re-introduce the legacy `domain` / `project` / `service_account`
+	// keys an un-migrated downstream might still trust during the
+	// rolling-upgrade window. The server layer's prefixed private claims
+	// (e.g. extra_domain) survive because computeStripList intentionally
+	// excludes the configured <prefix>_<logical> keys from the strip set.
+	for _, k := range p.stripList {
 		delete(claims, k)
 	}
 	claims["user_id"] = userID

@@ -5,28 +5,103 @@ import (
 	"testing"
 )
 
-func TestIsReservedClaimKey(t *testing.T) {
-	reserved := []string{
+func TestBuildReservedClaimKeys_DefaultPrefix(t *testing.T) {
+	got := BuildReservedClaimKeys("extra")
+
+	// Static RFC/OIDC/AuthGate-internal keys must always be reserved.
+	staticKeys := []string{
 		"iss", "sub", "aud", "exp", "nbf", "iat", "jti",
 		"type", "scope", "user_id", "client_id",
 		"azp", "amr", "acr", "auth_time", "nonce", "at_hash",
-		ClaimProject, ClaimServiceAccount, ClaimDomain,
 	}
-	for _, k := range reserved {
-		if !IsReservedClaimKey(k) {
-			t.Errorf("expected %q to be reserved", k)
+	for _, k := range staticKeys {
+		if _, ok := got[k]; !ok {
+			t.Errorf("expected %q to be reserved (static key)", k)
 		}
 	}
 
-	allowed := []string{"tenant", "trace_id", "department", "role", "feature_flags"}
-	for _, k := range allowed {
-		if IsReservedClaimKey(k) {
-			t.Errorf("expected %q to NOT be reserved", k)
+	// Every PrivateClaim entry contributes <prefix>_<logical>.
+	for _, pc := range privateClaims {
+		composed := EmittedName("extra", pc.LogicalName)
+		if _, ok := got[composed]; !ok {
+			t.Errorf("expected %q (composed) to be reserved", composed)
+		}
+	}
+
+	// Every PrivateClaim entry's bare logical name MUST also be reserved so
+	// callers cannot smuggle a legacy claim name past the parser. Iterating
+	// the registry (rather than hardcoding domain/project/service_account)
+	// keeps the test in lockstep with future additions to privateClaims.
+	for _, pc := range privateClaims {
+		if _, ok := got[pc.LogicalName]; !ok {
+			t.Errorf("bare %q must be reserved (legacy-name impersonation guard)",
+				pc.LogicalName)
+		}
+	}
+
+	// Sanity: arbitrary non-reserved keys remain free.
+	for _, allowed := range []string{"tenant", "trace_id", "department", "role", "feature_flags"} {
+		if _, ok := got[allowed]; ok {
+			t.Errorf("expected %q to NOT be reserved", allowed)
 		}
 	}
 }
 
+func TestBuildReservedClaimKeys_CustomPrefix(t *testing.T) {
+	got := BuildReservedClaimKeys("acme")
+	for _, pc := range privateClaims {
+		want := "acme_" + pc.LogicalName
+		if _, ok := got[want]; !ok {
+			t.Errorf("expected %q to be reserved under custom prefix", want)
+		}
+	}
+	// Default-prefixed forms (extra_*) MUST also be reserved, regardless
+	// of the configured prefix. Without this, an un-migrated downstream
+	// consumer that hardcoded the default-prefixed keys would trust an
+	// attacker-controlled value smuggled via extra_claims on a deployment
+	// that has switched to a custom prefix.
+	for _, pc := range privateClaims {
+		defaulted := "extra_" + pc.LogicalName
+		if _, ok := got[defaulted]; !ok {
+			t.Errorf("%q must be reserved even when prefix=acme "+
+				"(cross-prefix impersonation guard)", defaulted)
+		}
+	}
+}
+
+func TestEmittedName(t *testing.T) {
+	cases := []struct {
+		prefix, logical, want string
+	}{
+		{"extra", "domain", "extra_domain"},
+		{"acme", "project", "acme_project"},
+		{"acme", "service_account", "acme_service_account"},
+		{"x", "domain", "x_domain"},
+	}
+	for _, c := range cases {
+		if got := EmittedName(c.prefix, c.logical); got != c.want {
+			t.Errorf("EmittedName(%q, %q) = %q, want %q",
+				c.prefix, c.logical, got, c.want)
+		}
+	}
+}
+
+// TestValidateExtraClaims_NilReservedMapRejected guards the footgun where
+// a future internal caller passes a nil reserved map: nil-map lookups
+// always return ok=false, which would silently disable reserved-key
+// enforcement. ValidateExtraClaims must reject nil up-front instead.
+func TestValidateExtraClaims_NilReservedMapRejected(t *testing.T) {
+	err := ValidateExtraClaims(map[string]any{"iss": "evil"}, nil)
+	if err == nil {
+		t.Fatal("expected error for nil reserved map, got nil")
+	}
+	if errors.Is(err, ErrReservedClaimKey) {
+		t.Errorf("expected nil-map-specific error, got ErrReservedClaimKey")
+	}
+}
+
 func TestValidateExtraClaims(t *testing.T) {
+	reserved := BuildReservedClaimKeys("extra")
 	tests := []struct {
 		name    string
 		input   map[string]any
@@ -50,13 +125,28 @@ func TestValidateExtraClaims(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "rejects project (system claim)",
-			input:   map[string]any{ClaimProject: "fake"},
+			name:    "rejects prefixed project",
+			input:   map[string]any{EmittedName("extra", "project"): "fake"},
 			wantErr: true,
 		},
 		{
-			name:    "rejects domain (server claim)",
-			input:   map[string]any{ClaimDomain: "evil"},
+			name:    "rejects prefixed domain",
+			input:   map[string]any{EmittedName("extra", "domain"): "evil"},
+			wantErr: true,
+		},
+		{
+			name:    "rejects bare project (legacy-name impersonation guard)",
+			input:   map[string]any{"project": "user-set"},
+			wantErr: true,
+		},
+		{
+			name:    "rejects bare domain (legacy-name impersonation guard)",
+			input:   map[string]any{"domain": "evil"},
+			wantErr: true,
+		},
+		{
+			name:    "rejects bare service_account (legacy-name impersonation guard)",
+			input:   map[string]any{"service_account": "evil"},
 			wantErr: true,
 		},
 		{
@@ -67,7 +157,7 @@ func TestValidateExtraClaims(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateExtraClaims(tt.input)
+			err := ValidateExtraClaims(tt.input, reserved)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error, got nil")

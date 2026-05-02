@@ -10,20 +10,51 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestDetectPrefixCollision_Synthetic genuinely exercises the collision
+// branch by passing a synthetic logical-name list directly to the helper.
+// Pure-function call: no package-level state is mutated, so the test is
+// safe under t.Parallel() and unaffected by other tests' Validate() calls.
+//
+// "time" is the synthetic addition: with prefix="auth", it composes to
+// "auth_time" — already in staticReservedClaimKeys. The registry as
+// shipped has no logical name that would collide for any plausible prefix,
+// so the branch is otherwise unreachable.
+func TestDetectPrefixCollision_Synthetic(t *testing.T) {
+	logicalNames := append([]string{}, jwtPrivateClaimLogicalNames...)
+	logicalNames = append(logicalNames, "time")
+	err := detectPrefixCollision("auth", logicalNames, staticReservedClaimKeys)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `"auth_time"`,
+		"error must name the colliding composed key")
+	assert.Contains(t, err.Error(), "JWT_PRIVATE_CLAIM_PREFIX")
+}
+
+// TestDetectPrefixCollision_NoCollision pins the negative case alongside
+// the positive one, so a future change to the helper that breaks the
+// "no collision" path is caught.
+func TestDetectPrefixCollision_NoCollision(t *testing.T) {
+	err := detectPrefixCollision(
+		"auth", jwtPrivateClaimLogicalNames, staticReservedClaimKeys,
+	)
+	assert.NoError(t, err,
+		"prefix=auth must not collide with the as-shipped logical names")
+}
+
 // validBaseConfig returns a Config that passes all Validate() checks.
 // Tests override specific fields to trigger the validation they want to test.
 func validBaseConfig() Config {
 	return Config{
-		JWTSecret:            "test-secret-that-is-at-least-32b",
-		JWTExpiration:        time.Hour,
-		RateLimitStore:       RateLimitStoreMemory,
-		MetricsCacheType:     CacheTypeMemory,
-		UserCacheType:        CacheTypeMemory,
-		UserCacheTTL:         5 * time.Minute,
-		ClientCountCacheType: CacheTypeMemory,
-		ClientCountCacheTTL:  time.Minute,
-		ClientCacheType:      CacheTypeMemory,
-		ClientCacheTTL:       5 * time.Minute,
+		JWTSecret:             "test-secret-that-is-at-least-32b",
+		JWTExpiration:         time.Hour,
+		RateLimitStore:        RateLimitStoreMemory,
+		MetricsCacheType:      CacheTypeMemory,
+		UserCacheType:         CacheTypeMemory,
+		UserCacheTTL:          5 * time.Minute,
+		ClientCountCacheType:  CacheTypeMemory,
+		ClientCountCacheTTL:   time.Minute,
+		ClientCacheType:       CacheTypeMemory,
+		ClientCacheTTL:        5 * time.Minute,
+		JWTPrivateClaimPrefix: DefaultJWTPrivateClaimPrefix,
 	}
 }
 
