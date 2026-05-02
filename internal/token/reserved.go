@@ -82,12 +82,20 @@ func BuildReservedClaimKeys(prefix string) map[string]struct{} {
 }
 
 // ValidateExtraClaims rejects empty keys and any key in the supplied reserved
-// set. Returns the first violation found; nil for an empty or nil map. The
-// reserved set must be supplied by the caller (typically built once via
-// BuildReservedClaimKeys at parser construction time). No additional
-// key-format validation (length, character set, namespacing) is performed —
-// callers that need stricter input rules must layer them on top.
+// set. Returns the first violation found; nil for an empty or nil claims map.
+// The reserved set must be supplied by the caller (typically built once via
+// BuildReservedClaimKeys at parser construction time) and must be non-nil —
+// a nil reserved map would silently disable reserved-key enforcement
+// because nil-map lookups always return ok=false. No additional key-format
+// validation (length, character set, namespacing) is performed — callers
+// that need stricter input rules must layer them on top.
 func ValidateExtraClaims(m map[string]any, reserved map[string]struct{}) error {
+	if reserved == nil {
+		return errors.New(
+			"ValidateExtraClaims: reserved set must be non-nil; " +
+				"use BuildReservedClaimKeys to construct it",
+		)
+	}
 	for k := range m {
 		if k == "" {
 			return fmt.Errorf("%w: empty key", ErrReservedClaimKey)

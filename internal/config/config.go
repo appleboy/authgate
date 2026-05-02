@@ -869,13 +869,19 @@ func (c *Config) Validate() error {
 // composed `<prefix>_<logical>` key collides with a static reserved claim key.
 // Trailing-underscore is rejected explicitly (not via the regex) so the error
 // message can name the cause.
+//
+// An empty prefix is treated as "use the default" — matching Load()
+// (which substitutes DefaultJWTPrivateClaimPrefix when the env var is unset
+// or empty) and the runtime layers (NewExtraClaimsParser /
+// NewLocalTokenProvider / NewTokenService all default empty → default).
+// Without this normalization, ad-hoc Config{} fixtures would surface an
+// empty-prefix error from Validate() while the rest of the codebase
+// silently substitutes the default — an inconsistency that produced
+// confusing test failures.
 func (c *Config) validateJWTPrivateClaimPrefix() error {
 	prefix := c.JWTPrivateClaimPrefix
 	if prefix == "" {
-		return errors.New(
-			"JWT_PRIVATE_CLAIM_PREFIX must not be empty " +
-				"(default \"extra\"; set explicitly to override)",
-		)
+		prefix = DefaultJWTPrivateClaimPrefix
 	}
 	if len(prefix) > jwtPrivateClaimPrefixMaxLen {
 		return fmt.Errorf(

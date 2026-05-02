@@ -86,6 +86,20 @@ func TestEmittedName(t *testing.T) {
 	}
 }
 
+// TestValidateExtraClaims_NilReservedMapRejected guards the footgun where
+// a future internal caller passes a nil reserved map: nil-map lookups
+// always return ok=false, which would silently disable reserved-key
+// enforcement. ValidateExtraClaims must reject nil up-front instead.
+func TestValidateExtraClaims_NilReservedMapRejected(t *testing.T) {
+	err := ValidateExtraClaims(map[string]any{"iss": "evil"}, nil)
+	if err == nil {
+		t.Fatal("expected error for nil reserved map, got nil")
+	}
+	if errors.Is(err, ErrReservedClaimKey) {
+		t.Errorf("expected nil-map-specific error, got ErrReservedClaimKey")
+	}
+}
+
 func TestValidateExtraClaims(t *testing.T) {
 	reserved := BuildReservedClaimKeys("extra")
 	tests := []struct {

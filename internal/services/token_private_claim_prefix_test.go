@@ -283,7 +283,14 @@ func TestJWTPrivateClaimPrefix_StartupValidation(t *testing.T) {
 		{name: "single x", prefix: "x", wantErr: false},
 		{name: "internal underscore co_v2", prefix: "co_v2", wantErr: false},
 
-		{name: "empty rejected", prefix: "", wantErr: true, errSub: "must not be empty"},
+		{
+			// Empty prefix is treated as "use the default" — matches Load()
+			// and the runtime layers; see validateJWTPrivateClaimPrefix for
+			// the consistency rationale.
+			name:    "empty normalized to default",
+			prefix:  "",
+			wantErr: false,
+		},
 		{
 			name:    "starts with digit",
 			prefix:  "1bad",
