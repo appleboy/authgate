@@ -99,7 +99,10 @@ JWT_EXPIRATION_JITTER=30m            # Max random jitter on access token expiry 
 # JWT_DOMAIN=oa                      # → "extra_domain": "oa" (default prefix)
 
 # JWT Private Claim Prefix — namespace token AuthGate prepends to every
-# server-attested private claim. With the default "extra" prefix, JWTs carry
+# AuthGate-emitted private claim. Of those, only `<prefix>_domain` is
+# server-attested (set from JWT_DOMAIN); `<prefix>_project` and
+# `<prefix>_service_account` are owner-set per-OAuth-client metadata.
+# With the default "extra" prefix, JWTs carry
 # "extra_domain", "extra_project", "extra_service_account". Setting
 # JWT_PRIVATE_CLAIM_PREFIX=acme would emit "acme_domain", "acme_project",
 # "acme_service_account".
@@ -524,7 +527,7 @@ curl -X POST https://authgate.example/oauth/token \
   --data-urlencode 'extra_claims={"tenant":"acme","trace_id":"abc-123","feature_flags":["beta"]}'
 ```
 
-The supplied JSON object is merged into the JWT alongside standard claims. Reserved keys are rejected with `invalid_request` at the parser. The reserved set covers (1) the static RFC/OIDC/AuthGate-internal keys (`iss`, `sub`, `exp`, `iat`, `jti`, `aud`, `nbf`, `type`, `scope`, `user_id`, `client_id`, `azp`, `amr`, `acr`, `auth_time`, `nonce`, `at_hash`), (2) the **prefixed** server-attested private claims composed from `JWT_PRIVATE_CLAIM_PREFIX` and the registry — by default `extra_domain`, `extra_project`, `extra_service_account`, and (3) the **bare** logical names from the registry (`domain`, `project`, `service_account`). Reserving the bare names enforces the hard cutover: without it, a caller could re-introduce the legacy pre-prefix keys an un-migrated downstream consumer might still trust. As a supplementary guard, `generateJWT` also overwrites the standard claims it manages (`iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `type`, `scope`, `user_id`, `client_id`) and drops the OIDC-only ID-token keys (`nbf`, `azp`, `amr`, `acr`, `auth_time`, `nonce`, `at_hash`) **and the bare logical names** that have no place in an access token — so a caller-supplied value for any of those cannot survive signing even if it bypasses the parser. System claims set on the OAuth client (`<prefix>_project`, `<prefix>_service_account`) override caller values on collision — admins always win.
+The supplied JSON object is merged into the JWT alongside standard claims. Reserved keys are rejected with `invalid_request` at the parser. The reserved set covers (1) the static RFC/OIDC/AuthGate-internal keys (`iss`, `sub`, `exp`, `iat`, `jti`, `aud`, `nbf`, `type`, `scope`, `user_id`, `client_id`, `azp`, `amr`, `acr`, `auth_time`, `nonce`, `at_hash`), (2) the **prefixed** AuthGate-emitted private claims composed from `JWT_PRIVATE_CLAIM_PREFIX` and the registry — by default `extra_domain`, `extra_project`, `extra_service_account`, and (3) the **bare** logical names from the registry (`domain`, `project`, `service_account`). Reserving the bare names enforces the hard cutover: without it, a caller could re-introduce the legacy pre-prefix keys an un-migrated downstream consumer might still trust. As a supplementary guard, `generateJWT` also overwrites the standard claims it manages (`iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `type`, `scope`, `user_id`, `client_id`) and drops the OIDC-only ID-token keys (`nbf`, `azp`, `amr`, `acr`, `auth_time`, `nonce`, `at_hash`) **and the bare logical names** that have no place in an access token — so a caller-supplied value for any of those cannot survive signing even if it bypasses the parser. System claims set on the OAuth client (`<prefix>_project`, `<prefix>_service_account`) override caller values on collision — admins always win.
 
 ### Configuration
 
@@ -545,15 +548,17 @@ The signature only proves AuthGate emitted these values, not that they are autho
 
 ---
 
-## Server-Attested Private Claim Prefix (Breaking Change)
+## AuthGate-Emitted Private Claim Prefix (Breaking Change)
 
-AuthGate emits three server-attested private claims on every issued JWT under a deployment-configurable namespace prefix:
+AuthGate emits three private claims on every issued JWT under a deployment-configurable namespace prefix. The trust level differs per claim:
 
-| Logical name      | Source                                | Default emitted key      |
-| ----------------- | ------------------------------------- | ------------------------ |
-| `domain`          | `JWT_DOMAIN` env var (server-set)     | `extra_domain`           |
-| `project`         | `OAuthApplication.Project` (admin)    | `extra_project`          |
-| `service_account` | `OAuthApplication.ServiceAccount`     | `extra_service_account`  |
+| Logical name      | Source                                | Trust level     | Default emitted key      |
+| ----------------- | ------------------------------------- | --------------- | ------------------------ |
+| `domain`          | `JWT_DOMAIN` env var                  | server-attested | `extra_domain`           |
+| `project`         | `OAuthApplication.Project`            | owner-set       | `extra_project`          |
+| `service_account` | `OAuthApplication.ServiceAccount`     | owner-set       | `extra_service_account`  |
+
+Only `<prefix>_domain` is sourced from deployment configuration and therefore carries server-attested trust. `<prefix>_project` and `<prefix>_service_account` come from the OAuthApplication row (admin- or client-owner-set) — a JWT signature only proves AuthGate emitted these values, not that the asserted ownership was independently verified. Downstream services should still apply their own policies on top.
 
 The composed key is `<JWT_PRIVATE_CLAIM_PREFIX>_<logical>`. AuthGate adds the separating underscore itself; setting `JWT_PRIVATE_CLAIM_PREFIX=acme` produces `acme_domain` / `acme_project` / `acme_service_account`.
 
@@ -561,7 +566,7 @@ The composed key is `<JWT_PRIVATE_CLAIM_PREFIX>_<logical>`. AuthGate adds the se
 
 | Variable                    | Default | Purpose                                                                                  |
 | --------------------------- | ------- | ---------------------------------------------------------------------------------------- |
-| `JWT_PRIVATE_CLAIM_PREFIX`  | `extra` | Namespace prefix for server-attested private claims. Validated at startup.               |
+| `JWT_PRIVATE_CLAIM_PREFIX`  | `extra` | Namespace prefix for AuthGate-emitted private claims. Validated at startup.              |
 
 ### Validation rules (startup)
 

@@ -68,8 +68,9 @@ func computeStripList(configuredPrefix string) []string {
 // Build once at parser construction time and reuse — the result is intended
 // to be passed into ValidateExtraClaims rather than recomputed per request.
 func BuildReservedClaimKeys(prefix string) map[string]struct{} {
-	out := make(map[string]struct{}, len(config.StaticReservedClaimKeys)+3*len(privateClaims))
-	for _, k := range config.StaticReservedClaimKeys {
+	staticKeys := config.StaticReservedClaimKeys()
+	out := make(map[string]struct{}, len(staticKeys)+3*len(privateClaims))
+	for _, k := range staticKeys {
 		out[k] = struct{}{}
 	}
 	for _, pc := range privateClaims {

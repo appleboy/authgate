@@ -220,7 +220,7 @@ func (p *LocalTokenProvider) generateJWT(
 	// because generateJWT does not set or preserve them for those token
 	// types: the registered JWT claim nbf (RFC 7519), the OIDC ID-token
 	// claims azp/amr/acr/auth_time/nonce/at_hash, and the bare logical
-	// names of the server-attested private-claim registry. A caller that
+	// names of the AuthGate-emitted private-claim registry. A caller that
 	// smuggles any of them past the parser would otherwise leak them into
 	// the signed token — bare logical names in particular would let a
 	// caller re-introduce the legacy `domain` / `project` / `service_account`

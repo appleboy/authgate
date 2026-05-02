@@ -41,7 +41,7 @@ const (
 )
 
 // DefaultJWTPrivateClaimPrefix is the namespace token AuthGate prepends to
-// every server-attested private JWT claim when JWT_PRIVATE_CLAIM_PREFIX is
+// every AuthGate-emitted private JWT claim when JWT_PRIVATE_CLAIM_PREFIX is
 // unset. Composed keys: extra_domain, extra_project, extra_service_account.
 const DefaultJWTPrivateClaimPrefix = "extra"
 
@@ -57,7 +57,7 @@ var jwtPrivateClaimPrefixPattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]*$`)
 // limits (e.g. extra_service_account is 21 chars, acme_service_account is 20).
 const jwtPrivateClaimPrefixMaxLen = 15
 
-// StaticReservedClaimKeys is the canonical static set of claim keys
+// staticReservedClaimKeys is the canonical static set of claim keys
 // (RFC 7519 §4.1 registered claims, OIDC Core 1.0 §2 ID-token claims, and
 // AuthGate-internal claims set unconditionally by token.generateJWT) that
 // callers must never set via extra_claims and that the configured
@@ -68,14 +68,27 @@ const jwtPrivateClaimPrefixMaxLen = 15
 // reuse it for runtime reserved-key derivation rather than maintaining a
 // drift-prone parallel list.
 //
-// Treat as read-only at runtime.
-var StaticReservedClaimKeys = []string{
+// Unexported so other packages cannot accidentally append/mutate the slice
+// at runtime — that would silently change reserved-claim enforcement and
+// the prefix collision validation. External callers must go through
+// StaticReservedClaimKeys() which returns a defensive copy.
+var staticReservedClaimKeys = []string{
 	// RFC 7519 §4.1
 	"iss", "sub", "aud", "exp", "nbf", "iat", "jti",
 	// AuthGate-internal claims set unconditionally by generateJWT
 	"type", "scope", "user_id", "client_id",
 	// OIDC Core 1.0 §2 (ID token)
 	"azp", "amr", "acr", "auth_time", "nonce", "at_hash",
+}
+
+// StaticReservedClaimKeys returns a defensive copy of the canonical static
+// reserved-claim list (see staticReservedClaimKeys). The underlying slice
+// is intentionally unexported to prevent cross-package mutation; callers
+// that need to iterate must use this accessor.
+func StaticReservedClaimKeys() []string {
+	out := make([]string, len(staticReservedClaimKeys))
+	copy(out, staticReservedClaimKeys)
+	return out
 }
 
 // jwtPrivateClaimLogicalNames mirrors the logical names of the registry in
@@ -117,7 +130,7 @@ type Config struct {
 	JWTAudience         []string      // "aud" claim values for issued access/refresh tokens (comma-separated env). Single entry → string, multiple → array. Empty → claim omitted.
 	JWTDomain           string        // Server-attested "domain" claim emitted on every issued JWT. Empty → claim omitted (default). Validated at startup via util.IsValidProjectIdentifier.
 	// JWTPrivateClaimPrefix is the namespace token AuthGate prepends (with an
-	// underscore separator AuthGate adds itself) to every server-attested
+	// underscore separator AuthGate adds itself) to every AuthGate-emitted
 	// private JWT claim. With the default "extra", JWTs carry "extra_domain",
 	// "extra_project", "extra_service_account". Validated at startup: must
 	// match ^[a-zA-Z][a-zA-Z0-9_]*$, 1–15 chars, no trailing underscore, and
@@ -884,8 +897,8 @@ func (c *Config) validateJWTPrivateClaimPrefix() error {
 		)
 	}
 
-	reserved := make(map[string]struct{}, len(StaticReservedClaimKeys))
-	for _, k := range StaticReservedClaimKeys {
+	reserved := make(map[string]struct{}, len(staticReservedClaimKeys))
+	for _, k := range staticReservedClaimKeys {
 		reserved[k] = struct{}{}
 	}
 	for _, logical := range jwtPrivateClaimLogicalNames {

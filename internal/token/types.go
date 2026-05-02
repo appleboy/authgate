@@ -13,17 +13,21 @@ const (
 	TokenCategoryRefresh = "refresh"
 )
 
-// PrivateClaim describes a server-attested private JWT claim emitted by
-// AuthGate under the configurable prefix (JWT_PRIVATE_CLAIM_PREFIX). The
-// emitted key is composed at runtime via EmittedName(prefix, LogicalName).
+// PrivateClaim describes an AuthGate-emitted private JWT claim issued under
+// the configurable prefix (JWT_PRIVATE_CLAIM_PREFIX). The emitted key is
+// composed at runtime via EmittedName(prefix, LogicalName).
 //
-// These claims are AuthGate-internal: their values come either from the
-// OAuthApplication row (project, service_account) or from the AuthGate process
-// configuration (domain). A signed JWT only proves AuthGate emitted these
-// values, not that the named project / service account is actually owned by
-// the token holder. Downstream gateways that route or authorize on these
-// claims must verify the JWT signature AND apply their own access policies —
-// never treat these values as authoritative proof of identity. See
+// Trust levels differ across the registry:
+//   - `domain` is **server-attested**: sourced from the AuthGate process's
+//     JWT_DOMAIN configuration; cannot be set per-client or by a caller.
+//   - `project` and `service_account` are **owner-set**: sourced from the
+//     OAuthApplication row (admin or client owner). A signed JWT only
+//     proves AuthGate emitted these values, not that the asserted project /
+//     service-account ownership has been independently verified.
+//
+// Downstream gateways that route or authorize on these claims must verify
+// the JWT signature AND apply their own access policies — never treat
+// owner-set values as authoritative proof of identity. See
 // docs/JWT_VERIFICATION.md for the full trust model.
 type PrivateClaim struct {
 	// LogicalName is the stable identifier used internally and inside
@@ -33,7 +37,8 @@ type PrivateClaim struct {
 	LogicalName string
 }
 
-// privateClaims is the canonical registry of server-attested private claims
+// privateClaims is the canonical registry of AuthGate-emitted private claims
+// (some server-attested, some owner-set — see PrivateClaim's doc) that
 // AuthGate may emit on issued JWTs. The list order is significant only for
 // deterministic iteration (tests, validation messages); emission and lookup
 // are key-based. Adding a new claim here requires:
@@ -55,7 +60,7 @@ var privateClaims = []PrivateClaim{
 	{LogicalName: "service_account"},
 }
 
-// PrivateClaimRegistry returns a defensive copy of the server-attested
+// PrivateClaimRegistry returns a defensive copy of the AuthGate-emitted
 // private-claim registry. Callers that need to iterate the registry from
 // outside this package (tests, downstream tooling) must use this accessor;
 // the underlying slice is intentionally unexported to prevent cross-package
