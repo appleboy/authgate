@@ -139,15 +139,18 @@ type Config struct {
 	JWTKeyID            string        // "kid" header for JWKS key rotation (auto-generated if empty)
 	JWTExpirationJitter time.Duration // Max random jitter added to access token expiry (default: 30m)
 	JWTAudience         []string      // "aud" claim values for issued access/refresh tokens (comma-separated env). Single entry → string, multiple → array. Empty → claim omitted.
-	JWTDomain           string        // Server-attested "domain" claim emitted on every issued JWT. Empty → claim omitted (default). Validated at startup via util.IsValidProjectIdentifier.
+	JWTDomain           string        // Server-attested domain value emitted as "<prefix>_domain" (default: "extra_domain") on every issued JWT. Empty → claim omitted (default). Validated at startup via util.IsValidProjectIdentifier.
 	// JWTPrivateClaimPrefix is the namespace token AuthGate prepends (with an
 	// underscore separator AuthGate adds itself) to every AuthGate-emitted
 	// private JWT claim. With the default "extra", JWTs carry "extra_domain",
-	// "extra_project", "extra_service_account". Empty is normalized to the
-	// default ("extra") at validation time. Validated at startup: must match
-	// ^[a-zA-Z][a-zA-Z0-9_]*$, 1–15 chars, no trailing underscore, and none
-	// of the composed "<prefix>_<logical>" keys may collide with any
-	// RFC 7519 / OIDC / AuthGate-internal claim key.
+	// "extra_project", "extra_service_account". An empty value is treated as
+	// "use the default" — Validate() checks it against the default without
+	// mutating this field; runtime callers (NewLocalTokenProvider,
+	// NewExtraClaimsParser, TokenService) each normalize empty → default
+	// locally. Validated at startup: must match ^[a-zA-Z][a-zA-Z0-9_]*$,
+	// 1–15 chars, no trailing underscore, and none of the composed
+	// "<prefix>_<logical>" keys may collide with any RFC 7519 / OIDC /
+	// AuthGate-internal claim key.
 	JWTPrivateClaimPrefix string
 
 	// Session settings
