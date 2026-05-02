@@ -55,11 +55,16 @@ func TestBuildReservedClaimKeys_CustomPrefix(t *testing.T) {
 			t.Errorf("expected %q to be reserved under custom prefix", want)
 		}
 	}
-	// extra_* are NOT reserved under the acme deployment.
+	// Default-prefixed forms (extra_*) MUST also be reserved, regardless
+	// of the configured prefix. Without this, an un-migrated downstream
+	// consumer that hardcoded the default-prefixed keys would trust an
+	// attacker-controlled value smuggled via extra_claims on a deployment
+	// that has switched to a custom prefix.
 	for _, pc := range privateClaims {
-		stale := "extra_" + pc.LogicalName
-		if _, ok := got[stale]; ok {
-			t.Errorf("%q must NOT be reserved when prefix=acme", stale)
+		defaulted := "extra_" + pc.LogicalName
+		if _, ok := got[defaulted]; !ok {
+			t.Errorf("%q must be reserved even when prefix=acme "+
+				"(cross-prefix impersonation guard)", defaulted)
 		}
 	}
 }

@@ -173,6 +173,46 @@ func TestPrivateClaimPrefix_CallerCannotInjectBareLegacyName(t *testing.T) {
 	}
 }
 
+// TestPrivateClaimPrefix_CallerCannotInjectDefaultPrefixOnCustomDeployment is
+// the regression guard for the cross-prefix impersonation vector: a deployment
+// running with a non-default prefix (e.g. acme) must still reject and strip
+// the default-prefixed forms (extra_domain / extra_project /
+// extra_service_account). Without this defense, an un-migrated downstream
+// consumer that hardcoded the default-prefixed keys would trust an
+// attacker-controlled value smuggled via extra_claims.
+func TestPrivateClaimPrefix_CallerCannotInjectDefaultPrefixOnCustomDeployment(t *testing.T) {
+	cfg := privateClaimPrefixConfig("acme")
+
+	// Defense layer 1: parser rejects extra_* under custom-prefix deployment.
+	parser := NewExtraClaimsParser(cfg)
+	for _, k := range []string{"extra_domain", "extra_project", "extra_service_account"} {
+		_, err := parser.Parse(`{"` + k + `":"evil"}`)
+		require.Error(t, err, "parser must reject %q under custom prefix", k)
+		require.ErrorIs(t, err, token.ErrReservedClaimKey)
+	}
+
+	// Defense layer 2: bypassing the parser, generateJWT must still strip
+	// extra_* so they cannot land in the signed token.
+	provider, err := token.NewLocalTokenProvider(cfg)
+	require.NoError(t, err)
+	smuggled := map[string]any{
+		"extra_domain":          "evil-default-domain",
+		"extra_project":         "evil-default-project",
+		"extra_service_account": "evil-default-sa",
+	}
+	result, err := provider.GenerateToken(
+		context.Background(), "u", "c", "read", 0, smuggled,
+	)
+	require.NoError(t, err)
+	for k := range smuggled {
+		_, present := result.Claims[k]
+		assert.False(t, present,
+			"default-prefixed %q must NOT appear in JWT issued by custom-prefix deployment",
+			k,
+		)
+	}
+}
+
 // TestPrivateClaimPrefix_RefreshContinuity verifies refreshing a token
 // re-emits the prefixed claims correctly. Mirrors the refresh-coverage case
 // in token_domain_test.go but exercises both project and service_account

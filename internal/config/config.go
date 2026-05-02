@@ -57,12 +57,19 @@ var jwtPrivateClaimPrefixPattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]*$`)
 // limits (e.g. extra_service_account is 21 chars, acme_service_account is 20).
 const jwtPrivateClaimPrefixMaxLen = 15
 
-// jwtPrivateClaimStaticReservedKeys is the static set of claim keys (RFC 7519,
-// OIDC Core 1.0, AuthGate-internal) that the configured prefix's composed
-// keys must not collide with. Mirrors the static portion of
-// internal/token/reserved.go — keep the two lists in sync. Used only for
-// startup validation.
-var jwtPrivateClaimStaticReservedKeys = []string{
+// StaticReservedClaimKeys is the canonical static set of claim keys
+// (RFC 7519 §4.1 registered claims, OIDC Core 1.0 §2 ID-token claims, and
+// AuthGate-internal claims set unconditionally by token.generateJWT) that
+// callers must never set via extra_claims and that the configured
+// JWT_PRIVATE_CLAIM_PREFIX's composed keys must not collide with.
+//
+// Owned here (in the leaf-most package between config and token: config
+// is imported by token, not the other way around) so internal/token can
+// reuse it for runtime reserved-key derivation rather than maintaining a
+// drift-prone parallel list.
+//
+// Treat as read-only at runtime.
+var StaticReservedClaimKeys = []string{
 	// RFC 7519 §4.1
 	"iss", "sub", "aud", "exp", "nbf", "iat", "jti",
 	// AuthGate-internal claims set unconditionally by generateJWT
@@ -877,8 +884,8 @@ func (c *Config) validateJWTPrivateClaimPrefix() error {
 		)
 	}
 
-	reserved := make(map[string]struct{}, len(jwtPrivateClaimStaticReservedKeys))
-	for _, k := range jwtPrivateClaimStaticReservedKeys {
+	reserved := make(map[string]struct{}, len(StaticReservedClaimKeys))
+	for _, k := range StaticReservedClaimKeys {
 		reserved[k] = struct{}{}
 	}
 	for _, logical := range jwtPrivateClaimLogicalNames {

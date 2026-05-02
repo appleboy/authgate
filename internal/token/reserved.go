@@ -3,6 +3,8 @@ package token
 import (
 	"errors"
 	"fmt"
+
+	"github.com/go-authgate/authgate/internal/config"
 )
 
 // ErrReservedClaimKey is returned when caller-supplied extra claims attempt
@@ -10,83 +12,70 @@ import (
 // and callers must not provide them via extra_claims.
 var ErrReservedClaimKey = errors.New("reserved claim key")
 
-// generateJWTStripList enumerates claim keys that generateJWT must always
-// strip from access/refresh tokens, regardless of the deployment prefix:
+// oidcStripKeys are RFC 7519 / OIDC ID-token claims that AuthGate never sets
+// or preserves on access/refresh tokens — generateJWT strips them from
+// extraClaims unconditionally to prevent caller smuggling.
+var oidcStripKeys = []string{"nbf", "azp", "amr", "acr", "auth_time", "nonce", "at_hash"}
+
+// computeStripList builds the per-token-provider list of claim keys that
+// generateJWT must strip from extraClaims before signing. It includes:
 //
-//   - nbf, azp, amr, acr, auth_time, nonce, at_hash — RFC 7519 / OIDC
-//     ID-token claims AuthGate does not set or preserve on access tokens.
-//   - the bare logical names from the private-claim registry — the
-//     legacy pre-prefix keys. Stripping them ensures that even if a caller
-//     bypasses the parser's reserved-key check, a smuggled `domain` /
-//     `project` / `service_account` cannot land in the signed JWT and
-//     mislead an un-migrated downstream consumer.
+//   - oidcStripKeys (RFC/OIDC ID-token keys that have no place in access tokens),
+//   - the bare logical names from the private-claim registry (legacy
+//     pre-prefix keys: domain / project / service_account),
+//   - the default-prefixed forms (extra_domain / extra_project /
+//     extra_service_account) WHEN the configured prefix is NOT the default.
+//     This blocks an attacker from re-introducing "extra_*" claims on a
+//     deployment that has migrated away from the default prefix, where an
+//     un-migrated downstream consumer might still hardcode the default.
+//     When the configured prefix IS the default, those keys are the
+//     legitimate server emission and must NOT be stripped.
 //
-// Precomputed once at package init so the hot path (every issued token)
-// just walks a fixed slice instead of allocating one per call.
-var generateJWTStripList = func() []string {
-	out := []string{"nbf", "azp", "amr", "acr", "auth_time", "nonce", "at_hash"}
+// Computed once at provider construction so the hot path (every issued
+// token) walks a fixed slice without per-call allocation.
+func computeStripList(configuredPrefix string) []string {
+	out := make([]string, 0, len(oidcStripKeys)+2*len(privateClaims))
+	out = append(out, oidcStripKeys...)
 	for _, pc := range privateClaims {
 		out = append(out, pc.LogicalName)
 	}
+	if configuredPrefix != config.DefaultJWTPrivateClaimPrefix {
+		for _, pc := range privateClaims {
+			out = append(out, EmittedName(config.DefaultJWTPrivateClaimPrefix, pc.LogicalName))
+		}
+	}
 	return out
-}()
-
-// staticReservedClaimKeys lists the JWT/OIDC standard claim keys plus the
-// AuthGate-internal claims that are reserved on every deployment regardless of
-// the configured private-claim prefix. Server-attested private claims
-// (composed from privateClaims + the runtime prefix) are merged on top by
-// BuildReservedClaimKeys.
-//
-// Defence layering:
-//  1. Primary — ParseExtraClaims/ValidateExtraClaims reject these keys at the
-//     handler edge before the request reaches the token provider.
-//  2. Supplementary — generateJWT explicitly overwrites the standard claims it
-//     manages (iss/sub/aud/exp/iat/jti/type/scope/user_id/client_id), and
-//     drops claims that have no place in an access token: the registered JWT
-//     claim nbf and the OIDC ID-token claims (azp/amr/acr/auth_time/nonce/
-//     at_hash). This is not a universal override of every entry in this list
-//     — server-attested private claims (e.g. extra_domain, extra_project,
-//     extra_service_account under the default prefix) are intentionally left
-//     alone so the service layer can set them via buildClientClaims /
-//     buildServerClaims.
-//
-// Any change to this list MUST be mirrored in
-// config.jwtPrivateClaimStaticReservedKeys so the prefix collision check
-// stays accurate.
-var staticReservedClaimKeys = []string{
-	// RFC 7519 §4.1 registered claim names
-	"iss", "sub", "aud", "exp", "nbf", "iat", "jti",
-
-	// AuthGate-internal claims set unconditionally by generateJWT
-	"type", "scope", "user_id", "client_id",
-
-	// OIDC ID token standard claims (OIDC Core 1.0 §2)
-	"azp", "amr", "acr", "auth_time", "nonce", "at_hash",
 }
 
 // BuildReservedClaimKeys returns the set of JWT claim keys that callers must
 // not supply via extra_claims for a deployment configured with the given
-// private-claim prefix. It includes the static RFC/OIDC/AuthGate-internal
-// keys, the composed `<prefix>_<logical>` key for every entry in
-// privateClaims, AND the bare logical name itself.
+// private-claim prefix. It includes:
 //
-// Reserving the bare logical names is what enforces the hard cutover: without
-// it, a caller could submit extra_claims={"domain":"evil"} and the bare
-// `domain` claim would survive into the signed JWT (generateJWT only strips
-// nbf/azp/amr/acr/auth_time/nonce/at_hash). An un-migrated downstream
-// consumer still reading claims["domain"] would then trust an
-// attacker-controlled value during the rolling-upgrade window.
+//   - the static RFC/OIDC/AuthGate-internal keys (canonical list owned by
+//     internal/config to avoid drift between this package's runtime check
+//     and config's startup collision check),
+//   - the bare logical names from privateClaims (legacy-name impersonation
+//     guard — without it, callers could submit extra_claims={"domain":"evil"}
+//     and the bare claim would survive into the signed JWT),
+//   - the composed `<prefix>_<logical>` key for every entry in privateClaims,
+//   - the default-prefixed forms (extra_<logical>) ALWAYS, regardless of the
+//     configured prefix. Reserving the default forms universally blocks an
+//     impersonation vector during prefix transitions: a deployment running
+//     JWT_PRIVATE_CLAIM_PREFIX=acme would otherwise accept caller-supplied
+//     "extra_domain" and let it land in the signed JWT, fooling any
+//     un-migrated downstream consumer that still reads the default key.
 //
 // Build once at parser construction time and reuse — the result is intended
 // to be passed into ValidateExtraClaims rather than recomputed per request.
 func BuildReservedClaimKeys(prefix string) map[string]struct{} {
-	out := make(map[string]struct{}, len(staticReservedClaimKeys)+2*len(privateClaims))
-	for _, k := range staticReservedClaimKeys {
+	out := make(map[string]struct{}, len(config.StaticReservedClaimKeys)+3*len(privateClaims))
+	for _, k := range config.StaticReservedClaimKeys {
 		out[k] = struct{}{}
 	}
 	for _, pc := range privateClaims {
 		out[pc.LogicalName] = struct{}{}
 		out[EmittedName(prefix, pc.LogicalName)] = struct{}{}
+		out[EmittedName(config.DefaultJWTPrivateClaimPrefix, pc.LogicalName)] = struct{}{}
 	}
 	return out
 }

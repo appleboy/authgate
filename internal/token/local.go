@@ -27,6 +27,11 @@ type LocalTokenProvider struct {
 	signKey   any               // []byte (HS256) / *rsa.PrivateKey / *ecdsa.PrivateKey
 	verifyKey any               // []byte (HS256) / *rsa.PublicKey / *ecdsa.PublicKey
 	keyID     string            // "kid" header value (empty for HS256)
+	// stripList is the per-deployment list of claim keys generateJWT must
+	// strip from caller-supplied extraClaims before signing. Computed once
+	// at construction time from the configured private-claim prefix — see
+	// computeStripList for the contents and rationale.
+	stripList []string
 }
 
 // Option configures a LocalTokenProvider.
@@ -146,6 +151,17 @@ func NewLocalTokenProvider(cfg *config.Config, opts ...Option) (*LocalTokenProvi
 		)
 	}
 
+	// Mirror Load()'s default so ad-hoc test configs that build Config{}
+	// directly (without going through Load) get production-equivalent
+	// strip semantics. Without this fallback, an empty prefix would
+	// trigger the cross-prefix strip and delete legitimate "extra_*"
+	// extra-claims callers passed verbatim.
+	prefix := cfg.JWTPrivateClaimPrefix
+	if prefix == "" {
+		prefix = config.DefaultJWTPrivateClaimPrefix
+	}
+	p.stripList = computeStripList(prefix)
+
 	return p, nil
 }
 
@@ -212,7 +228,7 @@ func (p *LocalTokenProvider) generateJWT(
 	// rolling-upgrade window. The server layer emits these claims under the
 	// configured prefix via buildClientClaims / buildServerClaims, and those
 	// prefixed keys are written after this strip step so they survive.
-	for _, k := range generateJWTStripList {
+	for _, k := range p.stripList {
 		delete(claims, k)
 	}
 	claims["user_id"] = userID
