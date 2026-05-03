@@ -26,10 +26,12 @@ func MachineUserID(clientID string) string {
 	return MachineUserIDPrefix + clientID
 }
 
-// IsMachineUserID reports whether userID is the synthetic identity issued by
-// the client_credentials grant. A real User.Username cannot start with
-// MachineUserIDPrefix because `:` is not a permitted username character;
-// callers may rely on this discriminator without an additional store lookup.
+// IsMachineUserID reports whether userID — the value stored in
+// AccessToken.UserID and propagated as the JWT `sub` claim — is the synthetic
+// identity issued by the client_credentials grant. AuthGate's real User.ID
+// is a UUID (see uses of uuid.New().String() in store seeding and
+// UpsertExternalUser) and never contains `:`, so the prefix is an unambiguous
+// discriminator and callers can rely on it without a store lookup.
 func IsMachineUserID(userID string) bool {
 	return strings.HasPrefix(userID, MachineUserIDPrefix)
 }
