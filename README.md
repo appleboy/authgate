@@ -347,32 +347,32 @@ sequenceDiagram
 
 **Key Endpoints:**
 
-| Endpoint                                  | Method   | Purpose                                                                                                                |
-| ----------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `/.well-known/openid-configuration`       | GET      | OIDC Discovery metadata                                                                                                |
-| `/.well-known/oauth-authorization-server` | GET      | OAuth 2.0 AS Metadata ([RFC 8414][rfc8414]) — required by MCP / RFC 8414-aware clients                                 |
-| `/.well-known/jwks.json`                  | GET      | JWKS public keys for RS256/ES256 verification (RFC 7517)                                                               |
-| `/oauth/device/code`                      | POST     | Request device code (CLI). Accepts optional repeatable `resource` ([RFC 8707][rfc8707])                                |
-| `/oauth/authorize`                        | GET      | Authorization consent page (web apps). Accepts optional repeatable `resource`                                          |
-| `/oauth/authorize`                        | POST     | Submit consent decision                                                                                                |
+| Endpoint                                  | Method   | Purpose                                                                                                                                                                    |
+| ----------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/.well-known/openid-configuration`       | GET      | OIDC Discovery metadata                                                                                                                                                    |
+| `/.well-known/oauth-authorization-server` | GET      | OAuth 2.0 AS Metadata ([RFC 8414][rfc8414]) — required by MCP / RFC 8414-aware clients                                                                                     |
+| `/.well-known/jwks.json`                  | GET      | JWKS public keys for RS256/ES256 verification (RFC 7517)                                                                                                                   |
+| `/oauth/device/code`                      | POST     | Request device code (CLI). Accepts optional repeatable `resource` ([RFC 8707][rfc8707])                                                                                    |
+| `/oauth/authorize`                        | GET      | Authorization consent page (web apps). Accepts optional repeatable `resource`                                                                                              |
+| `/oauth/authorize`                        | POST     | Submit consent decision                                                                                                                                                    |
 | `/oauth/token`                            | POST     | Token endpoint: `device_code`, `authorization_code`, `refresh_token`, `client_credentials`. Accepts optional `resource` (subset of the granted audience per RFC 8707 §2.2) |
-| `/oauth/tokeninfo`                        | GET      | Verify token validity                                                                                                  |
-| `/oauth/userinfo`                         | GET/POST | OIDC UserInfo — profile claims for token owner                                                                         |
-| `/oauth/revoke`                           | POST     | Revoke tokens ([RFC 7009][rfc7009])                                                                                    |
-| `/oauth/register`                         | POST     | Dynamic client registration ([RFC 7591][rfc7591])                                                                      |
-| `/oauth/introspect`                       | POST     | Token introspection ([RFC 7662][rfc7662])                                                                              |
-| `/device`                                 | GET      | Device code entry page (browser)                                                                                       |
-| `/account/sessions`                       | GET      | Manage active token sessions                                                                                           |
-| `/account/authorizations`                 | GET      | Manage per-app consent grants                                                                                          |
-| `/admin/clients/:id/authorizations`       | GET      | Admin: view all authorized users for a client                                                                          |
-| `/admin/clients/:id/revoke-all`           | POST     | Admin: force re-auth for all users                                                                                     |
-| `/admin/users`                            | GET/POST | Admin: list / create users                                                                                             |
-| `/admin/users/:id/disable`                | POST     | Admin: disable user (revokes all tokens, blocks login)                                                                 |
-| `/admin/users/:id/enable`                 | POST     | Admin: re-enable a disabled user                                                                                       |
-| `/admin/users/:id/connections`            | GET      | Admin: list a user's third-party OAuth connections                                                                     |
-| `/admin/users/:id/authorizations`         | GET      | Admin: list apps a user has authorized                                                                                 |
-| `/health`                                 | GET      | Health check                                                                                                           |
-| `/metrics`                                | GET      | Prometheus metrics (optional auth)                                                                                     |
+| `/oauth/tokeninfo`                        | GET      | Verify token validity                                                                                                                                                      |
+| `/oauth/userinfo`                         | GET/POST | OIDC UserInfo — profile claims for token owner                                                                                                                             |
+| `/oauth/revoke`                           | POST     | Revoke tokens ([RFC 7009][rfc7009])                                                                                                                                        |
+| `/oauth/register`                         | POST     | Dynamic client registration ([RFC 7591][rfc7591])                                                                                                                          |
+| `/oauth/introspect`                       | POST     | Token introspection ([RFC 7662][rfc7662])                                                                                                                                  |
+| `/device`                                 | GET      | Device code entry page (browser)                                                                                                                                           |
+| `/account/sessions`                       | GET      | Manage active token sessions                                                                                                                                               |
+| `/account/authorizations`                 | GET      | Manage per-app consent grants                                                                                                                                              |
+| `/admin/clients/:id/authorizations`       | GET      | Admin: view all authorized users for a client                                                                                                                              |
+| `/admin/clients/:id/revoke-all`           | POST     | Admin: force re-auth for all users                                                                                                                                         |
+| `/admin/users`                            | GET/POST | Admin: list / create users                                                                                                                                                 |
+| `/admin/users/:id/disable`                | POST     | Admin: disable user (revokes all tokens, blocks login)                                                                                                                     |
+| `/admin/users/:id/enable`                 | POST     | Admin: re-enable a disabled user                                                                                                                                           |
+| `/admin/users/:id/connections`            | GET      | Admin: list a user's third-party OAuth connections                                                                                                                         |
+| `/admin/users/:id/authorizations`         | GET      | Admin: list apps a user has authorized                                                                                                                                     |
+| `/health`                                 | GET      | Health check                                                                                                                                                               |
+| `/metrics`                                | GET      | Prometheus metrics (optional auth)                                                                                                                                         |
 
 **[Full API Reference →](docs/ARCHITECTURE.md#key-endpoints)** | **[Metrics Documentation →](docs/METRICS.md)**
 
