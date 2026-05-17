@@ -122,10 +122,11 @@ Content-Type: application/x-www-form-urlencoded
 
 **Parameters:**
 
-| Parameter   | Required | Description                                                     |
-| ----------- | -------- | --------------------------------------------------------------- |
-| `client_id` | Yes      | Your OAuth client ID (UUID)                                     |
-| `scope`     | No       | Space-separated scopes. Defaults to `email profile` if omitted. |
+| Parameter   | Required | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `client_id` | Yes      | Your OAuth client ID (UUID)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `scope`     | No       | Space-separated scopes. Defaults to `email profile` if omitted.                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `resource`  | No       | [RFC 8707][rfc8707] Resource Indicator(s). Repeat for multiple resources. Each value must be an absolute `http`/`https` URL with a non-empty host and no fragment, ≤ 1024 chars, max 10 per request. When supplied, the device code is bound to these resources — at `/device/verify` the user sees an explicit confirmation page listing the resources before authorization commits, and the CLI's eventual `/oauth/token` exchange may only request a **subset** of these resources (RFC 8707 §2.2).      |
 
 **Example:**
 
@@ -134,6 +135,20 @@ curl -s -X POST https://auth.example.com/oauth/device/code \
   -d client_id=550e8400-e29b-41d4-a716-446655440000 \
   -d scope="email profile"
 ```
+
+**Example with Resource Indicators (MCP / multi-RS):**
+
+```bash
+curl -s -X POST https://auth.example.com/oauth/device/code \
+  -d client_id=550e8400-e29b-41d4-a716-446655440000 \
+  -d scope="read" \
+  -d resource=https://api.example.com \
+  -d resource=https://mcp.example.com
+```
+
+The user will see a dedicated confirmation page at `/device/verify` listing **both** resources, and must click "Confirm and Authorize" before the device code is marked authorized. This guarantees the audience binding is user-attested, not just client-asserted. Non-resource-bound device codes skip this step and authorize on the first POST.
+
+[rfc8707]: https://datatracker.ietf.org/doc/html/rfc8707
 
 **Success Response (200 OK):**
 
@@ -186,11 +201,12 @@ Content-Type: application/x-www-form-urlencoded
 
 **Parameters:**
 
-| Parameter     | Required | Description                                    |
-| ------------- | -------- | ---------------------------------------------- |
-| `grant_type`  | Yes      | `urn:ietf:params:oauth:grant-type:device_code` |
-| `device_code` | Yes      | The `device_code` from step 1                  |
-| `client_id`   | Yes      | Your OAuth client ID                           |
+| Parameter     | Required | Description                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `grant_type`  | Yes      | `urn:ietf:params:oauth:grant-type:device_code`                                                                                                                                                                                                                                                                                                                                                                       |
+| `device_code` | Yes      | The `device_code` from step 1                                                                                                                                                                                                                                                                                                                                                                                        |
+| `client_id`   | Yes      | Your OAuth client ID                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `resource`    | No       | [RFC 8707 §2.2][rfc8707] narrowing — repeat to narrow the access token's `aud` to a **subset** of what was bound at `/oauth/device/code`. Widening returns `400 invalid_target` (the device code is NOT consumed, so the CLI may retry). Omit to issue a token bound to the full granted resource set. Refresh tokens issued from this exchange always carry the full grant on their DB row for future re-narrowing. |
 
 **Example:**
 
