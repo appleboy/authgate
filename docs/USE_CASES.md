@@ -1057,7 +1057,7 @@ Your organisation runs three internal APIs behind a single AuthGate deployment:
 - `https://reports-api.corp.internal` — analytics
 - `https://admin-api.corp.internal` — privileged operations
 
-A user wants to authorize a third-party automation tool to access **only** the billing API. Scope alone (`read write`) doesn't express *which* API — each API also defines those scopes. Audience binding via RFC 8707 makes the access boundary explicit on the token itself.
+A user wants to authorize a third-party automation tool to access **only** the billing API. Scope alone (`read write`) doesn't express _which_ API — each API also defines those scopes. Audience binding via RFC 8707 makes the access boundary explicit on the token itself.
 
 ### Requirements
 
@@ -1091,11 +1091,11 @@ Token will be valid for
 
 After approval, the issued access token's `aud` is `"https://billing-api.corp.internal"`. Now:
 
-| Action | Result |
-| --- | --- |
-| Client presents token to `billing-api`  | ✅ accepted — `aud` matches |
-| Client presents token to `reports-api`  | ❌ rejected — `aud` mismatch |
-| Client presents token to `admin-api`    | ❌ rejected — `aud` mismatch |
+| Action                                 | Result                       |
+| -------------------------------------- | ---------------------------- |
+| Client presents token to `billing-api` | ✅ accepted — `aud` matches  |
+| Client presents token to `reports-api` | ❌ rejected — `aud` mismatch |
+| Client presents token to `admin-api`   | ❌ rejected — `aud` mismatch |
 
 If the user later approves a broader grant by re-running `/oauth/authorize` with `resource=https://billing-api.corp.internal&resource=https://reports-api.corp.internal`, the consent page re-prompts (the remembered consent is matched **exactly** by resource set) and the new token's `aud` covers both endpoints.
 

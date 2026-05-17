@@ -10,11 +10,11 @@ to wire the two together.
 
 ## Trust boundary
 
-| Component            | Owner                | Responsibility                                                       |
-| -------------------- | -------------------- | -------------------------------------------------------------------- |
-| MCP client           | The application      | Discovers the AS, performs PKCE, sends `resource=<MCP-URL>`          |
-| MCP server (RS)      | Your deployment      | Publishes [RFC 9728 Protected Resource Metadata][rfc9728] pointing at AuthGate; verifies token signature, `iss`, `aud` |
-| AuthGate (AS)        | This service         | Issues access/refresh tokens with audience bound to the MCP resource |
+| Component       | Owner           | Responsibility                                                                                                         |
+| --------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| MCP client      | The application | Discovers the AS, performs PKCE, sends `resource=<MCP-URL>`                                                            |
+| MCP server (RS) | Your deployment | Publishes [RFC 9728 Protected Resource Metadata][rfc9728] pointing at AuthGate; verifies token signature, `iss`, `aud` |
+| AuthGate (AS)   | This service    | Issues access/refresh tokens with audience bound to the MCP resource                                                   |
 
 AuthGate does **not** publish RFC 9728 Protected Resource Metadata; that
 belongs to each MCP server. The PRM document is what tells clients which
@@ -45,11 +45,11 @@ resource_metadata="..."`, it fetches the PRM, follows
 MCP clients try `/.well-known/oauth-authorization-server` (RFC 8414) first,
 then fall back to OIDC discovery. AuthGate publishes both:
 
-| URL                                                  | Use                                                   |
-| ---------------------------------------------------- | ----------------------------------------------------- |
-| `/.well-known/oauth-authorization-server`            | OAuth 2.0 AS metadata — curated, no OIDC-only fields  |
-| `/.well-known/openid-configuration`                  | OIDC Provider metadata — unchanged                    |
-| `/.well-known/jwks.json`                             | Public keys for `RS256`/`ES256` verification          |
+| URL                                       | Use                                                  |
+| ----------------------------------------- | ---------------------------------------------------- |
+| `/.well-known/oauth-authorization-server` | OAuth 2.0 AS metadata — curated, no OIDC-only fields |
+| `/.well-known/openid-configuration`       | OIDC Provider metadata — unchanged                   |
+| `/.well-known/jwks.json`                  | Public keys for `RS256`/`ES256` verification         |
 
 The OAuth metadata response includes:
 

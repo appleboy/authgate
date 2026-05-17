@@ -560,7 +560,7 @@ HTTP_API_MAX_RETRY_DELAY=30s
 **Symptoms:**
 
 ```json
-{"error":"invalid_target","error_description":"invalid resource indicator"}
+{ "error": "invalid_target", "error_description": "invalid resource indicator" }
 ```
 
 …or the `/oauth/authorize` redirect contains `?error=invalid_target&...`.
@@ -569,16 +569,16 @@ HTTP_API_MAX_RETRY_DELAY=30s
 
 **Diagnose:**
 
-| Symptom | Likely cause | Fix |
-| --- | --- | --- |
-| `resource=urn:foo:bar` rejected | Non-http(s) scheme | Use an `https://` URL as the resource identifier (even for `urn:`-style logical IDs) |
-| `resource=api.example.com` rejected | Not an absolute URI | Add the scheme: `resource=https://api.example.com` |
-| `resource=https://api.example.com/#frag` rejected | Has a fragment | Remove the `#` and everything after it (RFC 8707 §2.1 forbids fragments) |
-| `resource=https://:443/path` rejected | Empty host | Provide a hostname (`:443` alone is not a host) |
-| `resource` rejected on `/oauth/token` after working on `/oauth/authorize` | RFC 8707 §2.2 widening attempt | The token request's resource must be a **subset** of what was authorized — remove the new resource(s) |
-| Request omits `resource` on `/oauth/token` but `/oauth/authorize` had one — server complains the refresh widens | Refresh request supplied a resource not in the original grant | Either omit `resource` (reuses the full grant) or supply a subset |
-| 11 `resource` parameters in one request → `invalid_target` | Exceeds `MaxResourceIndicators = 10` | Send no more than 10 resources per request |
-| One `resource` value > 1024 chars → `invalid_target` | Exceeds `MaxResourceURILength` | Shorten the identifier |
+| Symptom                                                                                                         | Likely cause                                                  | Fix                                                                                                   |
+| --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `resource=urn:foo:bar` rejected                                                                                 | Non-http(s) scheme                                            | Use an `https://` URL as the resource identifier (even for `urn:`-style logical IDs)                  |
+| `resource=api.example.com` rejected                                                                             | Not an absolute URI                                           | Add the scheme: `resource=https://api.example.com`                                                    |
+| `resource=https://api.example.com/#frag` rejected                                                               | Has a fragment                                                | Remove the `#` and everything after it (RFC 8707 §2.1 forbids fragments)                              |
+| `resource=https://:443/path` rejected                                                                           | Empty host                                                    | Provide a hostname (`:443` alone is not a host)                                                       |
+| `resource` rejected on `/oauth/token` after working on `/oauth/authorize`                                       | RFC 8707 §2.2 widening attempt                                | The token request's resource must be a **subset** of what was authorized — remove the new resource(s) |
+| Request omits `resource` on `/oauth/token` but `/oauth/authorize` had one — server complains the refresh widens | Refresh request supplied a resource not in the original grant | Either omit `resource` (reuses the full grant) or supply a subset                                     |
+| 11 `resource` parameters in one request → `invalid_target`                                                      | Exceeds `MaxResourceIndicators = 10`                          | Send no more than 10 resources per request                                                            |
+| One `resource` value > 1024 chars → `invalid_target`                                                            | Exceeds `MaxResourceURILength`                                | Shorten the identifier                                                                                |
 
 **Validation code:** [`internal/util/resource.go`](../internal/util/resource.go) (full ruleset documented inline).
 
@@ -600,7 +600,7 @@ HTTP_API_MAX_RETRY_DELAY=30s
 
 **Symptoms:** A user has already authorized an app at `/oauth/authorize`. On a later authorization request, the consent screen reappears instead of auto-approving.
 
-**Cause:** The `ConsentRemember` shortcut requires an **exact resource-set match** between the new request and the recorded consent. If the request adds, removes, or changes any `resource` value, the user must re-consent. This is intentional — the user previously authorized access to a *specific* audience, and silently extending or narrowing it without their consent would defeat RFC 8707 audience binding.
+**Cause:** The `ConsentRemember` shortcut requires an **exact resource-set match** between the new request and the recorded consent. If the request adds, removes, or changes any `resource` value, the user must re-consent. This is intentional — the user previously authorized access to a _specific_ audience, and silently extending or narrowing it without their consent would defeat RFC 8707 audience binding.
 
 **Diagnose:** Check `user_authorizations.resource` for the existing grant:
 

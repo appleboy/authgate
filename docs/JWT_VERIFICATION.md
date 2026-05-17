@@ -256,7 +256,7 @@ AuthGate supports [Resource Indicators for OAuth 2.0 (RFC 8707)][rfc8707]: an OA
 
 **What this means for resource servers:**
 
-- **Validate `aud` against your own identifier**, exactly as you would with the static `JWT_AUDIENCE`. The verification code does not change; only the *source* of `aud` differs (per-request resource vs static config).
+- **Validate `aud` against your own identifier**, exactly as you would with the static `JWT_AUDIENCE`. The verification code does not change; only the _source_ of `aud` differs (per-request resource vs static config).
 - **Reject tokens whose `aud` does not include your identifier** with `401 Unauthorized` / `WWW-Authenticate: Bearer error="invalid_token"`. This is the core of audience-binding defense: a token minted for `https://api-a.corp` should fail at `https://api-b.corp`.
 - **The `aud` claim may be a string OR an array** (RFC 7519 §4.1.3). When the client requests a single resource, `aud` is a plain string; with multiple resources it is `["https://a", "https://b"]`. Most JWT libraries (e.g. `golang-jwt/jwt`'s `WithAudience`) handle both shapes.
 - **AuthGate also exposes `aud` in [RFC 7662][rfc7662] introspection responses for access tokens.** The introspection `aud` is a **snapshot taken at issuance** — rotating `JWT_AUDIENCE` after a token is minted does NOT change what introspection reports for that token. Introspection is consistent with the signed JWT.

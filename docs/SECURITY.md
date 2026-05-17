@@ -106,7 +106,7 @@ Before deploying AuthGate to production, complete this security checklist:
 - [ ] Provide clear instructions for revoking suspicious sessions
 - [ ] Document incident response procedures
 - [ ] Train administrators on security best practices
-- [ ] Train administrators that `POST /admin/users/:id/disable` is the fastest containment action — it revokes every active and refresh token immediately, blocks future logins (local + OAuth callbacks return `ErrAccountDisabled`), and `RequireAuth` clears any live session on the next request. Guards prevent disabling your own account or the last *active* admin (disabled admins do not block this guard).
+- [ ] Train administrators that `POST /admin/users/:id/disable` is the fastest containment action — it revokes every active and refresh token immediately, blocks future logins (local + OAuth callbacks return `ErrAccountDisabled`), and `RequireAuth` clears any live session on the next request. Guards prevent disabling your own account or the last _active_ admin (disabled admins do not block this guard).
 
 ---
 

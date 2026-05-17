@@ -472,9 +472,9 @@ The `device_codes`, `authorization_codes`, `user_authorizations`, and `access_to
 
 **Dual semantics on `access_tokens.Resource` (read carefully):**
 
-| Token category | `Resource` column meaning                                                                                                                                  |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Access token   | **Audience snapshot at issuance** — exactly what the JWT was signed with. RFC 7662 introspection reads this directly so `JWT_AUDIENCE` rotation cannot change what introspection reports for older tokens. |
+| Token category | `Resource` column meaning                                                                                                                                                                                                                       |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Access token   | **Audience snapshot at issuance** — exactly what the JWT was signed with. RFC 7662 introspection reads this directly so `JWT_AUDIENCE` rotation cannot change what introspection reports for older tokens.                                      |
 | Refresh token  | **The original grant's RFC 8707 resource set** — used for RFC 8707 §2.2 subset checks on subsequent refresh requests. **NOT** the refresh JWT's `aud` (refresh JWTs are signed with the static `JWT_AUDIENCE`, never the per-request resource). |
 
 Any code reading `access_tokens.Resource` directly must branch on `TokenCategory` to interpret the value correctly.

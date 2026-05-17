@@ -562,11 +562,11 @@ The signature only proves AuthGate emitted these values, not that they are autho
 
 AuthGate emits three private claims on every issued JWT under a deployment-configurable namespace prefix. The trust level differs per claim:
 
-| Logical name      | Source                                | Trust level     | Default emitted key      |
-| ----------------- | ------------------------------------- | --------------- | ------------------------ |
-| `domain`          | `JWT_DOMAIN` env var                  | server-attested | `extra_domain`           |
-| `project`         | `OAuthApplication.Project`            | owner-set       | `extra_project`          |
-| `service_account` | `OAuthApplication.ServiceAccount`     | owner-set       | `extra_service_account`  |
+| Logical name      | Source                            | Trust level     | Default emitted key     |
+| ----------------- | --------------------------------- | --------------- | ----------------------- |
+| `domain`          | `JWT_DOMAIN` env var              | server-attested | `extra_domain`          |
+| `project`         | `OAuthApplication.Project`        | owner-set       | `extra_project`         |
+| `service_account` | `OAuthApplication.ServiceAccount` | owner-set       | `extra_service_account` |
 
 Only `<prefix>_domain` is sourced from deployment configuration and therefore carries server-attested trust. `<prefix>_project` and `<prefix>_service_account` come from the OAuthApplication row (admin- or client-owner-set) — a JWT signature only proves AuthGate emitted these values, not that the asserted ownership was independently verified. Downstream services should still apply their own policies on top.
 
@@ -574,9 +574,9 @@ The composed key is `<JWT_PRIVATE_CLAIM_PREFIX>_<logical>`. AuthGate adds the se
 
 ### Configuration
 
-| Variable                    | Default | Purpose                                                                                  |
-| --------------------------- | ------- | ---------------------------------------------------------------------------------------- |
-| `JWT_PRIVATE_CLAIM_PREFIX`  | `extra` | Namespace prefix for AuthGate-emitted private claims. Validated at startup.              |
+| Variable                   | Default | Purpose                                                                     |
+| -------------------------- | ------- | --------------------------------------------------------------------------- |
+| `JWT_PRIVATE_CLAIM_PREFIX` | `extra` | Namespace prefix for AuthGate-emitted private claims. Validated at startup. |
 
 ### Validation rules (startup)
 
