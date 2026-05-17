@@ -555,6 +555,66 @@ HTTP_API_MAX_RETRY_DELAY=30s
 
 ---
 
+### Issue: `invalid_target` error on `/oauth/authorize`, `/oauth/device/code`, or `/oauth/token`
+
+**Symptoms:**
+
+```json
+{ "error": "invalid_target", "error_description": "invalid resource indicator" }
+```
+
+…or the `/oauth/authorize` redirect contains `?error=invalid_target&...`.
+
+**Cause:** A `resource` parameter ([RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707)) failed AuthGate's validation. AuthGate is stricter than RFC 8707 §2.1 — it requires absolute `http`/`https` URLs with a non-empty host and no fragment, ≤ 1024 chars, max 10 per request. Two other code paths return `invalid_target` for §2.2 violations.
+
+**Diagnose:**
+
+| Symptom                                                                                                         | Likely cause                                                  | Fix                                                                                                   |
+| --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `resource=urn:foo:bar` rejected                                                                                 | Non-http(s) scheme                                            | Use an `https://` URL as the resource identifier (even for `urn:`-style logical IDs)                  |
+| `resource=api.example.com` rejected                                                                             | Not an absolute URI                                           | Add the scheme: `resource=https://api.example.com`                                                    |
+| `resource=https://api.example.com/#frag` rejected                                                               | Has a fragment                                                | Remove the `#` and everything after it (RFC 8707 §2.1 forbids fragments)                              |
+| `resource=https://:443/path` rejected                                                                           | Empty host                                                    | Provide a hostname (`:443` alone is not a host)                                                       |
+| `resource` rejected on `/oauth/token` after working on `/oauth/authorize`                                       | RFC 8707 §2.2 widening attempt                                | The token request's resource must be a **subset** of what was authorized — remove the new resource(s) |
+| Request omits `resource` on `/oauth/token` but `/oauth/authorize` had one — server complains the refresh widens | Refresh request supplied a resource not in the original grant | Either omit `resource` (reuses the full grant) or supply a subset                                     |
+| 11 `resource` parameters in one request → `invalid_target`                                                      | Exceeds `MaxResourceIndicators = 10`                          | Send no more than 10 resources per request                                                            |
+| One `resource` value > 1024 chars → `invalid_target`                                                            | Exceeds `MaxResourceURILength`                                | Shorten the identifier                                                                                |
+
+**Validation code:** [`internal/util/resource.go`](../internal/util/resource.go) (full ruleset documented inline).
+
+---
+
+### Issue: Refresh token accepted as access token by a resource server
+
+**Symptoms:** A resource server returns `200 OK` for a request authenticated with a refresh JWT, when it should have returned `401 Unauthorized`.
+
+**Cause:** This is a token-confusion vulnerability — the RS is verifying signature/`iss`/`exp`/`aud` only and not the `type` claim, AND your deployment has `JWT_AUDIENCE` set to a value that matches the RS's expected audience.
+
+**Fix (RS side):** Always verify `claims["type"] == "access"` in addition to standard validation. AuthGate signs refresh tokens with the same key as access tokens, so signature verification alone cannot distinguish them. See [JWT Verification Guide § Audience Binding](JWT_VERIFICATION.md#audience-binding-rfc-8707).
+
+**Fix (AS side):** Set `JWT_AUDIENCE` either unset or to an AS-only identifier (e.g. `https://auth.example.com`), never a resource server's `aud`. Refresh JWTs are signed with this audience and presented back to `/oauth/token`, so it MUST NOT collide with any RS's expected audience. See [CONFIGURATION.md § JWT Audience Claim](CONFIGURATION.md).
+
+---
+
+### Issue: Consent screen re-appears for a previously-authorized app
+
+**Symptoms:** A user has already authorized an app at `/oauth/authorize`. On a later authorization request, the consent screen reappears instead of auto-approving.
+
+**Cause:** The `ConsentRemember` shortcut requires an **exact resource-set match** between the new request and the recorded consent. If the request adds, removes, or changes any `resource` value, the user must re-consent. This is intentional — the user previously authorized access to a _specific_ audience, and silently extending or narrowing it without their consent would defeat RFC 8707 audience binding.
+
+**Diagnose:** Check `user_authorizations.resource` for the existing grant:
+
+```bash
+sqlite3 authgate.db \
+  "SELECT client_id, scopes, resource FROM user_authorizations WHERE client_id='<CLIENT_ID>' AND user_id='<USER_ID>';"
+```
+
+Compare with the current authorize request's `resource` parameters. If they differ — even by one entry — the consent screen will re-prompt by design.
+
+**Fix:** Either send the same resource set as the previous consent, or accept the re-consent prompt and approve again.
+
+---
+
 ## Debug Mode
 
 ### Enable Debug Logging

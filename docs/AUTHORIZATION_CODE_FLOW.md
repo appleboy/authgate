@@ -147,16 +147,17 @@ The user's browser is redirected to this URL to begin the authorization flow.
 
 **Query Parameters:**
 
-| Parameter               | Required          | Description                                                                                             |
-| ----------------------- | ----------------- | ------------------------------------------------------------------------------------------------------- |
-| `client_id`             | ✅                | Your OAuth client ID (UUID)                                                                             |
-| `redirect_uri`          | ✅                | Must exactly match a registered Redirect URI                                                            |
-| `response_type`         | ✅                | Must be `code`                                                                                          |
-| `scope`                 | ○                 | Space-separated scopes. Include `openid` to receive an ID Token. Defaults to all client-allowed scopes. |
-| `state`                 | Recommended       | Random string to prevent CSRF. Returned unchanged in the redirect.                                      |
-| `nonce`                 | OIDC Recommended  | Random string bound to the session; included verbatim in the `id_token` to prevent replay attacks.      |
-| `code_challenge`        | Public clients ✅ | Base64url(SHA256(code_verifier))                                                                        |
-| `code_challenge_method` | Public clients ✅ | Must be `S256`                                                                                          |
+| Parameter               | Required          | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ----------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `client_id`             | ✅                | Your OAuth client ID (UUID)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `redirect_uri`          | ✅                | Must exactly match a registered Redirect URI                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `response_type`         | ✅                | Must be `code`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `scope`                 | ○                 | Space-separated scopes. Include `openid` to receive an ID Token. Defaults to all client-allowed scopes.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `state`                 | Recommended       | Random string to prevent CSRF. Returned unchanged in the redirect.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `nonce`                 | OIDC Recommended  | Random string bound to the session; included verbatim in the `id_token` to prevent replay attacks.                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `code_challenge`        | Public clients ✅ | Base64url(SHA256(code_verifier))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `code_challenge_method` | Public clients ✅ | Must be `S256`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `resource`              | ○                 | [RFC 8707][rfc8707] Resource Indicator(s). Repeat the parameter for multiple resources (e.g. `&resource=https://api.example.com&resource=https://mcp.example.com`). Each value must be an absolute `http`/`https` URL with a non-empty host and no fragment, ≤ 1024 chars, max 10 per request. When supplied, the issued JWT's `aud` is bound to these values and the consent page displays them under "Token will be valid for". The user's recorded consent is matched **exactly** by resource set on later requests — narrowing or widening forces a re-consent. |
 
 **Example (confidential client):**
 
@@ -181,6 +182,25 @@ GET /oauth/authorize?
   &code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM
   &code_challenge_method=S256
 ```
+
+**Example (public client + PKCE + Resource Indicators / [RFC 8707][rfc8707]):**
+
+```
+GET /oauth/authorize?
+  client_id=550e8400-e29b-41d4-a716-446655440000
+  &redirect_uri=https%3A%2F%2Fapp.example.com%2Fcallback
+  &response_type=code
+  &scope=read
+  &state=abc123xyz
+  &code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM
+  &code_challenge_method=S256
+  &resource=https%3A%2F%2Fapi.example.com
+  &resource=https%3A%2F%2Fmcp.example.com
+```
+
+The consent page displays both resources under "Token will be valid for". The issued access token's `aud` claim will be `["https://api.example.com", "https://mcp.example.com"]`.
+
+[rfc8707]: https://datatracker.ietf.org/doc/html/rfc8707
 
 **Success redirect (to your app):**
 
@@ -207,14 +227,15 @@ Exchange the authorization code for access and refresh tokens. The code is **sin
 
 **Request Parameters:**
 
-| Parameter       | Required        | Description                                                  |
-| --------------- | --------------- | ------------------------------------------------------------ |
-| `grant_type`    | ✅              | `authorization_code`                                         |
-| `code`          | ✅              | Authorization code received in the redirect                  |
-| `redirect_uri`  | ✅              | Must exactly match the redirect_uri used in step 1           |
-| `client_id`     | ✅              | Your OAuth client ID                                         |
-| `client_secret` | Confidential ✅ | Your client secret                                           |
-| `code_verifier` | Public ✅       | The original random string used to generate `code_challenge` |
+| Parameter       | Required        | Description                                                                                                                                                                                                                                                                                                                                                         |
+| --------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `grant_type`    | ✅              | `authorization_code`                                                                                                                                                                                                                                                                                                                                                |
+| `code`          | ✅              | Authorization code received in the redirect                                                                                                                                                                                                                                                                                                                         |
+| `redirect_uri`  | ✅              | Must exactly match the redirect_uri used in step 1                                                                                                                                                                                                                                                                                                                  |
+| `client_id`     | ✅              | Your OAuth client ID                                                                                                                                                                                                                                                                                                                                                |
+| `client_secret` | Confidential ✅ | Your client secret                                                                                                                                                                                                                                                                                                                                                  |
+| `code_verifier` | Public ✅       | The original random string used to generate `code_challenge`                                                                                                                                                                                                                                                                                                        |
+| `resource`      | ○               | [RFC 8707 §2.2][rfc8707] narrowing — repeat the parameter to narrow the access token's `aud` to a **subset** of what was authorized at `/oauth/authorize`. Widening returns `400 invalid_target` (the single-use authorization code is NOT consumed on failure so the client may retry). Omitting `resource` issues a token bound to the full granted resource set. |
 
 **Example (confidential client):**
 

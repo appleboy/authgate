@@ -1,6 +1,6 @@
 # AuthGate
 
-> A lightweight OAuth 2.0 Authorization Server supporting Device Authorization Grant ([RFC 8628][rfc8628]), Authorization Code Flow with PKCE ([RFC 6749][rfc6749] + [RFC 7636][rfc7636]), and Client Credentials Grant for machine-to-machine authentication
+> A lightweight OAuth 2.0 Authorization Server supporting Device Authorization Grant ([RFC 8628][rfc8628]), Authorization Code Flow with PKCE ([RFC 6749][rfc6749] + [RFC 7636][rfc7636]), Client Credentials Grant for machine-to-machine authentication, and Resource Indicators ([RFC 8707][rfc8707]) for MCP / multi-audience deployments
 
 [![Security Scanning](https://github.com/go-authgate/authgate/actions/workflows/security.yml/badge.svg)](https://github.com/go-authgate/authgate/actions/workflows/security.yml)
 [![Lint and Testing](https://github.com/go-authgate/authgate/actions/workflows/testing.yml/badge.svg)](https://github.com/go-authgate/authgate/actions/workflows/testing.yml)
@@ -86,6 +86,8 @@ AuthGate also serves as a lightweight **centralised identity gateway** for inter
 - 🏢 Enterprise teams needing **token self-service** — users manage and revoke their own active sessions and per-app grants via the built-in web UI (`/account/sessions`, `/account/authorizations`), no admin intervention required. Admins can additionally create accounts, disable or re-enable users (revoking all tokens immediately), and inspect or unlink each user's third-party OAuth connections and authorized apps from `/admin/users/:id`.
 - 🔑 Organisations wanting a **unified internal SSO portal** — centralise login across all internal tools and services through a single OAuth 2.0 gateway, eliminating per-system password management
 - 🔍 **Security & compliance teams** — comprehensive audit logs of every authentication, token, and admin event with filtering and CSV export (`/admin/audit`), satisfying audit and regulatory requirements
+- 🧩 **[Model Context Protocol (MCP)][mcp-spec] servers** — drop-in OAuth 2.1 authorization server with [RFC 8707][rfc8707] Resource Indicators, [RFC 8414][rfc8414] AS metadata at `/.well-known/oauth-authorization-server`, and CORS on the well-known group for browser-based MCP clients (see [MCP Integration Guide](docs/MCP.md))
+- 🎯 **Multi-resource-server APIs** — per-request audience binding ([RFC 8707][rfc8707]): a token requested for `https://api-a.corp` cannot be replayed at `https://api-b.corp` (the JWT `aud` is bound at issuance and verified by each resource server)
 
 ### The Enterprise Case for AuthGate
 
@@ -155,6 +157,8 @@ AuthGate also serves as a lightweight **centralised identity gateway** for inter
 - **OIDC `email_verified`**: Persists and exposes `email_verified` claims from upstream OAuth providers in ID tokens and UserInfo responses
 - **Dynamic Client Registration ([RFC 7591][rfc7591])**: Programmatic client registration with admin approval workflow, protected by optional initial access token
 - **Token Introspection ([RFC 7662][rfc7662])**: RFC-compliant token metadata inspection with client credential authentication
+- **Resource Indicators ([RFC 8707][rfc8707])**: Per-request `resource` parameter on all four grants binds the issued JWT's `aud` to the target resource server(s); refresh requests enforce RFC 8707 §2.2 subset-narrowing so a granted audience can never be widened
+- **OAuth 2.0 AS Metadata ([RFC 8414][rfc8414])**: Curated OAuth-only discovery document at `/.well-known/oauth-authorization-server` alongside the existing OIDC discovery — required by [MCP][mcp-spec] clients and other RFC 8414-aware tooling. CORS is applied to the `/.well-known/*` group so browser-based clients can fetch it
 
 ---
 
@@ -267,7 +271,8 @@ The Authorization Code Flow CLI starts a local callback server, opens your brows
 - **[Device Code Flow Guide](docs/DEVICE_CODE_FLOW.md)** - CLI and IoT authentication, polling, token lifecycle, Go implementation
 - **[Authorization Code Flow Guide](docs/AUTHORIZATION_CODE_FLOW.md)** - Auth Code Flow, PKCE, user consent, admin controls
 - **[Client Credentials Flow Guide](docs/CLIENT_CREDENTIALS_FLOW.md)** - Machine-to-machine authentication, M2M token management
-- **[JWT Verification Guide](docs/JWT_VERIFICATION.md)** - Verify tokens at resource servers using JWKS public keys (RS256/ES256)
+- **[MCP Integration Guide](docs/MCP.md)** - Resource Indicators (RFC 8707), AS metadata (RFC 8414), audience binding, CORS for browser-based MCP clients, multi-resource-server caveats
+- **[JWT Verification Guide](docs/JWT_VERIFICATION.md)** - Verify tokens at resource servers using JWKS public keys (RS256/ES256), `aud` and `type` claim validation
 - **[OAuth Setup Guide](docs/OAUTH_SETUP.md)** - GitHub, Gitea, Microsoft Entra ID integration
 - **[Rate Limiting Guide](docs/RATE_LIMITING.md)** - Protect against brute force and API abuse
 - **[Performance Guide](docs/PERFORMANCE.md)** - Scalability, optimization, benchmarks
@@ -342,31 +347,32 @@ sequenceDiagram
 
 **Key Endpoints:**
 
-| Endpoint                            | Method   | Purpose                                                                                    |
-| ----------------------------------- | -------- | ------------------------------------------------------------------------------------------ |
-| `/.well-known/openid-configuration` | GET      | OIDC Discovery metadata                                                                    |
-| `/.well-known/jwks.json`            | GET      | JWKS public keys for RS256/ES256 verification (RFC 7517)                                   |
-| `/oauth/device/code`                | POST     | Request device code (CLI)                                                                  |
-| `/oauth/authorize`                  | GET      | Authorization consent page (web apps)                                                      |
-| `/oauth/authorize`                  | POST     | Submit consent decision                                                                    |
-| `/oauth/token`                      | POST     | Token endpoint: `device_code`, `authorization_code`, `refresh_token`, `client_credentials` |
-| `/oauth/tokeninfo`                  | GET      | Verify token validity                                                                      |
-| `/oauth/userinfo`                   | GET/POST | OIDC UserInfo — profile claims for token owner                                             |
-| `/oauth/revoke`                     | POST     | Revoke tokens ([RFC 7009][rfc7009])                                                        |
-| `/oauth/register`                   | POST     | Dynamic client registration ([RFC 7591][rfc7591])                                          |
-| `/oauth/introspect`                 | POST     | Token introspection ([RFC 7662][rfc7662])                                                  |
-| `/device`                           | GET      | Device code entry page (browser)                                                           |
-| `/account/sessions`                 | GET      | Manage active token sessions                                                               |
-| `/account/authorizations`           | GET      | Manage per-app consent grants                                                              |
-| `/admin/clients/:id/authorizations` | GET      | Admin: view all authorized users for a client                                              |
-| `/admin/clients/:id/revoke-all`     | POST     | Admin: force re-auth for all users                                                         |
-| `/admin/users`                      | GET/POST | Admin: list / create users                                                                 |
-| `/admin/users/:id/disable`          | POST     | Admin: disable user (revokes all tokens, blocks login)                                     |
-| `/admin/users/:id/enable`           | POST     | Admin: re-enable a disabled user                                                           |
-| `/admin/users/:id/connections`      | GET      | Admin: list a user's third-party OAuth connections                                         |
-| `/admin/users/:id/authorizations`   | GET      | Admin: list apps a user has authorized                                                     |
-| `/health`                           | GET      | Health check                                                                               |
-| `/metrics`                          | GET      | Prometheus metrics (optional auth)                                                         |
+| Endpoint                                  | Method   | Purpose                                                                                                                                                                    |
+| ----------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/.well-known/openid-configuration`       | GET      | OIDC Discovery metadata                                                                                                                                                    |
+| `/.well-known/oauth-authorization-server` | GET      | OAuth 2.0 AS Metadata ([RFC 8414][rfc8414]) — required by MCP / RFC 8414-aware clients                                                                                     |
+| `/.well-known/jwks.json`                  | GET      | JWKS public keys for RS256/ES256 verification (RFC 7517)                                                                                                                   |
+| `/oauth/device/code`                      | POST     | Request device code (CLI). Accepts optional repeatable `resource` ([RFC 8707][rfc8707])                                                                                    |
+| `/oauth/authorize`                        | GET      | Authorization consent page (web apps). Accepts optional repeatable `resource`                                                                                              |
+| `/oauth/authorize`                        | POST     | Submit consent decision                                                                                                                                                    |
+| `/oauth/token`                            | POST     | Token endpoint: `device_code`, `authorization_code`, `refresh_token`, `client_credentials`. Accepts optional `resource` (subset of the granted audience per RFC 8707 §2.2) |
+| `/oauth/tokeninfo`                        | GET      | Verify token validity                                                                                                                                                      |
+| `/oauth/userinfo`                         | GET/POST | OIDC UserInfo — profile claims for token owner                                                                                                                             |
+| `/oauth/revoke`                           | POST     | Revoke tokens ([RFC 7009][rfc7009])                                                                                                                                        |
+| `/oauth/register`                         | POST     | Dynamic client registration ([RFC 7591][rfc7591])                                                                                                                          |
+| `/oauth/introspect`                       | POST     | Token introspection ([RFC 7662][rfc7662])                                                                                                                                  |
+| `/device`                                 | GET      | Device code entry page (browser)                                                                                                                                           |
+| `/account/sessions`                       | GET      | Manage active token sessions                                                                                                                                               |
+| `/account/authorizations`                 | GET      | Manage per-app consent grants                                                                                                                                              |
+| `/admin/clients/:id/authorizations`       | GET      | Admin: view all authorized users for a client                                                                                                                              |
+| `/admin/clients/:id/revoke-all`           | POST     | Admin: force re-auth for all users                                                                                                                                         |
+| `/admin/users`                            | GET/POST | Admin: list / create users                                                                                                                                                 |
+| `/admin/users/:id/disable`                | POST     | Admin: disable user (revokes all tokens, blocks login)                                                                                                                     |
+| `/admin/users/:id/enable`                 | POST     | Admin: re-enable a disabled user                                                                                                                                           |
+| `/admin/users/:id/connections`            | GET      | Admin: list a user's third-party OAuth connections                                                                                                                         |
+| `/admin/users/:id/authorizations`         | GET      | Admin: list apps a user has authorized                                                                                                                                     |
+| `/health`                                 | GET      | Health check                                                                                                                                                               |
+| `/metrics`                                | GET      | Prometheus metrics (optional auth)                                                                                                                                         |
 
 **[Full API Reference →](docs/ARCHITECTURE.md#key-endpoints)** | **[Metrics Documentation →](docs/METRICS.md)**
 
@@ -690,8 +696,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [RFC 7591 - OAuth 2.0 Dynamic Client Registration Protocol][rfc7591]
 - [RFC 7662 - OAuth 2.0 Token Introspection][rfc7662]
 - [RFC 8414 - OAuth 2.0 Authorization Server Metadata][rfc8414]
+- [RFC 8707 - Resource Indicators for OAuth 2.0][rfc8707]
 - [RFC 9700 - Best Current Practice for OAuth 2.0 Security][rfc9700]
 - [OpenID Connect Core 1.0][oidccore]
+- [Model Context Protocol Specification][mcp-spec]
 
 ---
 
@@ -720,5 +728,7 @@ Built with:
 [rfc7591]: https://datatracker.ietf.org/doc/html/rfc7591
 [rfc7662]: https://datatracker.ietf.org/doc/html/rfc7662
 [rfc8414]: https://datatracker.ietf.org/doc/html/rfc8414
+[rfc8707]: https://datatracker.ietf.org/doc/html/rfc8707
 [rfc9700]: https://datatracker.ietf.org/doc/html/rfc9700
 [oidccore]: https://openid.net/specs/openid-connect-core-1_0.html
+[mcp-spec]: https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization

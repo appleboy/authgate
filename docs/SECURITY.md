@@ -47,6 +47,12 @@ Before deploying AuthGate to production, complete this security checklist:
 - [ ] Set appropriate `REFRESH_TOKEN_EXPIRATION` (default: 30 days)
 - [ ] Consider enabling token rotation for high-security scenarios (`ENABLE_TOKEN_ROTATION=true`)
 - [ ] Review token scopes and ensure least privilege
+- [ ] **`JWT_AUDIENCE` is unset or set to an AS-only identifier** — never a resource server's `aud`. Refresh tokens are signed with `JWT_AUDIENCE`; if it matches an RS identifier, a refresh token could be silently accepted as an access token by an RS that only verifies signature/`iss`/`exp`/`aud`. See [CONFIGURATION.md](CONFIGURATION.md) and [JWT_VERIFICATION.md](JWT_VERIFICATION.md).
+- [ ] **Resource servers verify `type == "access"` claim** — refresh tokens are signed with the same key and must be rejected at RS boundaries. See [JWT_VERIFICATION.md § Audience Binding](JWT_VERIFICATION.md#audience-binding-rfc-8707).
+- [ ] **Resource servers verify `aud` matches their own identifier** — when using [RFC 8707][rfc8707] Resource Indicators, `aud` is per-request and audience-bound; without it, `aud` falls back to `JWT_AUDIENCE`. Either way, RS-side verification is non-negotiable.
+- [ ] **Multi-resource-server `client_credentials` deployments**: there is no per-client allowed-resources allowlist on the M2M grant. Resource servers MUST validate `(client_id, sub, aud)` against their own per-client policy. See [CLIENT_CREDENTIALS_FLOW.md § Multi-resource-server caveat](CLIENT_CREDENTIALS_FLOW.md#multi-resource-server-caveat-read-before-enabling-resource-on-client_credentials).
+
+[rfc8707]: https://datatracker.ietf.org/doc/html/rfc8707
 
 ### Rate Limiting
 
@@ -100,7 +106,7 @@ Before deploying AuthGate to production, complete this security checklist:
 - [ ] Provide clear instructions for revoking suspicious sessions
 - [ ] Document incident response procedures
 - [ ] Train administrators on security best practices
-- [ ] Train administrators that `POST /admin/users/:id/disable` is the fastest containment action — it revokes every active and refresh token immediately, blocks future logins (local + OAuth callbacks return `ErrAccountDisabled`), and `RequireAuth` clears any live session on the next request. Guards prevent disabling your own account or the last *active* admin (disabled admins do not block this guard).
+- [ ] Train administrators that `POST /admin/users/:id/disable` is the fastest containment action — it revokes every active and refresh token immediately, blocks future logins (local + OAuth callbacks return `ErrAccountDisabled`), and `RequireAuth` clears any live session on the next request. Guards prevent disabling your own account or the last _active_ admin (disabled admins do not block this guard).
 
 ---
 
@@ -160,6 +166,19 @@ Before deploying AuthGate to production, complete this security checklist:
 - Encrypted session cookies (AES-256)
 - HttpOnly and Secure flags on cookies
 - Session fingerprinting support (configurable)
+
+✅ **Token Replay Across Resource Servers (RFC 8707 Audience Binding)**
+
+- Each token's `aud` claim is bound at issuance to the `resource` parameter the client requested. A token minted for `https://api-a.corp` cannot be replayed at `https://api-b.corp` (provided each RS verifies `aud`).
+- Refresh requests enforce RFC 8707 §2.2: the caller may narrow the audience but never widen it. A widening attempt returns `400 invalid_target` without consuming the authorization code or refresh token.
+- The recorded consent grant is matched **exactly** by resource set on subsequent authorize requests — narrowing or widening triggers a re-consent prompt, so a remembered consent for `[api-a, api-b]` will never silently auto-approve a request for `[api-a]` alone or `[api-a, api-c]`.
+- Device codes that bind a `resource` route through a dedicated confirmation page that displays the audience before authorization commits — the binding is user-attested, not just client-asserted.
+
+✅ **Refresh-Token-as-Access-Token Confusion**
+
+- Refresh JWTs carry a `type: "refresh"` claim; resource servers MUST reject any JWT whose `type` is not `"access"`.
+- Refresh JWTs are never signed with a per-request RFC 8707 `resource` audience — they fall back to the static `JWT_AUDIENCE`, which MUST be unset or AS-only (never a resource server's identifier).
+- RFC 7662 introspection responses omit `aud` for refresh tokens, so an RS that authorizes via introspection alone cannot mistake one for an access token even if `token_type: "Bearer"` is identical.
 - 7-day session expiration (configurable)
 
 ### What You Must Secure
