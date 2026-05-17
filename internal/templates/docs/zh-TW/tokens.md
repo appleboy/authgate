@@ -6,15 +6,19 @@
 
 流程成功後您會拿到其中一或多種：
 
-| Token           | 格式                 | 生命週期（依客戶端 profile 而定）                  | 用途                                                |
-| --------------- | -------------------- | -------------------------------------------------- | --------------------------------------------------- |
-| Access token    | JWT                  | `short` 15m · `standard` 10h · `long` 24h（近似值）| `Authorization: Bearer` 打 API                      |
-| Refresh token   | JWT（請當不透明處理）| `short` 1d · `standard` 30d · `long` 90d（近似值） | 到 `/oauth/token` 換新 access token                 |
-| ID token        | JWT                  | 與 access token 相同                               | 客戶端身分資訊 — [見 OIDC](./oidc)                  |
+| Token         | 格式                  | 生命週期（依客戶端 profile 而定）                   | 用途                                |
+| ------------- | --------------------- | --------------------------------------------------- | ----------------------------------- |
+| Access token  | JWT                   | `short` 15m · `standard` 10h · `long` 24h（近似值） | `Authorization: Bearer` 打 API      |
+| Refresh token | JWT（請當不透明處理） | `short` 1d · `standard` 30d · `long` 90d（近似值）  | 到 `/oauth/token` 換新 access token |
+| ID token      | JWT                   | 與 access token 相同                                | 客戶端身分資訊 — [見 OIDC](./oidc)  |
 
 > Refresh token 內部是 JWT，但您應該 **把它當成不透明** — 在客戶端不要去解析其 claim，收穫為零還會耦合到內部實作。
 
 實際數值取決於管理員為此客戶端選擇的 **token profile**。**請一律相信 token response 的 `expires_in`**，永遠不要寫死。
+
+### Audience Binding (`aud` claim)
+
+當流程帶有 `resource=<URL>` 參數（[RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707)），簽發的 **access token** 的 `aud` 會綁到該 resource。不帶 `resource` 時 `aud` 會回退到部署層級的 `JWT_AUDIENCE`。**Refresh token** 一律用靜態 `JWT_AUDIENCE`，不會帶每次請求的 resource。Resource server 應檢查 `aud` 等於自己的識別字，同時要求 `type=access` — 見 [JWT 驗證 §Audience Binding](./jwt-verification#audience-binding-rfc-8707)。
 
 ## 刷新 token
 
@@ -31,6 +35,8 @@ curl -X POST https://your-authgate/oauth/token \
 
 **回應** 與初次 token 交換相同格式。
 
+> **刷新時縮小 `resource`（RFC 8707 §2.2）**：可選擇帶 `resource=...` 來簽發 `aud` 為原授權 **子集** 的新 access token。要求未在原授權的 resource（擴張）會回 `400 invalid_target` — refresh token 不會被消耗。省略 `resource` 則拿到綁定完整授權集的 token。
+
 **何時刷新**：提前刷，例如過期前 30–60 秒，不要等到收到 401 才做。這樣可以避免請求失敗的中途錯誤與重試的噪音。
 
 > 若您的部署啟用 rotation 模式（下節），還必須 **將同一 session 的並發刷新序列化** — 兩個分頁同時刷新會直接毀掉 session。
@@ -45,7 +51,7 @@ curl -X POST https://your-authgate/oauth/token \
 
 **對串接方的實務意義：**
 
-- **序列化每個使用者 / session 的刷新**（mutex、single-flight）。兩個分頁同時刷新，兩邊都拿著同一份舊 refresh token，一個會贏，另一個會用 *剛被作廢* 的舊 token 觸發重用偵測，整個 session 就死了。
+- **序列化每個使用者 / session 的刷新**（mutex、single-flight）。兩個分頁同時刷新，兩邊都拿著同一份舊 refresh token，一個會贏，另一個會用 _剛被作廢_ 的舊 token 觸發重用偵測，整個 session 就死了。
 - **立刻持久化新 refresh token**。儲存更新前，不要先用舊的再發一輪請求。
 - **刷新時收到 `invalid_grant` 是終態** — 請顯示登入頁面，不要重試。
 
@@ -64,11 +70,11 @@ curl -X POST https://your-authgate/oauth/revoke \
 # 機密客戶端：帶 client_secret 或使用 HTTP Basic
 ```
 
-| 參數              | 必填 | 值                                        |
-| ----------------- | ---- | ----------------------------------------- |
-| `token`           | 是   | 要撤銷的 token                            |
-| `token_type_hint` | 否   | `access_token` 或 `refresh_token`         |
-| `client_id`       | 是   | 機密客戶端還需要 `client_secret`          |
+| 參數              | 必填 | 值                                |
+| ----------------- | ---- | --------------------------------- |
+| `token`           | 是   | 要撤銷的 token                    |
+| `token_type_hint` | 否   | `access_token` 或 `refresh_token` |
+| `client_id`       | 是   | 機密客戶端還需要 `client_secret`  |
 
 依 RFC 7009，不論 token 原本存不存在，端點一律回 **`200 OK`**。不要依賴回應判斷狀態 — 直接當作 token 已經消失。
 
@@ -141,24 +147,24 @@ Client Credentials 發出的 token，`subject_type` 會是 `"client"`。無效 t
 
 ### 該選哪個？
 
-| 需求                                                         | 方式                                        |
-| ------------------------------------------------------------ | ------------------------------------------- |
-| resource server 大量驗證，可容忍短暫陳舊                     | **本地 JWKS 驗證**（不打 AuthGate）         |
-| 需要即時撤銷狀態，呼叫端能做客戶端認證                       | **`/oauth/introspect`**                     |
-| 使用者 session 內的輕量檢查，手邊沒有客戶端憑證              | **`/oauth/tokeninfo`**                      |
-| 呼叫端本身就是此 token 的持有者                              | **`/oauth/tokeninfo`**                      |
+| 需求                                            | 方式                                |
+| ----------------------------------------------- | ----------------------------------- |
+| resource server 大量驗證，可容忍短暫陳舊        | **本地 JWKS 驗證**（不打 AuthGate） |
+| 需要即時撤銷狀態，呼叫端能做客戶端認證          | **`/oauth/introspect`**             |
+| 使用者 session 內的輕量檢查，手邊沒有客戶端憑證 | **`/oauth/tokeninfo`**              |
+| 呼叫端本身就是此 token 的持有者                 | **`/oauth/tokeninfo`**              |
 
 ## 速率限制
 
 AuthGate 對 token 路徑端點做每 IP 速率限制。預設值（營運者可調整）：
 
-| 端點                        | 預設限制           |
-| --------------------------- | ------------------ |
-| `POST /oauth/token`         | 20 req/min         |
-| `POST /oauth/device/code`   | 10 req/min         |
-| `POST /device/verify`       | 10 req/min         |
-| `POST /oauth/introspect`    | 20 req/min         |
-| `POST /login`               | 5 req/min          |
+| 端點                      | 預設限制   |
+| ------------------------- | ---------- |
+| `POST /oauth/token`       | 20 req/min |
+| `POST /oauth/device/code` | 10 req/min |
+| `POST /device/verify`     | 10 req/min |
+| `POST /oauth/introspect`  | 20 req/min |
+| `POST /login`             | 5 req/min  |
 
 超過限制回 `429 Too Many Requests`。若有 `Retry-After` header 請遵守；沒有的話指數退避。能批次就批次 — 可以本地 JWKS 驗證時不要用 `/oauth/tokeninfo` 逐筆打。
 

@@ -13,10 +13,10 @@
 
 ## 客戶端類型
 
-| 類型             | 憑證                          | 典型範例                           | 必須使用 PKCE？ |
-| ---------------- | ----------------------------- | ---------------------------------- | --------------- |
-| `confidential`   | `client_id` + `client_secret` | Rails / Django / Node 後端          | 建議            |
-| `public`         | 僅 `client_id`（無 secret）   | React SPA、iOS/Android、Electron   | 是 — 一律要     |
+| 類型           | 憑證                          | 典型範例                         | 必須使用 PKCE？ |
+| -------------- | ----------------------------- | -------------------------------- | --------------- |
+| `confidential` | `client_id` + `client_secret` | Rails / Django / Node 後端       | 建議            |
+| `public`       | 僅 `client_id`（無 secret）   | React SPA、iOS/Android、Electron | 是 — 一律要     |
 
 > PKCE（S256）**永遠是安全的選擇**，也是 AuthGate 唯一接受的 `code_challenge_method`。機密客戶端也應該加上，做為縱深防禦。
 
@@ -82,7 +82,10 @@ code_challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
 ```javascript
 // Node 16+:
 const codeVerifier = crypto.randomBytes(32).toString("base64url");
-const codeChallenge = crypto.createHash("sha256").update(codeVerifier).digest("base64url");
+const codeChallenge = crypto
+  .createHash("sha256")
+  .update(codeVerifier)
+  .digest("base64url");
 ```
 
 把 `code_verifier` 存起來，步驟 4 會用到：
@@ -104,20 +107,21 @@ GET /oauth/authorize
   &code_challenge_method=S256
 ```
 
-| 參數                    | 必填     | 備註                                                                |
-| ----------------------- | -------- | ------------------------------------------------------------------- |
-| `client_id`             | 是       | 管理員提供                                                          |
-| `redirect_uri`          | 是       | 與註冊 URI **完全字串比對**                                         |
-| `response_type`         | 是       | 必須是 `code`（AuthGate 僅支援此類型）                              |
-| `scope`                 | 建議     | 空白分隔；包含 `openid` 以取得 ID token                             |
-| `state`                 | 是（CSRF） | 隨機值 — 回呼時驗證                                                |
-| `nonce`                 | OIDC     | 當 `scope` 含 `openid` 時必填；會寫進 `id_token` 以防重送           |
-| `code_challenge`        | PKCE     | 依上面方式推導                                                      |
-| `code_challenge_method` | PKCE     | 必須是 `S256`（`plain` 會被拒）                                     |
+| 參數                    | 必填       | 備註                                                                                                                                                                                                                             |
+| ----------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `client_id`             | 是         | 管理員提供                                                                                                                                                                                                                       |
+| `redirect_uri`          | 是         | 與註冊 URI **完全字串比對**                                                                                                                                                                                                      |
+| `response_type`         | 是         | 必須是 `code`（AuthGate 僅支援此類型）                                                                                                                                                                                           |
+| `scope`                 | 建議       | 空白分隔；包含 `openid` 以取得 ID token                                                                                                                                                                                          |
+| `state`                 | 是（CSRF） | 隨機值 — 回呼時驗證                                                                                                                                                                                                              |
+| `nonce`                 | OIDC       | 當 `scope` 含 `openid` 時必填；會寫進 `id_token` 以防重送                                                                                                                                                                        |
+| `code_challenge`        | PKCE       | 依上面方式推導                                                                                                                                                                                                                   |
+| `code_challenge_method` | PKCE       | 必須是 `S256`（`plain` 會被拒）                                                                                                                                                                                                  |
+| `resource`              | 選填       | [RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707) Resource Indicator — 絕對 http(s) URI、無 fragment、≤ 1024 字元；可重複（最多 10 個）。帶入後，簽發的 access token `aud` 會綁到這些值。格式不正確會回 `invalid_target` |
 
 > **state 與 nonce**：各自獨立、隨機、夠長（≥ 16 bytes base64url）。把 `state` 與 `code_verifier` 以 `state` 當作鍵存入使用者 session，回呼時才能查得到。
 
-使用者會被要求登入（若尚未登入），接著看到列出 scope 的授權同意畫面。
+使用者會被要求登入（若尚未登入），接著看到列出 scope 的授權同意畫面。若帶了 `resource`，同意畫面會另外列出 token 適用的 audience 目標。
 
 ### 步驟 3：處理回呼
 
@@ -165,6 +169,8 @@ curl -X POST https://your-authgate/oauth/token \
 
 也可以放在表單 body（`client_id=...&client_secret=...`）。依 RFC 6749 §2.3.1，HTTP Basic 是首選。
 
+> **縮小 `resource`**：若在 `/oauth/authorize` 帶過 `resource=...`，這裡可再傳一次，但必須是當時送出的集合的 **子集**（RFC 8707 §2.2）。擴張會回 `400 invalid_target`。省略 `resource` 則拿到綁定完整授權集的 token。
+
 **回應：**
 
 ```json
@@ -196,18 +202,19 @@ curl -X POST https://your-authgate/oauth/token \
 
 ## 安全檢查清單
 
-| 要求                    | 說明                                                                           |
-| ----------------------- | ------------------------------------------------------------------------------ |
-| 一律驗 `state`          | 防止回呼 CSRF                                                                  |
-| 一律驗 `nonce`          | OIDC 用 — 比對 `id_token` 內的 `nonce` claim 與您送出的值                      |
-| 一律用 PKCE（S256）     | 即便是機密客戶端，也做縱深防禦                                                 |
-| 全程 HTTPS              | token 與 code 絕對不能以明文通過網路                                           |
-| redirect URI 完全符合   | AuthGate 完全字串比對 — 小心尾斜線                                             |
-| 登出時撤銷              | 用 refresh token 呼叫 `/oauth/revoke`                                          |
-| 短效 access token       | 尊重 `expires_in`；提前刷新（例如過期前 30 秒）                                |
-| 驗證 `id_token`         | 簽章、`iss`、`aud=client_id`、`exp`、`nonce` — 見 [OpenID Connect](./oidc)     |
+| 要求                    | 說明                                                                                                                               |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| 一律驗 `state`          | 防止回呼 CSRF                                                                                                                      |
+| 一律驗 `nonce`          | OIDC 用 — 比對 `id_token` 內的 `nonce` claim 與您送出的值                                                                          |
+| 一律用 PKCE（S256）     | 即便是機密客戶端，也做縱深防禦                                                                                                     |
+| 全程 HTTPS              | token 與 code 絕對不能以明文通過網路                                                                                               |
+| redirect URI 完全符合   | AuthGate 完全字串比對 — 小心尾斜線                                                                                                 |
+| 登出時撤銷              | 用 refresh token 呼叫 `/oauth/revoke`                                                                                              |
+| 短效 access token       | 尊重 `expires_in`；提前刷新（例如過期前 30 秒）                                                                                    |
+| 驗證 `id_token`         | 簽章、`iss`、`aud=client_id`、`exp`、`nonce` — 見 [OpenID Connect](./oidc)                                                         |
+| 驗證 access token `aud` | 在 resource server 端要求 `aud` 等於該服務的識別字（RFC 8707）— 見 [JWT 驗證](./jwt-verification#audience-binding-rfc-8707)        |
 | SPA 權杖儲存            | 優先使用 BFF。否則：access token 只放記憶體；refresh token 放 `HttpOnly; Secure; SameSite=Lax` cookie。**絕不用 `localStorage`。** |
-| 原生 / CLI 儲存         | OS keychain / Credential Manager / Secret Service — 見 [Device Flow](./device-flow) |
+| 原生 / CLI 儲存         | OS keychain / Credential Manager / Secret Service — 見 [Device Flow](./device-flow)                                                |
 
 ## 範例客戶端
 

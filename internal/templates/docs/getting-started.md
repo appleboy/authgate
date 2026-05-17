@@ -6,13 +6,13 @@ AuthGate is an OAuth 2.0 + OpenID Connect authorization server. It issues tokens
 
 ## Pick a Flow
 
-| Your application                                  | Recommended flow              |
-| ------------------------------------------------- | ----------------------------- |
+| Your application                                  | Recommended flow                                |
+| ------------------------------------------------- | ----------------------------------------------- |
 | Server-rendered web app (has a backend)           | Authorization Code + PKCE (confidential client) |
 | Single-page app (React / Vue / Svelte / etc.)     | Authorization Code + PKCE (public client)       |
 | Mobile or desktop app                             | Authorization Code + PKCE (public client)       |
-| CLI tool, IoT device, or headless shell           | Device Authorization Grant    |
-| Backend service calling another service (no user) | Client Credentials            |
+| CLI tool, IoT device, or headless shell           | Device Authorization Grant                      |
+| Backend service calling another service (no user) | Client Credentials                              |
 
 Unsure? Use **Authorization Code + PKCE** for anything with a user and **Client Credentials** for service-to-service.
 
@@ -22,10 +22,11 @@ Ask your AuthGate administrator for:
 
 1. **Base URL** — e.g. `https://your-authgate`. Everything else you need is reachable from `BASE_URL/.well-known/openid-configuration` (see below).
 2. **`client_id`** — identifies your application.
-3. **`client_secret`** — only for *confidential* clients (server-side web apps, client-credentials services). Public clients (SPAs, mobile, CLIs) do not get a secret.
+3. **`client_secret`** — only for _confidential_ clients (server-side web apps, client-credentials services). Public clients (SPAs, mobile, CLIs) do not get a secret.
 4. **Allowed redirect URIs** — for Authorization Code Flow. AuthGate does **exact-string matching**: `https://yourapp.example/cb` and `https://yourapp.example/cb/` are not the same URI.
 5. **Allowed scopes** — which of `openid`, `profile`, `email`, `offline_access` this client may request. (Your admin may also have registered custom API scopes — ask which ones apply.)
 6. **Enabled grant types** — which of Device Flow / Auth Code Flow / Client Credentials are turned on for this client.
+7. **Resource identifier(s)** — _skip unless you're integrating an MCP server or a multi-RS deployment that enforces audience binding ([RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707))_. The absolute http(s) URI(s) you'll pass as `resource=` so the issued access token's `aud` matches your resource server.
 
 ## Start Here: OIDC Discovery
 
@@ -47,14 +48,33 @@ curl https://your-authgate/.well-known/openid-configuration
   "subject_types_supported": ["public"],
   "id_token_signing_alg_values_supported": ["RS256"],
   "scopes_supported": ["openid", "profile", "email", "read", "write"],
-  "token_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post", "none"],
+  "token_endpoint_auth_methods_supported": [
+    "client_secret_basic",
+    "client_secret_post",
+    "none"
+  ],
   "grant_types_supported": [
     "authorization_code",
     "urn:ietf:params:oauth:grant-type:device_code",
     "refresh_token",
     "client_credentials"
   ],
-  "claims_supported": ["sub", "iss", "aud", "exp", "iat", "auth_time", "nonce", "at_hash", "name", "preferred_username", "email", "email_verified", "picture", "updated_at"],
+  "claims_supported": [
+    "sub",
+    "iss",
+    "aud",
+    "exp",
+    "iat",
+    "auth_time",
+    "nonce",
+    "at_hash",
+    "name",
+    "preferred_username",
+    "email",
+    "email_verified",
+    "picture",
+    "updated_at"
+  ],
   "code_challenge_methods_supported": ["S256"]
 }
 ```
@@ -67,14 +87,16 @@ Most mature OAuth/OIDC libraries can consume this document directly and wire up 
 - `/oauth/introspect` and `/oauth/device/code` are supported but **not advertised** in Discovery — use the paths shown in this guide directly.
 - `offline_access` is accepted when requested even though it's not currently listed in `scopes_supported`.
 
+> **Non-OIDC / MCP clients**: AuthGate also publishes an [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414) authorization server metadata document at `/.well-known/oauth-authorization-server`. It advertises `resource_indicators_supported: true` and `device_authorization_endpoint`, and is the document MCP and OAuth-2.1-only clients expect. The two documents share fields where they overlap; pick whichever your library wants.
+
 ## Supported Scopes
 
-| Scope            | Purpose                                                                             |
-| ---------------- | ----------------------------------------------------------------------------------- |
-| `openid`         | Required to receive an **ID token** and use `/oauth/userinfo`                       |
-| `profile`        | Unlocks `name`, `preferred_username`, `picture`, `updated_at` on UserInfo/ID token  |
-| `email`          | Unlocks `email`, `email_verified` on UserInfo/ID token                              |
-| `offline_access` | Signals that you want a refresh token (OIDC Core §11)                               |
+| Scope            | Purpose                                                                            |
+| ---------------- | ---------------------------------------------------------------------------------- |
+| `openid`         | Required to receive an **ID token** and use `/oauth/userinfo`                      |
+| `profile`        | Unlocks `name`, `preferred_username`, `picture`, `updated_at` on UserInfo/ID token |
+| `email`          | Unlocks `email`, `email_verified` on UserInfo/ID token                             |
+| `offline_access` | Signals that you want a refresh token (OIDC Core §11)                              |
 
 Notes:
 
@@ -91,6 +113,8 @@ After a successful flow, AuthGate issues:
 - **ID token** — JWT about the user (only when `scope` contains `openid`). See [OpenID Connect](./oidc).
 
 Access token lifetime varies per client (`short` ≈ 15m, `standard` ≈ 10h, `long` ≈ 24h). Always honor the `expires_in` field of the token response — **never hardcode a duration**.
+
+When you pass `resource=<URL>` on token requests, the access token's `aud` claim is bound to that resource (RFC 8707). Resource servers should validate `aud` against their own identifier — see [JWT Verification §Audience Binding](./jwt-verification#audience-binding-rfc-8707).
 
 Rate limits, revocation, introspection, refresh rotation: see [Tokens & Revocation](./tokens).
 

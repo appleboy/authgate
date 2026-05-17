@@ -13,10 +13,10 @@ Use Authorization Code + PKCE when:
 
 ## Client Types
 
-| Type             | Credentials                | Typical examples                    | Must use PKCE?        |
-| ---------------- | -------------------------- | ----------------------------------- | --------------------- |
-| `confidential`   | `client_id` + `client_secret` | Rails / Django / Node backend    | Recommended           |
-| `public`         | `client_id` only (no secret)  | React SPA, iOS/Android, Electron | Yes — always          |
+| Type           | Credentials                   | Typical examples                 | Must use PKCE? |
+| -------------- | ----------------------------- | -------------------------------- | -------------- |
+| `confidential` | `client_id` + `client_secret` | Rails / Django / Node backend    | Recommended    |
+| `public`       | `client_id` only (no secret)  | React SPA, iOS/Android, Electron | Yes — always   |
 
 > PKCE (S256) is **always safe to use** and is the only `code_challenge_method` AuthGate accepts. Confidential clients should also include it — defence-in-depth.
 
@@ -82,7 +82,10 @@ code_challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
 ```javascript
 // Node 16+:
 const codeVerifier = crypto.randomBytes(32).toString("base64url");
-const codeChallenge = crypto.createHash("sha256").update(codeVerifier).digest("base64url");
+const codeChallenge = crypto
+  .createHash("sha256")
+  .update(codeVerifier)
+  .digest("base64url");
 ```
 
 Store the `code_verifier` for use in Step 4:
@@ -104,20 +107,21 @@ GET /oauth/authorize
   &code_challenge_method=S256
 ```
 
-| Parameter               | Required    | Notes                                                      |
-| ----------------------- | ----------- | ---------------------------------------------------------- |
-| `client_id`             | yes         | From the admin                                             |
-| `redirect_uri`          | yes         | **Exact string match** against a registered URI            |
-| `response_type`         | yes         | Must be `code` (the only type AuthGate supports)           |
-| `scope`                 | recommended | Space-separated; include `openid` for an ID token          |
-| `state`                 | yes (CSRF)  | Random value — validate on callback                        |
-| `nonce`                 | OIDC        | Required when `scope` contains `openid`; ends up in `id_token` for replay protection |
-| `code_challenge`        | PKCE        | Derived as above                                           |
-| `code_challenge_method` | PKCE        | Must be `S256` (`plain` is rejected)                       |
+| Parameter               | Required    | Notes                                                                                                                                                                                                                                                                         |
+| ----------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `client_id`             | yes         | From the admin                                                                                                                                                                                                                                                                |
+| `redirect_uri`          | yes         | **Exact string match** against a registered URI                                                                                                                                                                                                                               |
+| `response_type`         | yes         | Must be `code` (the only type AuthGate supports)                                                                                                                                                                                                                              |
+| `scope`                 | recommended | Space-separated; include `openid` for an ID token                                                                                                                                                                                                                             |
+| `state`                 | yes (CSRF)  | Random value — validate on callback                                                                                                                                                                                                                                           |
+| `nonce`                 | OIDC        | Required when `scope` contains `openid`; ends up in `id_token` for replay protection                                                                                                                                                                                          |
+| `code_challenge`        | PKCE        | Derived as above                                                                                                                                                                                                                                                              |
+| `code_challenge_method` | PKCE        | Must be `S256` (`plain` is rejected)                                                                                                                                                                                                                                          |
+| `resource`              | optional    | [RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707) Resource Indicator — absolute http(s) URI, no fragment, ≤ 1024 chars; repeat for multiple resources (max 10). When supplied, the issued access token's `aud` is bound to these values. Malformed → `invalid_target` |
 
 > **State & nonce**: generate independently, random, and long enough (≥ 16 bytes base64url). Persist `state` and `code_verifier` against the user session keyed by `state`, so the callback can look them up.
 
-The user will be prompted to log in (if not already) and then see a consent screen listing requested scopes.
+The user will be prompted to log in (if not already) and then see a consent screen listing requested scopes. When `resource` is supplied, the consent screen separately lists the audience target(s) the token will be valid for.
 
 ### Step 3: Handle the Callback
 
@@ -165,6 +169,8 @@ curl -X POST https://your-authgate/oauth/token \
 
 Or put the credentials in the form body (`client_id=...&client_secret=...`). HTTP Basic is preferred per RFC 6749 §2.3.1.
 
+> **Narrowing `resource`**: if you sent `resource=...` on `/oauth/authorize`, you may pass `resource=...` here too — but it must be a **subset** of what you sent at the authorize step (RFC 8707 §2.2). Widening returns `400 invalid_target`. Omit `resource` to receive a token bound to the full granted set.
+
 **Response:**
 
 ```json
@@ -196,18 +202,19 @@ Users can review and revoke per-app access at **Account → Authorized Apps** in
 
 ## Security Checklist
 
-| Requirement               | Details                                                                   |
-| ------------------------- | ------------------------------------------------------------------------- |
-| Always validate `state`   | Prevents CSRF on the callback                                             |
-| Always validate `nonce`   | For OIDC — compare the `id_token` `nonce` claim to what you sent          |
-| Always use PKCE (S256)    | Defence-in-depth even for confidential clients                            |
-| Use HTTPS everywhere      | Tokens and codes must never cross the wire in cleartext                   |
-| Exact redirect URI        | AuthGate does exact-string match — watch for trailing slashes             |
-| Revoke on logout          | Call `/oauth/revoke` with the refresh token                               |
-| Short-lived access tokens | Honor `expires_in`; refresh proactively (e.g. 30s before expiry)          |
-| Validate `id_token`       | Signature, `iss`, `aud=client_id`, `exp`, `nonce` — see [OpenID Connect](./oidc) |
-| SPA token storage         | Prefer BFF. Otherwise: access token in memory only; refresh token in `HttpOnly; Secure; SameSite=Lax` cookie. **Never `localStorage`.** |
-| Native / CLI storage      | OS keychain / Credential Manager / Secret Service — see [Device Flow §Storing Tokens Locally](./device-flow#storing-tokens-locally) |
+| Requirement                 | Details                                                                                                                                                   |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Always validate `state`     | Prevents CSRF on the callback                                                                                                                             |
+| Always validate `nonce`     | For OIDC — compare the `id_token` `nonce` claim to what you sent                                                                                          |
+| Always use PKCE (S256)      | Defence-in-depth even for confidential clients                                                                                                            |
+| Use HTTPS everywhere        | Tokens and codes must never cross the wire in cleartext                                                                                                   |
+| Exact redirect URI          | AuthGate does exact-string match — watch for trailing slashes                                                                                             |
+| Revoke on logout            | Call `/oauth/revoke` with the refresh token                                                                                                               |
+| Short-lived access tokens   | Honor `expires_in`; refresh proactively (e.g. 30s before expiry)                                                                                          |
+| Validate `id_token`         | Signature, `iss`, `aud=client_id`, `exp`, `nonce` — see [OpenID Connect](./oidc)                                                                          |
+| Validate access-token `aud` | At your resource server, require `aud` matches your resource identifier (RFC 8707) — see [JWT Verification](./jwt-verification#audience-binding-rfc-8707) |
+| SPA token storage           | Prefer BFF. Otherwise: access token in memory only; refresh token in `HttpOnly; Secure; SameSite=Lax` cookie. **Never `localStorage`.**                   |
+| Native / CLI storage        | OS keychain / Credential Manager / Secret Service — see [Device Flow §Storing Tokens Locally](./device-flow#storing-tokens-locally)                       |
 
 ## Example Clients
 

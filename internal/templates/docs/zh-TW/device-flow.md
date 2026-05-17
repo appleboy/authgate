@@ -44,10 +44,24 @@ curl -X POST https://your-authgate/oauth/device/code \
   -d "scope=openid profile email offline_access"
 ```
 
-| 參數        | 必填 | 備註                                                               |
-| ----------- | ---- | ------------------------------------------------------------------ |
-| `client_id` | 是   | 已啟用 Device Flow 的公開客戶端                                    |
-| `scope`     | 否   | 空白分隔；省略則預設 `email profile`。包含 `openid` 才會拿到 ID token |
+| 參數        | 必填 | 備註                                                                                                                                                                                                                                                                                       |
+| ----------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `client_id` | 是   | 已啟用 Device Flow 的公開客戶端                                                                                                                                                                                                                                                            |
+| `scope`     | 否   | 空白分隔；省略則預設 `email profile`。包含 `openid` 才會拿到 ID token                                                                                                                                                                                                                      |
+| `resource`  | 否   | [RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707) Resource Indicator。絕對 http(s) URI、無 fragment、≤ 1024 字元；可重複（最多 10 個）。帶入後，簽發的 access token `aud` 會綁到這些值。格式不正確會回 `invalid_target` — 見 [錯誤處理](./errors#resource-indicator-錯誤-rfc-8707) |
+
+**附 Resource Indicator 的範例（MCP / 多 RS）：**
+
+```bash
+curl -X POST https://your-authgate/oauth/device/code \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "client_id=YOUR_CLIENT_ID" \
+  -d "scope=read" \
+  -d "resource=https://api.example.com" \
+  -d "resource=https://mcp.example.com"
+```
+
+帶 `resource` 時，使用者會看到一個專屬的 **device 確認頁** 列出兩個 resource，必須點「Confirm and Authorize」後 device code 才會被標記為已授權。簽發的 access token `aud` 也會綁定這些 resource。
 
 **回應：**
 
@@ -96,6 +110,8 @@ curl -X POST https://your-authgate/oauth/token \
   -d "client_id=YOUR_CLIENT_ID"
 ```
 
+> **縮小 `resource`（RFC 8707 §2.2）**：可選擇在這裡再傳一次 `resource=...`，將 access token 綁到 `/oauth/device/code` 原授權集合的 **子集**。要求未在原授權的 resource（擴張）會回 `400 invalid_target` — 但 device code _不會_ 被消耗，CLI 可以修正後重試。
+
 **成功**（使用者已同意）：
 
 ```json
@@ -110,13 +126,14 @@ curl -X POST https://your-authgate/oauth/token \
 
 **輪詢中的錯誤**（HTTP 400，格式 `{"error": "...", "error_description": "..."}`）：
 
-| `error`                 | HTTP | 意義 / 處理動作                                           |
-| ----------------------- | ---- | --------------------------------------------------------- |
-| `authorization_pending` | 400  | 使用者還沒同意 — 維持原 `interval` 繼續輪詢               |
-| `slow_down`             | 400  | 輪詢太快 — **將 interval 增加 ≥ 5 秒**                    |
-| `access_denied`         | 400  | 使用者拒絕了 — 停止輪詢                                   |
-| `expired_token`         | 400  | `device_code` 超過 `expires_in` — 從步驟 1 重新開始       |
-| `invalid_grant`         | 400  | `device_code` 不存在或已被用過 — 從步驟 1 重新開始        |
+| `error`                 | HTTP | 意義 / 處理動作                                                                                                                                                                                      |
+| ----------------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `authorization_pending` | 400  | 使用者還沒同意 — 維持原 `interval` 繼續輪詢                                                                                                                                                          |
+| `slow_down`             | 400  | 輪詢太快 — **將 interval 增加 ≥ 5 秒**                                                                                                                                                               |
+| `access_denied`         | 400  | 使用者拒絕了 — 停止輪詢                                                                                                                                                                              |
+| `expired_token`         | 400  | `device_code` 超過 `expires_in` — 從步驟 1 重新開始                                                                                                                                                  |
+| `invalid_grant`         | 400  | `device_code` 不存在或已被用過 — 從步驟 1 重新開始                                                                                                                                                   |
+| `invalid_target`        | 400  | 本次 token 請求帶的 `resource=` 不在原 device-code 授權子集，或格式不對。Device code **不會** 被消耗 — 修正後重試。見 [錯誤處理 §Resource Indicator 錯誤](./errors#resource-indicator-錯誤-rfc-8707) |
 
 也可能遇到 `429 Too Many Requests` — 見 [Token 與撤銷](./tokens)。完整錯誤清單見 [錯誤處理](./errors)。
 

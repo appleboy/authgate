@@ -86,14 +86,16 @@ curl https://your-authgate/.well-known/jwks.json
 
 ```json
 {
-  "keys": [{
-    "kty": "RSA",
-    "use": "sig",
-    "kid": "abc123...",
-    "alg": "RS256",
-    "n": "0vx7agoebGc...",
-    "e": "AQAB"
-  }]
+  "keys": [
+    {
+      "kty": "RSA",
+      "use": "sig",
+      "kid": "abc123...",
+      "alg": "RS256",
+      "n": "0vx7agoebGc...",
+      "e": "AQAB"
+    }
+  ]
 }
 ```
 
@@ -101,15 +103,17 @@ curl https://your-authgate/.well-known/jwks.json
 
 ```json
 {
-  "keys": [{
-    "kty": "EC",
-    "use": "sig",
-    "kid": "def456...",
-    "alg": "ES256",
-    "crv": "P-256",
-    "x": "f83OJ3D2xF1B...",
-    "y": "x_FEzRu9m36H..."
-  }]
+  "keys": [
+    {
+      "kty": "EC",
+      "use": "sig",
+      "kid": "def456...",
+      "alg": "ES256",
+      "crv": "P-256",
+      "x": "f83OJ3D2xF1B...",
+      "y": "x_FEzRu9m36H..."
+    }
+  ]
 }
 ```
 
@@ -145,21 +149,33 @@ The response includes `Cache-Control: public, max-age=3600` — cache for up to 
 }
 ```
 
-| Claim       | Description                            |
-| ----------- | -------------------------------------- |
-| `user_id`   | Same as `sub`                          |
-| `client_id` | OAuth client that requested the token  |
-| `scope`     | Space-separated granted scopes         |
-| `type`      | Always `access` for tokens you receive as a Bearer. Refresh tokens also set `type=refresh` but aren't sent to resource servers — reject anything other than `access` |
-| `exp`       | Expiration time (Unix timestamp)       |
-| `iat`       | Issued-at time (Unix timestamp)        |
-| `iss`       | Issuer URL (AuthGate's BASE_URL)       |
-| `sub`       | User UUID for user-delegated tokens, or `client:<client_id>` for `client_credentials` tokens |
-| `jti`       | Unique token identifier (UUID)         |
-
-> **No `aud` claim**: AuthGate access tokens intentionally omit the `aud` (audience) claim. Do **not** configure your JWT library to require `aud` on access tokens — it will reject every token. (ID tokens **do** carry `aud=<client_id>`; validate `aud` only there. See [OpenID Connect](./oidc).)
+| Claim       | Description                                                                                                                                                                                                                                                                                                                                                    |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user_id`   | Same as `sub`                                                                                                                                                                                                                                                                                                                                                  |
+| `client_id` | OAuth client that requested the token                                                                                                                                                                                                                                                                                                                          |
+| `scope`     | Space-separated granted scopes                                                                                                                                                                                                                                                                                                                                 |
+| `type`      | `access` on tokens you accept as a Bearer; `refresh` on refresh tokens (which must **never** be accepted by a resource server). Reject anything other than `access`                                                                                                                                                                                            |
+| `aud`       | Audience — the resource server(s) this token is valid for. Set to the per-request `resource` value(s) (RFC 8707) when the client supplied one; otherwise falls back to the static `JWT_AUDIENCE` config. May be absent on older deployments that set neither. May be a single string OR a JSON array. See [Audience Binding](#audience-binding-rfc-8707) below |
+| `exp`       | Expiration time (Unix timestamp)                                                                                                                                                                                                                                                                                                                               |
+| `iat`       | Issued-at time (Unix timestamp)                                                                                                                                                                                                                                                                                                                                |
+| `iss`       | Issuer URL (AuthGate's BASE_URL)                                                                                                                                                                                                                                                                                                                               |
+| `sub`       | User UUID for user-delegated tokens, or `client:<client_id>` for `client_credentials` tokens                                                                                                                                                                                                                                                                   |
+| `jti`       | Unique token identifier (UUID)                                                                                                                                                                                                                                                                                                                                 |
 
 > **M2M tokens**: when `sub` starts with `client:` the token is from the Client Credentials flow — no end user is involved. Branch on this if your API treats service calls differently.
+
+### Audience Binding (RFC 8707)
+
+AuthGate supports [Resource Indicators (RFC 8707)](https://datatracker.ietf.org/doc/html/rfc8707). When an OAuth client includes one or more `resource=<URL>` parameters on `/oauth/authorize`, `/oauth/device/code`, or `/oauth/token`, the issued access-token JWT's `aud` claim is **bound to those values at issuance**. With no `resource` parameter, `aud` falls back to the deployment-wide `JWT_AUDIENCE` config (if set) or is omitted entirely.
+
+**Resource servers must validate `aud`:**
+
+- Configure your JWT library to require `aud` matching **your own resource identifier** (e.g. `https://api.example.com`). This is what stops a token minted for `https://api-a.example.com` from being silently accepted at `https://api-b.example.com`.
+- `aud` may be a single string OR a JSON array — most JWT libraries (`jwt.WithAudience` in Go, `audience=...` in PyJWT, `audience: ...` in jose) handle both shapes.
+- **Refresh tokens are signed with the static `JWT_AUDIENCE`**, never the per-request resource. Combined with the `type=access` check, this is what prevents a refresh token from being mistakenly accepted at a resource server. Always check **both** claims.
+- Tokens issued before audience binding was deployed may omit `aud`. If your deployment guarantees a `resource` parameter or a non-empty `JWT_AUDIENCE`, require `aud` strictly; otherwise accept its absence but log it.
+
+> ID tokens are unaffected — their `aud` continues to be the OAuth `client_id` per OIDC Core 1.0. See [OpenID Connect](./oidc).
 
 ## Verification Steps
 
@@ -167,7 +183,11 @@ The response includes `Cache-Control: public, max-age=3600` — cache for up to 
 2. **Fetch JWKS** from `/.well-known/jwks.json` (use cached copy if available)
 3. **Find the key** matching the `kid` from the JWT header
 4. **Verify the signature** using the public key
-5. **Validate claims**: `exp` (not expired), `iss` (matches AuthGate URL), `type` (is `access`)
+5. **Validate claims**:
+   - `exp` — token is not expired
+   - `iss` — matches your AuthGate URL
+   - `type` — must be `access` (reject `refresh`)
+   - `aud` — must contain your resource server's identifier — see [Audience Binding](#audience-binding-rfc-8707)
 6. **Check authorization**: verify `scope` matches your requirements; optionally validate `client_id` if your API restricts access to specific clients
 
 ## Code Examples
@@ -180,74 +200,79 @@ Using [`keyfunc`](https://github.com/MicahParks/keyfunc) for automatic JWKS fetc
 package main
 
 import (
-	"fmt"
-	"log"
-	"net/http"
-	"slices"
-	"strings"
+  "fmt"
+  "log"
+  "net/http"
+  "slices"
+  "strings"
 
-	"github.com/MicahParks/keyfunc/v3"
-	"github.com/golang-jwt/jwt/v5"
+  "github.com/MicahParks/keyfunc/v3"
+  "github.com/golang-jwt/jwt/v5"
 )
 
 func main() {
-	jwksURL := "https://your-authgate/.well-known/jwks.json"
+  jwksURL := "https://your-authgate/.well-known/jwks.json"
 
-	// Create a keyfunc that auto-refreshes JWKS
-	k, err := keyfunc.NewDefault([]string{jwksURL})
-	if err != nil {
-		log.Fatalf("Failed to create JWKS keyfunc: %v", err)
-	}
+  // Create a keyfunc that auto-refreshes JWKS
+  k, err := keyfunc.NewDefault([]string{jwksURL})
+  if err != nil {
+    log.Fatalf("Failed to create JWKS keyfunc: %v", err)
+  }
 
-	http.HandleFunc("/api/resource", func(w http.ResponseWriter, r *http.Request) {
-		auth := r.Header.Get("Authorization")
-		if !strings.HasPrefix(auth, "Bearer ") {
-			http.Error(w, "Missing Bearer token", http.StatusUnauthorized)
-			return
-		}
-		tokenString := strings.TrimPrefix(auth, "Bearer ")
+  http.HandleFunc("/api/resource", func(w http.ResponseWriter, r *http.Request) {
+    auth := r.Header.Get("Authorization")
+    if !strings.HasPrefix(auth, "Bearer ") {
+      http.Error(w, "Missing Bearer token", http.StatusUnauthorized)
+      return
+    }
+    tokenString := strings.TrimPrefix(auth, "Bearer ")
 
-		// Parse and verify the JWT using JWKS
-		token, err := jwt.Parse(tokenString, k.Keyfunc,
-			jwt.WithIssuer("https://your-authgate"),
-			jwt.WithExpirationRequired(),
-			jwt.WithValidMethods([]string{"RS256", "ES256"}),
-		)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Invalid token: %v", err), http.StatusUnauthorized)
-			return
-		}
+    // Parse and verify the JWT using JWKS.
+    // WithAudience enforces that the JWT's `aud` claim includes this
+    // resource server's identifier — AuthGate sets `aud` from a per-request
+    // RFC 8707 `resource` parameter when supplied, otherwise from the static
+    // JWT_AUDIENCE config; the RS-side check is the same in either case.
+    token, err := jwt.Parse(tokenString, k.Keyfunc,
+      jwt.WithIssuer("https://your-authgate"),
+      jwt.WithAudience("https://api.example.com"), // your resource server identifier
+      jwt.WithExpirationRequired(),
+      jwt.WithValidMethods([]string{"RS256", "ES256"}),
+    )
+    if err != nil {
+      http.Error(w, fmt.Sprintf("Invalid token: %v", err), http.StatusUnauthorized)
+      return
+    }
 
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			http.Error(w, "Invalid token claims", http.StatusUnauthorized)
-			return
-		}
+    claims, ok := token.Claims.(jwt.MapClaims)
+    if !ok {
+      http.Error(w, "Invalid token claims", http.StatusUnauthorized)
+      return
+    }
 
-		tokenType, ok := claims["type"].(string)
-		if !ok || tokenType != "access" {
-			http.Error(w, "Invalid token type", http.StatusUnauthorized)
-			return
-		}
+    tokenType, ok := claims["type"].(string)
+    if !ok || tokenType != "access" {
+      http.Error(w, "Invalid token type", http.StatusUnauthorized)
+      return
+    }
 
-		// Check scopes — replace "profile" with whatever your API requires.
-		scopeStr, _ := claims["scope"].(string)
-		scopes := strings.Fields(scopeStr)
-		if !slices.Contains(scopes, "profile") {
-			http.Error(w, "Insufficient scope", http.StatusForbidden)
-			return
-		}
+    // Check scopes — replace "profile" with whatever your API requires.
+    scopeStr, _ := claims["scope"].(string)
+    scopes := strings.Fields(scopeStr)
+    if !slices.Contains(scopes, "profile") {
+      http.Error(w, "Insufficient scope", http.StatusForbidden)
+      return
+    }
 
-		// For user tokens, sub is a UUID; for client_credentials, it is "client:<client_id>"
-		subject, ok := claims["sub"].(string)
-		if !ok || subject == "" {
-			http.Error(w, "Invalid token claims", http.StatusUnauthorized)
-			return
-		}
-		fmt.Fprintf(w, "Hello, %s!", subject)
-	})
+    // For user tokens, sub is a UUID; for client_credentials, it is "client:<client_id>"
+    subject, ok := claims["sub"].(string)
+    if !ok || subject == "" {
+      http.Error(w, "Invalid token claims", http.StatusUnauthorized)
+      return
+    }
+    fmt.Fprintf(w, "Hello, %s!", subject)
+  })
 
-	log.Fatal(http.ListenAndServe(":8081", nil))
+  log.Fatal(http.ListenAndServe(":8081", nil))
 }
 ```
 
@@ -264,6 +289,7 @@ app = Flask(__name__)
 
 AUTHGATE_URL = "https://your-authgate"
 JWKS_URL = f"{AUTHGATE_URL}/.well-known/jwks.json"
+MY_RESOURCE_ID = "https://api.example.com"   # this resource server's identifier
 
 # PyJWKClient caches JWKS keys automatically
 jwks_client = PyJWKClient(JWKS_URL, cache_keys=True, lifespan=3600)
@@ -283,7 +309,8 @@ def protected_resource():
             signing_key.key,
             algorithms=["RS256", "ES256"],
             issuer=AUTHGATE_URL,
-            options={"require": ["exp", "iss", "sub"]},
+            audience=MY_RESOURCE_ID,                       # enforce RFC 8707 audience binding
+            options={"require": ["exp", "iss", "sub", "aud"]},
         )
     except jwt.InvalidTokenError as e:
         return jsonify({"error": f"Invalid token: {e}"}), 401
@@ -308,8 +335,9 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { createServer } from "node:http";
 
 const AUTHGATE_URL = "https://your-authgate";
+const MY_RESOURCE_ID = "https://api.example.com"; // this resource server's identifier
 const JWKS = createRemoteJWKSet(
-  new URL(`${AUTHGATE_URL}/.well-known/jwks.json`)
+  new URL(`${AUTHGATE_URL}/.well-known/jwks.json`),
 );
 
 const server = createServer(async (req, res) => {
@@ -323,8 +351,9 @@ const server = createServer(async (req, res) => {
   try {
     const { payload } = await jwtVerify(auth.slice(7), JWKS, {
       issuer: AUTHGATE_URL,
+      audience: MY_RESOURCE_ID, // enforce RFC 8707 audience binding
       algorithms: ["RS256", "ES256"],
-      requiredClaims: ["exp", "sub", "scope"],
+      requiredClaims: ["exp", "sub", "aud", "scope"],
     });
 
     if (payload.type !== "access") {
@@ -354,13 +383,13 @@ server.listen(8081, () => console.log("Resource server on :8081"));
 
 ## Caching Best Practices
 
-| Practice | Details |
-| -------- | ------- |
-| **Respect `Cache-Control`** | AuthGate sets `max-age=3600` (1 hour). Don't fetch more often. |
-| **Use JWKS libraries** | Libraries like `keyfunc` (Go), `PyJWKClient` (Python), and `jose` (Node.js) handle caching automatically. |
-| **Cache by `kid`** | Index cached keys by their `kid` value for O(1) lookup. |
-| **Handle unknown `kid`** | Re-fetch JWKS once on unknown `kid`. If still no match, reject the token. |
-| **Pre-warm cache** | Fetch JWKS at service startup to avoid latency on the first request. |
+| Practice                    | Details                                                                                                   |
+| --------------------------- | --------------------------------------------------------------------------------------------------------- |
+| **Respect `Cache-Control`** | AuthGate sets `max-age=3600` (1 hour). Don't fetch more often.                                            |
+| **Use JWKS libraries**      | Libraries like `keyfunc` (Go), `PyJWKClient` (Python), and `jose` (Node.js) handle caching automatically. |
+| **Cache by `kid`**          | Index cached keys by their `kid` value for O(1) lookup.                                                   |
+| **Handle unknown `kid`**    | Re-fetch JWKS once on unknown `kid`. If still no match, reject the token.                                 |
+| **Pre-warm cache**          | Fetch JWKS at service startup to avoid latency on the first request.                                      |
 
 ## Key Rotation
 
@@ -370,11 +399,11 @@ server.listen(8081, () => console.log("Resource server on :8081"));
 
 ### Timeline
 
-| Time   | Event                                                                  |
-| ------ | ---------------------------------------------------------------------- |
-| T+0    | AuthGate restarts with new key; JWKS endpoint serves new public key    |
-| T+0~1h | Resource servers with cached old JWKS re-fetch on unknown `kid`        |
-| T+1h   | All old access tokens have expired (default expiry = 1 hour)           |
+| Time   | Event                                                               |
+| ------ | ------------------------------------------------------------------- |
+| T+0    | AuthGate restarts with new key; JWKS endpoint serves new public key |
+| T+0~1h | Resource servers with cached old JWKS re-fetch on unknown `kid`     |
+| T+1h   | All old access tokens have expired (default expiry = 1 hour)        |
 
 > **Limitations**: AuthGate serves a single active public key in the JWKS response. During rotation, resource servers that don't handle unknown `kid` gracefully may reject new tokens until their JWKS cache expires (up to 1 hour). Once a resource server refreshes to the new JWKS, it can no longer verify still-unexpired tokens signed with the old key. To minimize disruption, use short-lived access tokens or schedule rotation during low-traffic periods.
 
@@ -384,7 +413,8 @@ server.listen(8081, () => console.log("Resource server on :8081"));
 - **Not re-fetching JWKS on unknown `kid`** — Re-fetch once before rejecting; this enables seamless key rotation
 - **JWKS empty for HS256** — Switch to RS256 or ES256 for JWKS-based verification
 - **Not validating `iss`** — Always check the issuer matches your AuthGate URL
-- **Accepting refresh tokens** — Always verify `type` is `access`
+- **Not validating `aud`** — A token minted for another resource server must not be accepted at yours. Configure `WithAudience` (Go), `audience=` (PyJWT), or `audience:` (jose) with **your own** resource identifier — this enforces both the RFC 8707 per-request binding and the static `JWT_AUDIENCE` fallback in one check
+- **Accepting refresh tokens at resource servers** — Always verify `type=access`. Refresh tokens are signed with the same key and carry the static `JWT_AUDIENCE` as their `aud`; without the `type` check, a stolen refresh token can be replayed at any RS that only validates signature/iss/exp/aud
 - **Hardcoding public keys** — Use JWKS for automatic key rotation support
 - **Clock skew** — Keep server clocks synchronized with NTP; configure a 30-60 second tolerance in your JWT library
 

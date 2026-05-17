@@ -19,11 +19,11 @@
 
 ## 演算法比較
 
-| 演算法   | 類型       | 金鑰材料                       | Token 大小 | 適用情境                               |
-| -------- | ---------- | ------------------------------ | ---------- | -------------------------------------- |
-| `HS256`  | 對稱       | `JWT_SECRET`（共享 secret）    | ~300 bytes | 單一服務的簡單部署                     |
-| `RS256`  | 非對稱     | RSA 2048-bit 私鑰              | ~600 bytes | 廣泛生態支援，以 JWKS 分發             |
-| `ES256`  | 非對稱     | ECDSA P-256 私鑰               | ~400 bytes | 體積小，適合現代部署                   |
+| 演算法  | 類型   | 金鑰材料                    | Token 大小 | 適用情境                   |
+| ------- | ------ | --------------------------- | ---------- | -------------------------- |
+| `HS256` | 對稱   | `JWT_SECRET`（共享 secret） | ~300 bytes | 單一服務的簡單部署         |
+| `RS256` | 非對稱 | RSA 2048-bit 私鑰           | ~600 bytes | 廣泛生態支援，以 JWKS 分發 |
+| `ES256` | 非對稱 | ECDSA P-256 私鑰            | ~400 bytes | 體積小，適合現代部署       |
 
 > **建議**：最大相容性選 **RS256**；想要小體積 token 選 **ES256**。多服務架構請避免 HS256。
 
@@ -86,14 +86,16 @@ curl https://your-authgate/.well-known/jwks.json
 
 ```json
 {
-  "keys": [{
-    "kty": "RSA",
-    "use": "sig",
-    "kid": "abc123...",
-    "alg": "RS256",
-    "n": "0vx7agoebGc...",
-    "e": "AQAB"
-  }]
+  "keys": [
+    {
+      "kty": "RSA",
+      "use": "sig",
+      "kid": "abc123...",
+      "alg": "RS256",
+      "n": "0vx7agoebGc...",
+      "e": "AQAB"
+    }
+  ]
 }
 ```
 
@@ -101,15 +103,17 @@ curl https://your-authgate/.well-known/jwks.json
 
 ```json
 {
-  "keys": [{
-    "kty": "EC",
-    "use": "sig",
-    "kid": "def456...",
-    "alg": "ES256",
-    "crv": "P-256",
-    "x": "f83OJ3D2xF1B...",
-    "y": "x_FEzRu9m36H..."
-  }]
+  "keys": [
+    {
+      "kty": "EC",
+      "use": "sig",
+      "kid": "def456...",
+      "alg": "ES256",
+      "crv": "P-256",
+      "x": "f83OJ3D2xF1B...",
+      "y": "x_FEzRu9m36H..."
+    }
+  ]
 }
 ```
 
@@ -145,21 +149,33 @@ curl https://your-authgate/.well-known/jwks.json
 }
 ```
 
-| Claim       | 說明                                                                                                            |
-| ----------- | --------------------------------------------------------------------------------------------------------------- |
-| `user_id`   | 與 `sub` 相同                                                                                                   |
-| `client_id` | 索取此 token 的 OAuth 客戶端                                                                                    |
-| `scope`     | 空白分隔的授予 scope                                                                                            |
-| `type`      | 收到當 Bearer 使用的一定是 `access`。refresh token 也會帶 `type=refresh` 但不應送到 resource server — 一律只接受 `access` |
-| `exp`       | 過期時間（Unix 秒）                                                                                             |
-| `iat`       | 簽發時間（Unix 秒）                                                                                             |
-| `iss`       | Issuer URL（AuthGate 的 BASE_URL）                                                                              |
-| `sub`       | 使用者 UUID；Client Credentials token 則為 `client:<client_id>`                                                 |
-| `jti`       | 唯一 token id（UUID）                                                                                           |
-
-> **無 `aud` claim**：AuthGate 的 access token 刻意不帶 `aud`。**不要** 在 JWT 函式庫設定要求 `aud`，否則每張 token 都會被拒。（ID token **有** `aud=<client_id>`；只在 ID token 驗 `aud`。詳見 [OpenID Connect](./oidc)。）
+| Claim       | 說明                                                                                                                                                                                                                                                           |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user_id`   | 與 `sub` 相同                                                                                                                                                                                                                                                  |
+| `client_id` | 索取此 token 的 OAuth 客戶端                                                                                                                                                                                                                                   |
+| `scope`     | 空白分隔的授予 scope                                                                                                                                                                                                                                           |
+| `type`      | 您接受為 Bearer 的 token 一定是 `access`；refresh token 帶 `type=refresh`，resource server **絕對不可** 接受。一律只接受 `access`                                                                                                                              |
+| `aud`       | Audience — 這張 token 適用的 resource server。當客戶端傳入 `resource` 參數（RFC 8707）時設為該值；否則回退為部署層級的 `JWT_AUDIENCE`。舊部署若兩者皆未設定可能無此 claim。可能是單一字串或 JSON 陣列。詳見下方 [Audience Binding](#audience-binding-rfc-8707) |
+| `exp`       | 過期時間（Unix 秒）                                                                                                                                                                                                                                            |
+| `iat`       | 簽發時間（Unix 秒）                                                                                                                                                                                                                                            |
+| `iss`       | Issuer URL（AuthGate 的 BASE_URL）                                                                                                                                                                                                                             |
+| `sub`       | 使用者 UUID；Client Credentials token 則為 `client:<client_id>`                                                                                                                                                                                                |
+| `jti`       | 唯一 token id（UUID）                                                                                                                                                                                                                                          |
 
 > **M2M token**：當 `sub` 以 `client:` 開頭，代表這張 token 來自 Client Credentials 流程，沒有終端使用者。若您的 API 要區別處理服務呼叫，可以依此分流。
+
+### Audience Binding (RFC 8707)
+
+AuthGate 支援 [Resource Indicators (RFC 8707)](https://datatracker.ietf.org/doc/html/rfc8707)。當 OAuth 客戶端在 `/oauth/authorize`、`/oauth/device/code` 或 `/oauth/token` 帶入一個以上的 `resource=<URL>` 參數時，**簽發當下** 就把存取 token 的 `aud` 綁到這些值。若沒帶 `resource`，`aud` 會回退到部署層級的 `JWT_AUDIENCE` 設定（若有），或完全省略。
+
+**Resource server 必須驗 `aud`：**
+
+- 在 JWT 函式庫設定要求 `aud` 等於 **您自己的 resource 識別字** （例如 `https://api.example.com`）。這是阻止「為 A 服務簽的 token 被 B 服務悄悄接受」的關鍵。
+- `aud` 可能是單一字串或 JSON 陣列 — 多數 JWT 函式庫（Go 的 `jwt.WithAudience`、PyJWT 的 `audience=...`、jose 的 `audience:`）兩種形狀都會處理。
+- **Refresh token 一律以靜態 `JWT_AUDIENCE` 簽**，不會帶每次請求的 resource。配合 `type=access` 檢查，才能阻止 refresh token 被誤當成 access token 拿到 resource server 用。請一定 **兩個 claim 都檢查**。
+- audience binding 部署前簽發的 token 可能不含 `aud`。若您的部署保證會帶 `resource` 或設定了非空 `JWT_AUDIENCE`，請嚴格要求 `aud`；否則容許缺失但記錄起來。
+
+> ID token 不受影響 — 依 OIDC Core 1.0，其 `aud` 仍為 OAuth `client_id`。見 [OpenID Connect](./oidc)。
 
 ## 驗證步驟
 
@@ -167,7 +183,11 @@ curl https://your-authgate/.well-known/jwks.json
 2. **抓取 JWKS** `/.well-known/jwks.json`（有快取就用快取）
 3. **找金鑰** 對應 JWT header 的 `kid`
 4. **驗簽** 用對應公鑰
-5. **驗 claim**：`exp`（未過期）、`iss`（對應 AuthGate URL）、`type`（是 `access`）
+5. **驗 claim**：
+   - `exp` — 未過期
+   - `iss` — 對應 AuthGate URL
+   - `type` — 必須是 `access`（拒絕 `refresh`）
+   - `aud` — 必須包含您 resource server 的識別字 — 見 [Audience Binding](#audience-binding-rfc-8707)
 6. **授權檢查**：驗 `scope` 是否滿足需求；若您的 API 只允許特定客戶端，也驗 `client_id`
 
 ## 程式範例
@@ -180,74 +200,78 @@ curl https://your-authgate/.well-known/jwks.json
 package main
 
 import (
-	"fmt"
-	"log"
-	"net/http"
-	"slices"
-	"strings"
+  "fmt"
+  "log"
+  "net/http"
+  "slices"
+  "strings"
 
-	"github.com/MicahParks/keyfunc/v3"
-	"github.com/golang-jwt/jwt/v5"
+  "github.com/MicahParks/keyfunc/v3"
+  "github.com/golang-jwt/jwt/v5"
 )
 
 func main() {
-	jwksURL := "https://your-authgate/.well-known/jwks.json"
+  jwksURL := "https://your-authgate/.well-known/jwks.json"
 
-	// 建立會自動重新抓取 JWKS 的 keyfunc
-	k, err := keyfunc.NewDefault([]string{jwksURL})
-	if err != nil {
-		log.Fatalf("Failed to create JWKS keyfunc: %v", err)
-	}
+  // 建立會自動重新抓取 JWKS 的 keyfunc
+  k, err := keyfunc.NewDefault([]string{jwksURL})
+  if err != nil {
+    log.Fatalf("Failed to create JWKS keyfunc: %v", err)
+  }
 
-	http.HandleFunc("/api/resource", func(w http.ResponseWriter, r *http.Request) {
-		auth := r.Header.Get("Authorization")
-		if !strings.HasPrefix(auth, "Bearer ") {
-			http.Error(w, "Missing Bearer token", http.StatusUnauthorized)
-			return
-		}
-		tokenString := strings.TrimPrefix(auth, "Bearer ")
+  http.HandleFunc("/api/resource", func(w http.ResponseWriter, r *http.Request) {
+    auth := r.Header.Get("Authorization")
+    if !strings.HasPrefix(auth, "Bearer ") {
+      http.Error(w, "Missing Bearer token", http.StatusUnauthorized)
+      return
+    }
+    tokenString := strings.TrimPrefix(auth, "Bearer ")
 
-		// 以 JWKS 解析並驗證 JWT
-		token, err := jwt.Parse(tokenString, k.Keyfunc,
-			jwt.WithIssuer("https://your-authgate"),
-			jwt.WithExpirationRequired(),
-			jwt.WithValidMethods([]string{"RS256", "ES256"}),
-		)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Invalid token: %v", err), http.StatusUnauthorized)
-			return
-		}
+    // 以 JWKS 解析並驗證 JWT。
+    // WithAudience 要求 JWT 的 `aud` 必須包含此 resource server 的識別字 —
+    // AuthGate 在客戶端帶 RFC 8707 `resource` 時用該值；否則回退到靜態 JWT_AUDIENCE。
+    // 不論哪種來源，RS 端驗法都一樣。
+    token, err := jwt.Parse(tokenString, k.Keyfunc,
+      jwt.WithIssuer("https://your-authgate"),
+      jwt.WithAudience("https://api.example.com"), // 您 resource server 的識別字
+      jwt.WithExpirationRequired(),
+      jwt.WithValidMethods([]string{"RS256", "ES256"}),
+    )
+    if err != nil {
+      http.Error(w, fmt.Sprintf("Invalid token: %v", err), http.StatusUnauthorized)
+      return
+    }
 
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			http.Error(w, "Invalid token claims", http.StatusUnauthorized)
-			return
-		}
+    claims, ok := token.Claims.(jwt.MapClaims)
+    if !ok {
+      http.Error(w, "Invalid token claims", http.StatusUnauthorized)
+      return
+    }
 
-		tokenType, ok := claims["type"].(string)
-		if !ok || tokenType != "access" {
-			http.Error(w, "Invalid token type", http.StatusUnauthorized)
-			return
-		}
+    tokenType, ok := claims["type"].(string)
+    if !ok || tokenType != "access" {
+      http.Error(w, "Invalid token type", http.StatusUnauthorized)
+      return
+    }
 
-		// 檢查 scope — 視您的 API 所需替換 "profile"。
-		scopeStr, _ := claims["scope"].(string)
-		scopes := strings.Fields(scopeStr)
-		if !slices.Contains(scopes, "profile") {
-			http.Error(w, "Insufficient scope", http.StatusForbidden)
-			return
-		}
+    // 檢查 scope — 視您的 API 所需替換 "profile"。
+    scopeStr, _ := claims["scope"].(string)
+    scopes := strings.Fields(scopeStr)
+    if !slices.Contains(scopes, "profile") {
+      http.Error(w, "Insufficient scope", http.StatusForbidden)
+      return
+    }
 
-		// 使用者 token 的 sub 是 UUID；client_credentials 則為 "client:<client_id>"
-		subject, ok := claims["sub"].(string)
-		if !ok || subject == "" {
-			http.Error(w, "Invalid token claims", http.StatusUnauthorized)
-			return
-		}
-		fmt.Fprintf(w, "Hello, %s!", subject)
-	})
+    // 使用者 token 的 sub 是 UUID；client_credentials 則為 "client:<client_id>"
+    subject, ok := claims["sub"].(string)
+    if !ok || subject == "" {
+      http.Error(w, "Invalid token claims", http.StatusUnauthorized)
+      return
+    }
+    fmt.Fprintf(w, "Hello, %s!", subject)
+  })
 
-	log.Fatal(http.ListenAndServe(":8081", nil))
+  log.Fatal(http.ListenAndServe(":8081", nil))
 }
 ```
 
@@ -264,6 +288,7 @@ app = Flask(__name__)
 
 AUTHGATE_URL = "https://your-authgate"
 JWKS_URL = f"{AUTHGATE_URL}/.well-known/jwks.json"
+MY_RESOURCE_ID = "https://api.example.com"   # 本 resource server 的識別字
 
 # PyJWKClient 會自動快取 JWKS
 jwks_client = PyJWKClient(JWKS_URL, cache_keys=True, lifespan=3600)
@@ -283,7 +308,8 @@ def protected_resource():
             signing_key.key,
             algorithms=["RS256", "ES256"],
             issuer=AUTHGATE_URL,
-            options={"require": ["exp", "iss", "sub"]},
+            audience=MY_RESOURCE_ID,                       # 強制 RFC 8707 audience binding
+            options={"require": ["exp", "iss", "sub", "aud"]},
         )
     except jwt.InvalidTokenError as e:
         return jsonify({"error": f"Invalid token: {e}"}), 401
@@ -308,8 +334,9 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { createServer } from "node:http";
 
 const AUTHGATE_URL = "https://your-authgate";
+const MY_RESOURCE_ID = "https://api.example.com"; // 本 resource server 的識別字
 const JWKS = createRemoteJWKSet(
-  new URL(`${AUTHGATE_URL}/.well-known/jwks.json`)
+  new URL(`${AUTHGATE_URL}/.well-known/jwks.json`),
 );
 
 const server = createServer(async (req, res) => {
@@ -323,8 +350,9 @@ const server = createServer(async (req, res) => {
   try {
     const { payload } = await jwtVerify(auth.slice(7), JWKS, {
       issuer: AUTHGATE_URL,
+      audience: MY_RESOURCE_ID, // 強制 RFC 8707 audience binding
       algorithms: ["RS256", "ES256"],
-      requiredClaims: ["exp", "sub", "scope"],
+      requiredClaims: ["exp", "sub", "aud", "scope"],
     });
 
     if (payload.type !== "access") {
@@ -354,13 +382,13 @@ server.listen(8081, () => console.log("Resource server on :8081"));
 
 ## 快取最佳實務
 
-| 做法                        | 細節                                                                                                                  |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| **尊重 `Cache-Control`**    | AuthGate 回 `max-age=3600`（1 小時）。不要抓得更頻繁。                                                                |
-| **使用 JWKS 函式庫**        | `keyfunc`（Go）、`PyJWKClient`（Python）、`jose`（Node.js）都會自動快取。                                             |
-| **以 `kid` 當鍵**           | 以 `kid` 做 O(1) 查表。                                                                                               |
-| **遇到未知的 `kid`**        | 重抓 JWKS 一次；仍找不到才拒絕此 token。                                                                              |
-| **預熱快取**                | 服務啟動時先抓一次 JWKS，避免首個請求卡延遲。                                                                         |
+| 做法                     | 細節                                                                      |
+| ------------------------ | ------------------------------------------------------------------------- |
+| **尊重 `Cache-Control`** | AuthGate 回 `max-age=3600`（1 小時）。不要抓得更頻繁。                    |
+| **使用 JWKS 函式庫**     | `keyfunc`（Go）、`PyJWKClient`（Python）、`jose`（Node.js）都會自動快取。 |
+| **以 `kid` 當鍵**        | 以 `kid` 做 O(1) 查表。                                                   |
+| **遇到未知的 `kid`**     | 重抓 JWKS 一次；仍找不到才拒絕此 token。                                  |
+| **預熱快取**             | 服務啟動時先抓一次 JWKS，避免首個請求卡延遲。                             |
 
 ## 金鑰輪替
 
@@ -370,11 +398,11 @@ server.listen(8081, () => console.log("Resource server on :8081"));
 
 ### 時程
 
-| 時間   | 事件                                                                               |
-| ------ | ---------------------------------------------------------------------------------- |
-| T+0    | AuthGate 帶新金鑰重啟；JWKS 端點開始提供新公鑰                                     |
-| T+0~1h | 還在舊 JWKS 快取的 resource server 遇到未知 `kid` 後重抓                           |
-| T+1h   | 舊 access token 全部過期（預設 1 小時）                                            |
+| 時間   | 事件                                                     |
+| ------ | -------------------------------------------------------- |
+| T+0    | AuthGate 帶新金鑰重啟；JWKS 端點開始提供新公鑰           |
+| T+0~1h | 還在舊 JWKS 快取的 resource server 遇到未知 `kid` 後重抓 |
+| T+1h   | 舊 access token 全部過期（預設 1 小時）                  |
 
 > **限制**：AuthGate 在 JWKS 回應中只公開一把有效公鑰。輪替期間，沒有正確處理未知 `kid` 的 resource server 可能拒絕新 token，直到 JWKS 快取過期（最長 1 小時）。一旦某台 resource server 更新到新 JWKS，它就無法驗證仍未過期、由舊金鑰簽的 token。為減少中斷，請使用短效 access token 或在離峰時段輪替。
 
@@ -384,7 +412,8 @@ server.listen(8081, () => console.log("Resource server on :8081"));
 - **遇到未知 `kid` 不重抓 JWKS** — 拒絕前先重抓一次，才能無縫輪替
 - **HS256 時 JWKS 是空的** — 要改用 RS256 / ES256 才能以 JWKS 驗證
 - **不驗 `iss`** — 一律驗 issuer 與 AuthGate URL 相符
-- **接受 refresh token** — 一律檢查 `type` 是 `access`
+- **不驗 `aud`** — 為其他 resource server 簽的 token 不該在您這裡被接受。把 `WithAudience`（Go）/ `audience=`（PyJWT）/ `audience:`（jose）設成 **您自己的** resource 識別字 — 這同時涵蓋 RFC 8707 每次請求綁定與靜態 `JWT_AUDIENCE` 回退
+- **resource server 接受 refresh token** — 一律檢查 `type=access`。Refresh token 用同一把金鑰簽，且 `aud` 為靜態 `JWT_AUDIENCE`；沒檢查 `type` 的話，偷到的 refresh token 就能在任何只驗簽章/iss/exp/aud 的 RS 重放
 - **把公鑰寫死** — 改用 JWKS，才能自動支援金鑰輪替
 - **時鐘偏移** — 伺服器保持 NTP 同步；在 JWT 函式庫設 30–60 秒容許誤差
 

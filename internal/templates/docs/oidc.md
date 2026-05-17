@@ -6,14 +6,14 @@ AuthGate supports **OpenID Connect 1.0** on top of the Authorization Code Flow. 
 
 ## ID Token vs. Access Token
 
-| Question                         | ID Token                                  | Access Token                                      |
-| -------------------------------- | ----------------------------------------- | ------------------------------------------------- |
-| Who is it *about*?               | The end user (identity)                   | An authorization to call an API                   |
-| Who is it *for*?                 | **Your client application** (`aud=client_id`) | Resource servers (no `aud`)                   |
-| Sent to APIs as `Authorization: Bearer`? | **No** — never                   | Yes                                               |
-| Validate `aud`?                  | **Yes** — must equal your `client_id`     | No — AuthGate doesn't set `aud` here              |
-| Validate `nonce`?                | Yes — must match what you sent            | N/A                                               |
-| Contains PII?                    | Yes (email, name, picture, depending on scope) | No                                           |
+| Question                                 | ID Token                                       | Access Token                                                                                                                                   |
+| ---------------------------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Who is it _about_?                       | The end user (identity)                        | An authorization to call an API                                                                                                                |
+| Who is it _for_?                         | **Your client application** (`aud=client_id`)  | The resource server(s) the token is bound to (`aud`=per-request `resource` or `JWT_AUDIENCE`)                                                  |
+| Sent to APIs as `Authorization: Bearer`? | **No** — never                                 | Yes                                                                                                                                            |
+| Validate `aud`?                          | **Yes — must equal your `client_id`**          | **Yes — must equal the resource server's identifier** (see [JWT Verification §Audience Binding](./jwt-verification#audience-binding-rfc-8707)) |
+| Validate `nonce`?                        | Yes — must match what you sent                 | N/A                                                                                                                                            |
+| Contains PII?                            | Yes (email, name, picture, depending on scope) | No                                                                                                                                             |
 
 **Rule of thumb**: only your own client app should ever parse the ID token. Pass it to another service and you're leaking the user's identity to a party that isn't the audience.
 
@@ -60,23 +60,23 @@ After the code exchange at `/oauth/token`, the response includes an `id_token`:
 
 **Payload** (shape depends on the granted scopes):
 
-| Claim                | Always | When added                                     | Meaning                                                          |
-| -------------------- | ------ | ---------------------------------------------- | ---------------------------------------------------------------- |
-| `iss`                | ✓      |                                                | Issuer URL — must equal your AuthGate `BASE_URL`                 |
-| `sub`                | ✓      |                                                | Stable user identifier (UUID)                                    |
-| `aud`                | ✓      |                                                | Your `client_id` — **must match** for the token to be valid      |
-| `exp`                | ✓      |                                                | Expiration (Unix time)                                           |
-| `iat`                | ✓      |                                                | Issued-at (Unix time)                                            |
-| `auth_time`          | ✓      |                                                | When the user authenticated (Unix time)                          |
-| `jti`                | ✓      |                                                | Unique token ID                                                  |
+| Claim                | Always | When added                                       | Meaning                                                         |
+| -------------------- | ------ | ------------------------------------------------ | --------------------------------------------------------------- |
+| `iss`                | ✓      |                                                  | Issuer URL — must equal your AuthGate `BASE_URL`                |
+| `sub`                | ✓      |                                                  | Stable user identifier (UUID)                                   |
+| `aud`                | ✓      |                                                  | Your `client_id` — **must match** for the token to be valid     |
+| `exp`                | ✓      |                                                  | Expiration (Unix time)                                          |
+| `iat`                | ✓      |                                                  | Issued-at (Unix time)                                           |
+| `auth_time`          | ✓      |                                                  | When the user authenticated (Unix time)                         |
+| `jti`                | ✓      |                                                  | Unique token ID                                                 |
 | `nonce`              | —      | If you sent `nonce` in the authorization request | Must equal the value you sent — prevents replay                 |
-| `at_hash`            | —      | When an access token is co-issued              | First half of SHA-256(access_token), base64url-encoded           |
-| `name`               | —      | `scope` includes `profile`                     | Full display name                                                |
-| `preferred_username` | —      | `scope` includes `profile`                     | Username for display (e.g. `alice`)                              |
-| `picture`            | —      | `scope` includes `profile` and user has avatar | Avatar URL                                                       |
-| `updated_at`         | —      | `scope` includes `profile`                     | Profile last-updated (Unix time)                                 |
-| `email`              | —      | `scope` includes `email`                       | Primary email                                                    |
-| `email_verified`     | —      | `scope` includes `email`                       | `true` if the email has been verified (e.g. via OAuth provider)  |
+| `at_hash`            | —      | When an access token is co-issued                | First half of SHA-256(access_token), base64url-encoded          |
+| `name`               | —      | `scope` includes `profile`                       | Full display name                                               |
+| `preferred_username` | —      | `scope` includes `profile`                       | Username for display (e.g. `alice`)                             |
+| `picture`            | —      | `scope` includes `profile` and user has avatar   | Avatar URL                                                      |
+| `updated_at`         | —      | `scope` includes `profile`                       | Profile last-updated (Unix time)                                |
+| `email`              | —      | `scope` includes `email`                         | Primary email                                                   |
+| `email_verified`     | —      | `scope` includes `email`                         | `true` if the email has been verified (e.g. via OAuth provider) |
 
 ## Verifying the ID Token
 
@@ -89,7 +89,7 @@ Use the same JWKS mechanics as access tokens ([JWT Verification](./jwt-verificat
 5. **`iat`** — should be reasonably recent.
 6. **`nonce`** — must equal the `nonce` you sent in the authorization request.
 7. **`auth_time`** — if you requested `max_age`, enforce it.
-8. **`at_hash`** *(optional, recommended)* — verify it matches the access token you also received.
+8. **`at_hash`** _(optional, recommended)_ — verify it matches the access token you also received.
 
 ### Go (golang-jwt + keyfunc)
 
@@ -147,11 +147,13 @@ if claims.get("nonce") != expected_nonce:
 ```javascript
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
-const JWKS = createRemoteJWKSet(new URL(`${AUTHGATE_URL}/.well-known/jwks.json`));
+const JWKS = createRemoteJWKSet(
+  new URL(`${AUTHGATE_URL}/.well-known/jwks.json`),
+);
 
 const { payload } = await jwtVerify(idToken, JWKS, {
   issuer: AUTHGATE_URL,
-  audience: CLIENT_ID,               // enforces aud
+  audience: CLIENT_ID, // enforces aud
   algorithms: ["RS256", "ES256"],
 });
 
@@ -199,13 +201,15 @@ https://your-authgate/.well-known/openid-configuration
 
 See [Getting Started](./getting-started#start-here-oidc-discovery) for the full document shape.
 
+> AuthGate also publishes a parallel [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414) document at `/.well-known/oauth-authorization-server` for non-OIDC OAuth 2.1 / MCP clients. The two documents are kept in sync for fields they share — pick whichever your library expects.
+
 ## Common Pitfalls
 
 - **Sending the ID token as a Bearer to an API.** Don't. Use the access token.
-- **Skipping `aud` validation.** Without it, an ID token issued for *another* client could be accepted as yours.
+- **Skipping `aud` validation.** Without it, an ID token issued for _another_ client could be accepted as yours.
 - **Skipping `nonce` validation.** Always send and validate `nonce`. The spec marks it OPTIONAL for the auth-code flow, but omitting it forfeits replay protection and is strongly discouraged.
-- **Parsing the ID token without verifying the signature.** Never — the JWT is *not* authenticated until you verify it.
-- **Requiring `aud` on *access* tokens.** They don't carry `aud`. Only ID tokens do.
+- **Parsing the ID token without verifying the signature.** Never — the JWT is _not_ authenticated until you verify it.
+- **Validating `aud=client_id` on _access_ tokens.** Access tokens carry `aud=<resource server identifier>` (the RFC 8707 `resource` value or `JWT_AUDIENCE`), never your `client_id`. Use `aud=client_id` only when validating ID tokens.
 
 ## Related
 

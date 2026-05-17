@@ -44,10 +44,24 @@ curl -X POST https://your-authgate/oauth/device/code \
   -d "scope=openid profile email offline_access"
 ```
 
-| Parameter   | Required | Notes                                                |
-| ----------- | -------- | ---------------------------------------------------- |
-| `client_id` | yes      | Public client with Device Flow enabled               |
-| `scope`     | no       | Space-separated; defaults to `email profile` if omitted. Include `openid` for an ID token |
+| Parameter   | Required | Notes                                                                                                                                                                                                                                                                                                                                               |
+| ----------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `client_id` | yes      | Public client with Device Flow enabled                                                                                                                                                                                                                                                                                                              |
+| `scope`     | no       | Space-separated; defaults to `email profile` if omitted. Include `openid` for an ID token                                                                                                                                                                                                                                                           |
+| `resource`  | no       | [RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707) Resource Indicator. Absolute http(s) URI, no fragment, ≤ 1024 chars; repeat for multiple resources, max 10. When supplied, the issued access token's `aud` is bound to these values. Malformed values return `invalid_target` — see [Errors](./errors#resource-indicator-errors-rfc-8707) |
+
+**Example with resource indicators (MCP / multi-RS):**
+
+```bash
+curl -X POST https://your-authgate/oauth/device/code \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "client_id=YOUR_CLIENT_ID" \
+  -d "scope=read" \
+  -d "resource=https://api.example.com" \
+  -d "resource=https://mcp.example.com"
+```
+
+When `resource` is present, the user sees a dedicated **device confirm consent page** listing both resources and must click **Confirm and Authorize** before the device code is marked authorized. The resulting access token's `aud` is bound to the requested resources.
 
 **Response:**
 
@@ -96,6 +110,8 @@ curl -X POST https://your-authgate/oauth/token \
   -d "client_id=YOUR_CLIENT_ID"
 ```
 
+> **Narrowing `resource` (RFC 8707 §2.2)**: optionally pass `resource=...` here to bind the access token to a **subset** of what was granted at `/oauth/device/code`. Widening (passing a resource that wasn't in the original grant) returns `400 invalid_target` — the device code is _not_ consumed, so the CLI may retry with a corrected list.
+
 **Success** (user approved):
 
 ```json
@@ -110,13 +126,14 @@ curl -X POST https://your-authgate/oauth/token \
 
 **Errors while polling** (HTTP 400, shape `{"error": "...", "error_description": "..."}`):
 
-| `error`                 | HTTP | Meaning / Action                                            |
-| ----------------------- | ---- | ----------------------------------------------------------- |
-| `authorization_pending` | 400  | User hasn't approved yet — keep polling at `interval`       |
-| `slow_down`             | 400  | Polling too fast — **increase interval by ≥ 5 seconds**     |
-| `access_denied`         | 400  | User rejected the request — stop polling                    |
-| `expired_token`         | 400  | `device_code` past `expires_in` — restart from Step 1       |
-| `invalid_grant`         | 400  | `device_code` unknown or already used — restart from Step 1 |
+| `error`                 | HTTP | Meaning / Action                                                                                                                                                                                                                                                             |
+| ----------------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `authorization_pending` | 400  | User hasn't approved yet — keep polling at `interval`                                                                                                                                                                                                                        |
+| `slow_down`             | 400  | Polling too fast — **increase interval by ≥ 5 seconds**                                                                                                                                                                                                                      |
+| `access_denied`         | 400  | User rejected the request — stop polling                                                                                                                                                                                                                                     |
+| `expired_token`         | 400  | `device_code` past `expires_in` — restart from Step 1                                                                                                                                                                                                                        |
+| `invalid_grant`         | 400  | `device_code` unknown or already used — restart from Step 1                                                                                                                                                                                                                  |
+| `invalid_target`        | 400  | `resource=` on this token request is not a subset of the original device-code grant, or fails RFC 8707 shape validation. Device code is **not** consumed — retry with a corrected list. See [Errors §Resource Indicator Errors](./errors#resource-indicator-errors-rfc-8707) |
 
 `429 Too Many Requests` is also possible — see [Tokens & Revocation §Rate Limits](./tokens#rate-limits). The full error catalog lives in [Errors](./errors).
 
