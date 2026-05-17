@@ -161,7 +161,8 @@ sequenceDiagram
 | Endpoint                                       | Method   | Auth Required | Purpose                                                                                           |
 | ---------------------------------------------- | -------- | ------------- | ------------------------------------------------------------------------------------------------- |
 | `/health`                                      | GET      | No            | Health check with database connection test                                                        |
-| `/.well-known/openid-configuration`            | GET      | No            | OIDC Discovery metadata (RFC 8414 / OIDC Discovery 1.0)                                           |
+| `/.well-known/openid-configuration`            | GET      | No            | OIDC Discovery metadata (OIDC Discovery 1.0)                                                      |
+| `/.well-known/oauth-authorization-server`      | GET      | No            | OAuth 2.0 Authorization Server Metadata (RFC 8414) — required by MCP / RFC 8414-aware clients     |
 | `/.well-known/jwks.json`                       | GET      | No            | JWKS public keys for RS256/ES256 JWT verification (RFC 7517)                                      |
 | `/oauth/device/code`                           | POST     | No            | Request device and user codes (CLI/device)                                                        |
 | `/oauth/authorize`                             | GET      | Yes (Session) | Authorization Code Flow consent page (web apps)                                                   |
@@ -459,9 +460,34 @@ The application automatically creates these tables:
 - `users` - User accounts (includes OAuth-linked users)
 - `oauth_clients` - Registered client applications
 - `device_codes` - Active device authorization requests
+- `authorization_codes` - One-time authorization codes for the Authorization Code Flow
+- `user_authorizations` - Per-user, per-application consent grants
 - `access_tokens` - Issued JWT tokens (both access and refresh tokens)
 - `oauth_connections` - OAuth provider connections (GitHub, Gitea, etc.)
 - `audit_logs` - Comprehensive audit trail of all operations (authentication, tokens, admin actions, security events)
+
+### RFC 8707 Resource Indicator Columns
+
+The `device_codes`, `authorization_codes`, `user_authorizations`, and `access_tokens` tables each carry a nullable `Resource` JSON column (`StringArray`). GORM AutoMigrate adds this column on startup; existing rows have an empty `Resource`.
+
+**Dual semantics on `access_tokens.Resource` (read carefully):**
+
+| Token category | `Resource` column meaning                                                                                                                                  |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Access token   | **Audience snapshot at issuance** — exactly what the JWT was signed with. RFC 7662 introspection reads this directly so `JWT_AUDIENCE` rotation cannot change what introspection reports for older tokens. |
+| Refresh token  | **The original grant's RFC 8707 resource set** — used for RFC 8707 §2.2 subset checks on subsequent refresh requests. **NOT** the refresh JWT's `aud` (refresh JWTs are signed with the static `JWT_AUDIENCE`, never the per-request resource). |
+
+Any code reading `access_tokens.Resource` directly must branch on `TokenCategory` to interpret the value correctly.
+
+### TokenProvider interface signature
+
+The PR that introduced RFC 8707 support **changed the signature** of `core.TokenProvider`:
+
+- `GenerateToken`, `GenerateRefreshToken`, `GenerateClientCredentialsToken` each gained a trailing `audience []string` parameter.
+- `RefreshAccessToken` split its single `audience` parameter into `accessAudience, refreshAudience []string` so refresh JWTs never carry a per-request RS `aud`.
+- A new `ValidateRefreshToken(ctx, tokenString) (*TokenValidationResult, error)` method is required for legacy-row audience recovery.
+
+Any out-of-tree `core.TokenProvider` implementation must be updated to match. Pass `nil` for the new audience parameters to preserve pre-PR behaviour.
 
 ---
 

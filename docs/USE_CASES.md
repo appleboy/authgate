@@ -37,6 +37,16 @@ This guide provides real-world examples of how to use AuthGate for different sce
   - [Multi-Device User Management](#multi-device-user-management)
     - [Scenario](#scenario-6)
     - [Features](#features)
+  - [MCP Server Authorization Server](#mcp-server-authorization-server)
+    - [Scenario](#scenario-7)
+    - [Requirements](#requirements-7)
+    - [Setup](#setup-1)
+    - [Client Flow](#client-flow)
+  - [Multi-Resource-Server Audience Binding](#multi-resource-server-audience-binding)
+    - [Scenario](#scenario-8)
+    - [Requirements](#requirements-8)
+    - [Implementation](#implementation-4)
+    - [Why This Beats Scope-Only Isolation](#why-this-beats-scope-only-isolation)
 
 ---
 
@@ -960,10 +970,149 @@ Show helpful information:
 
 ---
 
+## MCP Server Authorization Server
+
+### Scenario
+
+You operate a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization) server at `https://mcp.example.com` and want to delegate authorization to a central AuthGate deployment, so any MCP-compatible AI assistant client can:
+
+1. Discover the AuthGate Authorization Server via RFC 9728 Protected Resource Metadata.
+2. Run PKCE-based Authorization Code Flow.
+3. Receive an access token whose `aud` is bound to the MCP server's URL.
+
+### Requirements
+
+- AuthGate deployment with `BASE_URL=https://auth.example.com`, `JWT_SIGNING_ALGORITHM=RS256` (or `ES256`), and **`JWT_AUDIENCE` unset or AS-only**.
+- MCP server publishes RFC 9728 PRM at `https://mcp.example.com/.well-known/oauth-protected-resource` pointing at AuthGate.
+- (Optional but recommended) `ENABLE_DYNAMIC_CLIENT_REGISTRATION=true` so MCP clients can self-register.
+- (Optional) `CORS_ENABLED=true` + `CORS_ALLOWED_ORIGINS=https://app.example.com,...` if any MCP client runs in the browser.
+
+### Setup
+
+1. **MCP server PRM document** (`https://mcp.example.com/.well-known/oauth-protected-resource`):
+
+   ```json
+   {
+     "resource": "https://mcp.example.com",
+     "authorization_servers": ["https://auth.example.com"]
+   }
+   ```
+
+2. **AuthGate AS metadata** (already published at `https://auth.example.com/.well-known/oauth-authorization-server` — no extra config):
+
+   ```json
+   {
+     "issuer": "https://auth.example.com",
+     "authorization_endpoint": "https://auth.example.com/oauth/authorize",
+     "token_endpoint": "https://auth.example.com/oauth/token",
+     "jwks_uri": "https://auth.example.com/.well-known/jwks.json",
+     "resource_indicators_supported": true,
+     "code_challenge_methods_supported": ["S256"]
+   }
+   ```
+
+3. **MCP server verifies issued tokens** at request time:
+   - JWKS-fetch `https://auth.example.com/.well-known/jwks.json` (cache it).
+   - Validate signature, `iss`, `exp`, **`type == "access"`**, and **`aud == "https://mcp.example.com"`**.
+   - See [JWT Verification Guide § Audience Binding](JWT_VERIFICATION.md#audience-binding-rfc-8707) for the full RS-side recipe.
+
+### Client Flow
+
+The MCP client (e.g. Claude Desktop) discovers and authenticates:
+
+```text
+1. GET https://mcp.example.com/.well-known/oauth-protected-resource
+   → { "authorization_servers": ["https://auth.example.com"] }
+
+2. GET https://auth.example.com/.well-known/oauth-authorization-server
+   → AS metadata with registration_endpoint, authorization_endpoint, ...
+
+3. POST https://auth.example.com/oauth/register   (optional, if DCR enabled)
+   → { "client_id": "<uuid>", ... }
+
+4. Browser → https://auth.example.com/oauth/authorize?
+              client_id=<id>&response_type=code&redirect_uri=<cb>
+              &code_challenge=<pkce>&code_challenge_method=S256
+              &scope=read
+              &resource=https://mcp.example.com
+
+5. User approves consent (the consent page lists "https://mcp.example.com"
+   under "Token will be valid for").
+
+6. POST https://auth.example.com/oauth/token   (grant_type=authorization_code)
+   → access_token with "aud": "https://mcp.example.com", "type": "access"
+```
+
+The MCP client then presents the access token as `Authorization: Bearer <token>` to `https://mcp.example.com/*`. See [docs/MCP.md](MCP.md) for the full integration guide including the curl walkthrough.
+
+---
+
+## Multi-Resource-Server Audience Binding
+
+### Scenario
+
+Your organisation runs three internal APIs behind a single AuthGate deployment:
+
+- `https://billing-api.corp.internal` — invoicing
+- `https://reports-api.corp.internal` — analytics
+- `https://admin-api.corp.internal` — privileged operations
+
+A user wants to authorize a third-party automation tool to access **only** the billing API. Scope alone (`read write`) doesn't express *which* API — each API also defines those scopes. Audience binding via RFC 8707 makes the access boundary explicit on the token itself.
+
+### Requirements
+
+- AuthGate with **`JWT_AUDIENCE` unset or AS-only** (critical — see the [security guide](SECURITY.md#token-configuration)).
+- Each resource server verifies `aud` matches its own identifier (`billing-api.corp.internal`, etc.).
+
+### Implementation
+
+The client requests an audience-narrowed token:
+
+```bash
+curl -X POST https://auth.example.com/oauth/authorize \
+  -d client_id=<id> \
+  -d response_type=code \
+  -d redirect_uri=<cb> \
+  -d scope=read \
+  -d code_challenge=<pkce> \
+  -d code_challenge_method=S256 \
+  -d resource=https://billing-api.corp.internal
+```
+
+The consent page displays:
+
+```
+Requested Permissions
+  ✓ read    Read your profile and data
+
+Token will be valid for
+  ◎ https://billing-api.corp.internal
+```
+
+After approval, the issued access token's `aud` is `"https://billing-api.corp.internal"`. Now:
+
+| Action | Result |
+| --- | --- |
+| Client presents token to `billing-api`  | ✅ accepted — `aud` matches |
+| Client presents token to `reports-api`  | ❌ rejected — `aud` mismatch |
+| Client presents token to `admin-api`    | ❌ rejected — `aud` mismatch |
+
+If the user later approves a broader grant by re-running `/oauth/authorize` with `resource=https://billing-api.corp.internal&resource=https://reports-api.corp.internal`, the consent page re-prompts (the remembered consent is matched **exactly** by resource set) and the new token's `aud` covers both endpoints.
+
+### Why This Beats Scope-Only Isolation
+
+Scope-based isolation (`scope=billing.read`) requires every resource server to enforce a different scope vocabulary, and an attacker who steals a token bound to `billing.read` may still present it to `reports-api` if that server happens to accept the same scope name. Audience binding adds a hard cryptographic boundary: `aud` must match before the token is even inspected, so the same token genuinely cannot be replayed across resource servers — provided each RS implements the `aud` check ([JWT Verification Guide](JWT_VERIFICATION.md#audience-binding-rfc-8707)).
+
+For the M2M (`client_credentials`) variant of this pattern, read the [multi-RS caveat](CLIENT_CREDENTIALS_FLOW.md#multi-resource-server-caveat-read-before-enabling-resource-on-client_credentials) — there is no per-client allowlist on the M2M grant, so resource servers must validate `(client_id, sub, aud)` against their own policy.
+
+---
+
 **Next Steps:**
 
 - [Client Credentials Flow Guide](CLIENT_CREDENTIALS_FLOW.md) - M2M / service-to-service authentication
 - [Authorization Code Flow Guide](AUTHORIZATION_CODE_FLOW.md) - Web and mobile app integration
+- [MCP Integration Guide](MCP.md) - End-to-end MCP server setup with AuthGate
+- [JWT Verification Guide](JWT_VERIFICATION.md) - RS-side verification of `aud` and `type` claims
 - [Development Guide](DEVELOPMENT.md) - Build your own integration
 - [API Reference (README)](../README.md#key-endpoints) - Endpoint documentation
 - [Device Code CLI](https://github.com/go-authgate/device-cli) - Working reference implementation
