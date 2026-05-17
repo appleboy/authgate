@@ -181,6 +181,73 @@
 }
 
 /* ============================================
+   Resource Indicators (RFC 8707) — the audience
+   the issued token will be bound to. Visually
+   distinct from .authorize-scope-* because
+   resources are *targets* (where the token
+   works), not capabilities (what it can do).
+   Blue accent ties to the security/primary
+   color; scopes stay green.
+   ============================================ */
+
+.authorize-resource-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-6);
+  padding: 0;
+}
+
+.authorize-resource-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  transition:
+    border-left-color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.authorize-resource-item:hover {
+  border-left-color: #00c6ff;
+  background: rgba(0, 114, 255, 0.04);
+}
+
+/* Bullseye marker — the universal "audience target" symbol.
+   Sized and tinted to match the .authorize-scope-check footprint
+   so the two rows line up visually even though the meaning differs. */
+.authorize-resource-marker {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-full);
+  background: rgba(0, 114, 255, 0.1);
+  border: 1.5px solid rgba(0, 114, 255, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+
+.authorize-resource-uri {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  background: none;
+  padding: 0;
+  border: none;
+  letter-spacing: -0.01em;
+  word-break: break-all;
+}
+
+/* ============================================
    Description (optional)
    ============================================ */
 
