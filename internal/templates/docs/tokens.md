@@ -1,20 +1,24 @@
 # Tokens & Revocation
 
-Everything integrators need to know about AuthGate tokens *after* the flow completes: lifecycles, refreshing, revoking, and checking validity in real time.
+Everything integrators need to know about AuthGate tokens _after_ the flow completes: lifecycles, refreshing, revoking, and checking validity in real time.
 
 ## Token Lifecycle
 
 After a successful flow you hold one or more of:
 
-| Token           | Format              | Lifetime (per client profile)                        | Used for                                          |
-| --------------- | ------------------- | ---------------------------------------------------- | ------------------------------------------------- |
-| Access token    | JWT                 | `short` 15m · `standard` 10h · `long` 24h (approx.)  | `Authorization: Bearer` on API calls              |
-| Refresh token   | JWT (treat as opaque) | `short` 1d · `standard` 30d · `long` 90d (approx.) | Exchanging for a new access token (`/oauth/token`) |
-| ID token        | JWT                 | Same as access token                                 | Client-side identity — [see OIDC](./oidc)         |
+| Token         | Format                | Lifetime (per client profile)                       | Used for                                           |
+| ------------- | --------------------- | --------------------------------------------------- | -------------------------------------------------- |
+| Access token  | JWT                   | `short` 15m · `standard` 10h · `long` 24h (approx.) | `Authorization: Bearer` on API calls               |
+| Refresh token | JWT (treat as opaque) | `short` 1d · `standard` 30d · `long` 90d (approx.)  | Exchanging for a new access token (`/oauth/token`) |
+| ID token      | JWT                   | Same as access token                                | Client-side identity — [see OIDC](./oidc)          |
 
 > Refresh tokens happen to be JWTs internally, but you should **treat them as opaque** — don't parse their claims in client code; you gain nothing and risk coupling to an internal detail.
 
 The exact numbers depend on the per-client **token profile** set by the administrator. **Always trust `expires_in`** from the token response — never hardcode.
+
+### Audience Binding (`aud` claim)
+
+When the flow includes a `resource=<URL>` parameter ([RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707)), the issued **access token** is signed with `aud=<resource>`. Without `resource`, `aud` falls back to the deployment-wide `JWT_AUDIENCE` config. **Refresh tokens** always use the static `JWT_AUDIENCE` and never carry the per-request resource. Resource servers should validate `aud` against their own identifier AND require `type=access` — see [JWT Verification §Audience Binding](./jwt-verification#audience-binding-rfc-8707).
 
 ## Refreshing Tokens
 
@@ -31,6 +35,8 @@ curl -X POST https://your-authgate/oauth/token \
 
 **Response** (same shape as the original token exchange).
 
+> **Narrowing `resource` on refresh (RFC 8707 §2.2)**: optionally include `resource=...` to issue a new access token whose `aud` is a **subset** of the original grant. Widening (requesting a resource not in the original grant) returns `400 invalid_target` — the refresh token is not consumed. Omit `resource` to receive a token bound to the full granted set.
+
 **When to refresh**: proactively, e.g. 30–60 seconds before expiry, not on 401. This avoids mid-request failures and the noise of retry logic.
 
 > If your deployment uses rotation mode (next section), you must also **serialize concurrent refreshes per session** — two tabs refreshing at once will blow up the session.
@@ -45,7 +51,7 @@ Some AuthGate deployments run in **rotation mode** (`ENABLE_TOKEN_ROTATION=true`
 
 **Practical implications for integrators:**
 
-- **Serialize refresh calls** per user/session (mutex, single-flight). Two tabs refreshing simultaneously will both try to cash in the same old refresh token, one will win, and the other — with the *just-invalidated* old token — will trip reuse detection and kill the session.
+- **Serialize refresh calls** per user/session (mutex, single-flight). Two tabs refreshing simultaneously will both try to cash in the same old refresh token, one will win, and the other — with the _just-invalidated_ old token — will trip reuse detection and kill the session.
 - **Persist the new refresh token immediately**. Don't issue another request with the old one while you're updating storage.
 - **Treat `invalid_grant` on refresh as terminal** — show a login screen; don't retry.
 
@@ -64,11 +70,11 @@ curl -X POST https://your-authgate/oauth/revoke \
 # Confidential clients: include client_secret or use HTTP Basic
 ```
 
-| Parameter         | Required | Values                                   |
-| ----------------- | -------- | ---------------------------------------- |
-| `token`           | yes      | The token to revoke                      |
-| `token_type_hint` | no       | `access_token` or `refresh_token`        |
-| `client_id`       | yes      | Plus `client_secret` for confidential    |
+| Parameter         | Required | Values                                |
+| ----------------- | -------- | ------------------------------------- |
+| `token`           | yes      | The token to revoke                   |
+| `token_type_hint` | no       | `access_token` or `refresh_token`     |
+| `client_id`       | yes      | Plus `client_secret` for confidential |
 
 Per RFC 7009, the endpoint returns **`200 OK`** whether or not the token existed. Don't rely on the response to tell you anything — just assume the token is gone.
 
@@ -141,24 +147,24 @@ curl -H "Authorization: Bearer TOKEN_TO_CHECK" https://your-authgate/oauth/token
 
 ### Which One?
 
-| Need                                                                   | Use                                        |
-| ---------------------------------------------------------------------- | ------------------------------------------ |
+| Need                                                                    | Use                                         |
+| ----------------------------------------------------------------------- | ------------------------------------------- |
 | Resource server validates tokens at scale, can tolerate short staleness | **Local JWKS verify** (no call to AuthGate) |
-| Need real-time revocation state, calling service can authenticate      | **`/oauth/introspect`**                    |
-| Lightweight check from within a user session, no client creds handy    | **`/oauth/tokeninfo`**                     |
-| Calling service is itself the token's owner                            | **`/oauth/tokeninfo`**                     |
+| Need real-time revocation state, calling service can authenticate       | **`/oauth/introspect`**                     |
+| Lightweight check from within a user session, no client creds handy     | **`/oauth/tokeninfo`**                      |
+| Calling service is itself the token's owner                             | **`/oauth/tokeninfo`**                      |
 
 ## Rate Limits
 
 AuthGate applies per-IP rate limits to token-path endpoints. Defaults (an operator may tune these):
 
-| Endpoint                | Default limit        |
-| ----------------------- | -------------------- |
-| `POST /oauth/token`     | 20 req/min           |
-| `POST /oauth/device/code` | 10 req/min         |
-| `POST /device/verify`   | 10 req/min           |
-| `POST /oauth/introspect` | 20 req/min          |
-| `POST /login`           | 5 req/min            |
+| Endpoint                  | Default limit |
+| ------------------------- | ------------- |
+| `POST /oauth/token`       | 20 req/min    |
+| `POST /oauth/device/code` | 10 req/min    |
+| `POST /device/verify`     | 10 req/min    |
+| `POST /oauth/introspect`  | 20 req/min    |
+| `POST /login`             | 5 req/min     |
 
 Exceeded limits return `429 Too Many Requests`. Honor any `Retry-After` header; otherwise back off exponentially. Batch your work — don't poll `/oauth/tokeninfo` per request if you can verify locally via JWKS.
 

@@ -68,6 +68,20 @@ curl -X POST https://your-authgate/oauth/token \
 
 Omit `scope` to receive the full set of scopes registered on your client. Include `scope=...` only when you want to request a **subset** of them.
 
+**With Resource Indicators (RFC 8707):**
+
+```bash
+curl -X POST https://your-authgate/oauth/token \
+  -u "$CLIENT_ID:$CLIENT_SECRET" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=client_credentials" \
+  -d "resource=https://api.example.com"
+```
+
+`resource` is optional, repeatable (max 10), must be an absolute http(s) URI without a fragment, ≤ 1024 chars. When supplied, the issued JWT's `aud` claim is bound to those resources — your resource server validates `aud` against its own identifier (see [JWT Verification §Audience Binding](./jwt-verification#audience-binding-rfc-8707)). Without `resource`, `aud` falls back to the deployment-wide `JWT_AUDIENCE`. Malformed values return `400 invalid_target` — see [Errors](./errors#resource-indicator-errors-rfc-8707).
+
+> **Multi-RS deployments**: if one service calls several resource servers with distinct identifiers, request a separate token per resource (each cached independently). Sharing one token across resource servers defeats audience binding — any RS the token is valid for becomes a relay point for the others.
+
 > The `$CLIENT_SECRET` env-var form above is fine in docs; in production, **never pass a literal secret on the command line** — argv is visible via `ps` and shell history. Pipe from `curl --netrc`, a config file (`-K`), or use a language SDK.
 
 **Response:**
@@ -102,7 +116,7 @@ curl -H "Authorization: Bearer ACCESS_TOKEN" https://api.example.com/resource
 
 Resource servers should **verify the JWT locally** using AuthGate's JWKS — see [JWT Verification](./jwt-verification).
 
-**Identifying M2M tokens**: the JWT `sub` (and `user_id`) claim has the form `client:<client_id>` for Client Credentials tokens. Your resource server can branch on this to distinguish service calls from user-delegated calls.
+**Identifying M2M tokens**: the JWT `sub` (and `user_id`) claim has the form `client:<client_id>` for Client Credentials tokens. Your resource server can branch on this to distinguish service calls from user-delegated calls. The `aud` claim is the resource indicator you requested (or `JWT_AUDIENCE` fallback) — validate it against the RS's own identifier just like for user tokens.
 
 ### Step 3: Cache and Renew
 
@@ -125,16 +139,16 @@ Avoid a thundering herd across service replicas: add small random jitter to the 
 
 ## Security Checklist
 
-| Requirement              | Details                                                                                  |
-| ------------------------ | ---------------------------------------------------------------------------------------- |
-| Store secrets securely   | Secrets manager or env vars injected at runtime — never commit to source control         |
-| Use HTTPS                | The `client_secret` crosses the wire on every token request                              |
-| One client per service   | Independent revocation and per-service scope control                                     |
-| Request only needed scopes | Principle of least privilege                                                           |
-| Rotate on compromise     | Ask the admin to regenerate the secret; update your secrets manager                      |
-| Retry with backoff       | `/oauth/token` is rate-limited — see [Tokens & Revocation §Rate Limits](./tokens#rate-limits); handle 429 with `Retry-After` |
-| Cache token, don't re-fetch | Respect `expires_in`; only renew when close to expiry                                 |
-| Monitor audit logs       | Ask your admin to set up alerts on anomalous `CLIENT_CREDENTIALS_TOKEN_ISSUED` events    |
+| Requirement                 | Details                                                                                                                      |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Store secrets securely      | Secrets manager or env vars injected at runtime — never commit to source control                                             |
+| Use HTTPS                   | The `client_secret` crosses the wire on every token request                                                                  |
+| One client per service      | Independent revocation and per-service scope control                                                                         |
+| Request only needed scopes  | Principle of least privilege                                                                                                 |
+| Rotate on compromise        | Ask the admin to regenerate the secret; update your secrets manager                                                          |
+| Retry with backoff          | `/oauth/token` is rate-limited — see [Tokens & Revocation §Rate Limits](./tokens#rate-limits); handle 429 with `Retry-After` |
+| Cache token, don't re-fetch | Respect `expires_in`; only renew when close to expiry                                                                        |
+| Monitor audit logs          | Ask your admin to set up alerts on anomalous `CLIENT_CREDENTIALS_TOKEN_ISSUED` events                                        |
 
 ## Related
 

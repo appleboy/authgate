@@ -68,6 +68,20 @@ curl -X POST https://your-authgate/oauth/token \
 
 省略 `scope` 會拿到此客戶端已註冊的全部 scope。只有在您想要 **子集** 時才帶 `scope=...`。
 
+**帶 Resource Indicator（RFC 8707）：**
+
+```bash
+curl -X POST https://your-authgate/oauth/token \
+  -u "$CLIENT_ID:$CLIENT_SECRET" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=client_credentials" \
+  -d "resource=https://api.example.com"
+```
+
+`resource` 為選填、可重複（最多 10 個），必須是絕對 http(s) URI、無 fragment、≤ 1024 字元。帶入後，簽發 JWT 的 `aud` 會綁到這些 resource — resource server 端對自己的識別字驗 `aud`（見 [JWT 驗證 §Audience Binding](./jwt-verification#audience-binding-rfc-8707)）。不帶 `resource` 時 `aud` 回退到部署層級的 `JWT_AUDIENCE`。格式不正確會回 `400 invalid_target` — 見 [錯誤處理](./errors#resource-indicator-錯誤-rfc-8707)。
+
+> **多 RS 部署**：若同一服務需要呼叫多個身分不同的 resource server，請對每個 resource 各自請求一張 token（各自快取）。一張 token 共用於多個 RS 會讓 audience binding 失效 — 任何能接受此 token 的 RS 都會變成中繼點。
+
 > 上面用 `$CLIENT_SECRET` 環境變數展示沒問題；但在正式環境 **不要把字面 secret 直接丟到指令列**，argv 會出現在 `ps` 與 shell 歷史裡。改用 `curl --netrc`、設定檔（`-K`）或語言端的 SDK。
 
 **回應：**
@@ -102,7 +116,7 @@ curl -H "Authorization: Bearer ACCESS_TOKEN" https://api.example.com/resource
 
 Resource server 應 **以 AuthGate 的 JWKS 在本地驗證 JWT** — 見 [JWT 驗證](./jwt-verification)。
 
-**辨識 M2M token**：Client Credentials 發出的 token 其 JWT `sub`（與 `user_id`）欄位為 `client:<client_id>`。resource server 可以依此分流服務呼叫與使用者委派呼叫。
+**辨識 M2M token**：Client Credentials 發出的 token 其 JWT `sub`（與 `user_id`）欄位為 `client:<client_id>`。resource server 可以依此分流服務呼叫與使用者委派呼叫。`aud` claim 是您請求的 resource indicator（或 `JWT_AUDIENCE` 回退值）— 與使用者 token 一樣，要對 RS 自己的識別字驗證。
 
 ### 步驟 3：快取與續約
 
@@ -125,16 +139,16 @@ if time.time() + 30 >= expires_at:
 
 ## 安全檢查清單
 
-| 要求                       | 說明                                                                                        |
-| -------------------------- | ------------------------------------------------------------------------------------------- |
-| 安全保管 secret            | Secrets manager 或 runtime 注入環境變數 — 絕對不要 commit 到版控                            |
-| 全程 HTTPS                 | 每次 token 請求都會把 `client_secret` 送上線路                                              |
-| 一服務一客戶端             | 個別撤銷與細粒度的服務 scope 控制                                                           |
-| 只要最小 scope             | 最小權限原則                                                                                |
-| 外洩即輪換                 | 請管理員重新產生 secret；更新 secrets manager                                               |
-| 退避重試                   | `/oauth/token` 有速率限制 — 見 [Token 與撤銷](./tokens)；處理 429 與 `Retry-After`          |
-| 快取 token，不要重抓       | 尊重 `expires_in`；只在接近過期時續約                                                       |
-| 監控 audit log             | 請管理員對異常的 `CLIENT_CREDENTIALS_TOKEN_ISSUED` 事件設警示                               |
+| 要求                 | 說明                                                                               |
+| -------------------- | ---------------------------------------------------------------------------------- |
+| 安全保管 secret      | Secrets manager 或 runtime 注入環境變數 — 絕對不要 commit 到版控                   |
+| 全程 HTTPS           | 每次 token 請求都會把 `client_secret` 送上線路                                     |
+| 一服務一客戶端       | 個別撤銷與細粒度的服務 scope 控制                                                  |
+| 只要最小 scope       | 最小權限原則                                                                       |
+| 外洩即輪換           | 請管理員重新產生 secret；更新 secrets manager                                      |
+| 退避重試             | `/oauth/token` 有速率限制 — 見 [Token 與撤銷](./tokens)；處理 429 與 `Retry-After` |
+| 快取 token，不要重抓 | 尊重 `expires_in`；只在接近過期時續約                                              |
+| 監控 audit log       | 請管理員對異常的 `CLIENT_CREDENTIALS_TOKEN_ISSUED` 事件設警示                      |
 
 ## 相關文件
 
