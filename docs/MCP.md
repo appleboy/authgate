@@ -150,6 +150,13 @@ verification still applies:
   (machine identity) — treat these distinctly from user-delegated tokens
   if your policy differs for them.
 
+For full RS-side verification details — including JWKS fetching, `aud` shape
+handling (string vs array), refresh-token-as-access-token confusion
+mitigation, and code samples in Go / Python / Node — see the
+[JWT Verification Guide](JWT_VERIFICATION.md), in particular the
+[Audience Binding (RFC 8707)](JWT_VERIFICATION.md#audience-binding-rfc-8707)
+section.
+
 ### Multi-resource-server caveat for `client_credentials`
 
 There is currently no per-client allowed-resources allowlist on the
@@ -217,3 +224,24 @@ For an MCP-ready deployment:
 No new configuration keys are required to support MCP — Resource Indicators
 are always-on and backward-compatible: callers that don't send `resource`
 keep getting `aud` from `JWT_AUDIENCE`.
+
+> ⚠️ **`JWT_AUDIENCE` operational constraint.** Refresh JWTs are signed with
+> the static `JWT_AUDIENCE` (not the per-request `resource`) so they can be
+> presented back to `/oauth/token`. **`JWT_AUDIENCE` MUST therefore be either
+> unset or set to an AS-only identifier — never a resource server's `aud`.**
+> Otherwise a refresh token whose `aud` happens to match an MCP server's
+> expected audience could be accepted as if it were an access token by any RS
+> that only verifies signature/`iss`/`exp`/`aud`. See
+> [docs/CONFIGURATION.md](CONFIGURATION.md#environment-variables) (JWT Audience
+> Claim section) for the full rationale.
+
+## See also
+
+- [JWT Verification Guide](JWT_VERIFICATION.md) — RS-side verification, JWKS,
+  `aud`/`type` claim validation, code samples
+- [Configuration Guide](CONFIGURATION.md) — `JWT_AUDIENCE`, CORS, OAuth client
+  setup
+- [Authorization Code Flow Guide](AUTHORIZATION_CODE_FLOW.md) — `/oauth/authorize`
+  parameters including `resource`
+- [Client Credentials Flow Guide](CLIENT_CREDENTIALS_FLOW.md) — M2M tokens and
+  the multi-resource-server caveat

@@ -246,9 +246,24 @@ The `kid` (Key ID) header identifies which key was used to sign the token. Use t
 5. **Validate standard claims**:
    - `exp` — token is not expired
    - `iss` — matches your expected AuthGate URL
-   - `type` — is `access` (not `refresh`)
-   - `aud` — when `JWT_AUDIENCE` is configured on AuthGate, verify the value matches your service's expected audience (see [Custom Claims](#custom-claims))
+   - **`type` — MUST be `access`** (not `refresh`). This check is non-optional: refresh tokens are signed with the same key and may carry an `aud` that incidentally matches a resource server (the static `JWT_AUDIENCE`). Without the `type` check, an attacker who steals a refresh token could present it as an access token to any RS that only validates signature/iss/exp/aud.
+   - **`aud` — verify the value matches your resource server's identifier**. When the OAuth client passed a [RFC 8707][rfc8707] `resource` parameter, the JWT's `aud` is that resource (the per-request binding); otherwise it is the static `JWT_AUDIENCE` config. Either way, the RS-side check is the same: compare `aud` against your own identifier and reject mismatches. See [Audience Binding (RFC 8707)](#audience-binding-rfc-8707) below.
 6. **Check authorization** — verify `scope` and `client_id` match your requirements
+
+### Audience Binding (RFC 8707)
+
+AuthGate supports [Resource Indicators for OAuth 2.0 (RFC 8707)][rfc8707]: an OAuth client may pass one or more `resource=<URL>` parameters on `/oauth/authorize`, `/oauth/device/code`, or `/oauth/token`. The issued access-token JWT's `aud` claim is bound to those values at issuance.
+
+**What this means for resource servers:**
+
+- **Validate `aud` against your own identifier**, exactly as you would with the static `JWT_AUDIENCE`. The verification code does not change; only the *source* of `aud` differs (per-request resource vs static config).
+- **Reject tokens whose `aud` does not include your identifier** with `401 Unauthorized` / `WWW-Authenticate: Bearer error="invalid_token"`. This is the core of audience-binding defense: a token minted for `https://api-a.corp` should fail at `https://api-b.corp`.
+- **The `aud` claim may be a string OR an array** (RFC 7519 §4.1.3). When the client requests a single resource, `aud` is a plain string; with multiple resources it is `["https://a", "https://b"]`. Most JWT libraries (e.g. `golang-jwt/jwt`'s `WithAudience`) handle both shapes.
+- **AuthGate also exposes `aud` in [RFC 7662][rfc7662] introspection responses for access tokens.** The introspection `aud` is a **snapshot taken at issuance** — rotating `JWT_AUDIENCE` after a token is minted does NOT change what introspection reports for that token. Introspection is consistent with the signed JWT.
+- **Refresh tokens never carry a resource `aud` and never expose `aud` in introspection.** They are signed with the static `JWT_AUDIENCE` (so they can be presented back to `/oauth/token`) and the introspection response omits `aud` entirely. Combined with the `type` check above, this prevents a refresh token from being mistakenly accepted as an access token at a resource server.
+
+[rfc8707]: https://datatracker.ietf.org/doc/html/rfc8707
+[rfc7662]: https://datatracker.ietf.org/doc/html/rfc7662
 
 ## Custom Claims
 
@@ -358,9 +373,14 @@ func main() {
     }
     tokenString := strings.TrimPrefix(auth, "Bearer ")
 
-    // Parse and verify the JWT
+    // Parse and verify the JWT.
+    // WithAudience requires the JWT's `aud` claim to include this resource server's
+    // identifier. AuthGate emits this from a per-request RFC 8707 `resource`
+    // parameter when supplied; otherwise it falls back to the static JWT_AUDIENCE
+    // config. The verification on the RS side is identical for either source.
     token, err := jwt.Parse(tokenString, k.Keyfunc,
       jwt.WithIssuer("https://your-authgate"),
+      jwt.WithAudience("https://api.example.com"), // your resource server identifier
       jwt.WithExpirationRequired(),
       jwt.WithValidMethods([]string{"RS256", "ES256"}),
     )

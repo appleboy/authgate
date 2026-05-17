@@ -78,12 +78,22 @@ JWT_EXPIRATION_JITTER=30m            # Max random jitter on access token expiry 
                                      # Example: JWT_EXPIRATION=8h + JWT_EXPIRATION_JITTER=30m → lifetime [8h, 8h30m)
 
 # JWT Audience Claim
-# Comma-separated values written to the "aud" claim on issued access and refresh tokens.
-# Single value emits "aud" as a string; multiple values as an array; empty omits the
-# claim entirely (RFC 7519 §4.1.3). ID tokens are not affected — their "aud" stays
-# the client_id per OIDC Core 1.0.
-# JWT_AUDIENCE=                      # Default: unset (no aud claim)
-# JWT_AUDIENCE=oa                    # → "aud": "oa"
+# Comma-separated values written to the "aud" claim on issued access and refresh tokens
+# WHEN the request does NOT supply a RFC 8707 `resource` parameter (in which case
+# `resource` overrides this fallback). Single value emits "aud" as a string;
+# multiple values as an array; empty omits the claim entirely (RFC 7519 §4.1.3).
+# ID tokens are not affected — their "aud" stays the client_id per OIDC Core 1.0.
+#
+# IMPORTANT: JWT_AUDIENCE MUST be set to an AS-only value or left unset. NEVER point
+# it at a resource server identifier — refresh JWTs are signed with this audience
+# (not the per-request `resource`) so they can be presented back to /oauth/token.
+# If JWT_AUDIENCE matches a resource server's expected aud, that RS could be tricked
+# into accepting a refresh token as if it were an access token whenever it only
+# verifies signature/iss/exp/aud. Always also verify the `type` claim ("access" vs
+# "refresh") at the resource server — see docs/JWT_VERIFICATION.md.
+#
+# JWT_AUDIENCE=                      # Default: unset (no aud claim — recommended for MCP/multi-RS)
+# JWT_AUDIENCE=https://authgate.local  # AS-only identifier — safe
 # JWT_AUDIENCE=oa,swrd,hwrd          # → "aud": ["oa", "swrd", "hwrd"]
 
 # JWT Domain Claim — server-attested
@@ -1210,7 +1220,16 @@ INTROSPECT_RATE_LIMIT=20
 
 ## CORS (Cross-Origin Resource Sharing)
 
-When building a Single-Page Application (SPA) or mobile app that calls AuthGate's OAuth API endpoints from a different origin, you need to enable CORS. By default, CORS is **disabled** — enabling it only affects `/oauth/*` API endpoints (token, device code, introspect, revoke, userinfo). HTML page endpoints are never affected.
+When building a Single-Page Application (SPA), mobile app, or browser-based [Model Context Protocol (MCP)][mcp-spec] client that calls AuthGate's OAuth API endpoints from a different origin, you need to enable CORS. By default, CORS is **disabled** — enabling it affects:
+
+- `/oauth/*` — token, device code, introspect, revoke, userinfo, register
+- `/.well-known/*` — `openid-configuration`, `oauth-authorization-server` ([RFC 8414][rfc8414]), `jwks.json` (needed by browser-based MCP clients that discover the AS via [RFC 9728 Protected Resource Metadata][rfc9728])
+
+HTML page endpoints (login, consent, admin UI) are never affected.
+
+[mcp-spec]: https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization
+[rfc8414]: https://datatracker.ietf.org/doc/html/rfc8414
+[rfc9728]: https://datatracker.ietf.org/doc/html/rfc9728
 
 ### Quick Start
 
@@ -1240,8 +1259,9 @@ CORS_ALLOWED_ORIGINS=http://localhost:3000,https://app.example.com
 ### Production Notes
 
 - Only list origins you trust — avoid using `*` (wildcard) with credentials.
-- The CORS middleware is applied **only** to the `/oauth/*` route group, not to login pages, admin UI, or static assets.
-- For maximum security, set `CORS_ALLOWED_ORIGINS` to the exact origins of your frontend applications.
+- The CORS middleware is applied to the `/oauth/*` and `/.well-known/*` route groups, not to login pages, admin UI, or static assets.
+- Each well-known endpoint also registers an `OPTIONS` handler so browser preflights reach the CORS middleware instead of returning 405.
+- For maximum security, set `CORS_ALLOWED_ORIGINS` to the exact origins of your frontend applications. "Internal-only" deployments are not a substitute — internal XSS can still abuse an over-permissive CORS policy.
 
 ---
 
