@@ -48,6 +48,7 @@
   - [🔒 Security](#-security)
     - [Production Checklist](#production-checklist)
     - [What AuthGate Protects](#what-authgate-protects)
+    - [MCP \& multi-resource hardening](#mcp--multi-resource-hardening)
   - [📊 Performance](#-performance)
     - [Benchmarks (Reference)](#benchmarks-reference)
     - [Scalability](#scalability)
@@ -136,6 +137,12 @@ AuthGate also serves as a lightweight **centralised identity gateway** for inter
 - View all token activity for a service in real time.
 - Revoke any user's authorisation instantly.
 - Respond to audits and security requests without digging through disparate system logs.
+
+> ⚠️ **Security highlights for MCP / multi-resource deployments**
+>
+> - **Refresh-as-access confusion: clear AS / RS boundary** — every OAuth bearer token (access and refresh) carries a `type` claim. AuthGate's own endpoints (`ValidateToken`, `/oauth/tokeninfo`) reject any token whose `type` is not `"access"`, and `JWT_AUDIENCE` must be configured AS-only (never a resource server identifier) so refresh tokens cannot collide with an RS's expected audience. **Resource servers validating JWTs locally must also enforce `type == "access"`** — a refresh token can otherwise be accepted if the RS only checks signature/`iss`/`exp`/`aud`. See [MCP Integration Guide → Audience binding (RFC 8707)](docs/MCP.md#audience-binding-via-resource-indicators-rfc-8707) and the [JWT Verification Guide](docs/JWT_VERIFICATION.md).
+> - **Silent device-code resource binding blocked** — resource-bound device codes always route through an explicit confirmation screen displaying the client and requested resource(s) before authorization, regardless of whether the user landed via `verification_uri_complete` or typed the user code by hand (documented in the same MCP guide).
+> - **MCP-ready out of the box** — [RFC 8414][rfc8414] AS metadata at `/.well-known/oauth-authorization-server`, [RFC 8707][rfc8707] per-request audience binding, and PKCE S256 (rejecting `plain`) for all public clients. [RFC 7591][rfc7591] Dynamic Client Registration at `/oauth/register` is opt-in via `ENABLE_DYNAMIC_CLIENT_REGISTRATION=true`. See the [MCP Integration Guide](docs/MCP.md).
 
 ---
 
@@ -565,6 +572,25 @@ docker run -d \
 - ✅ Token tampering (JWT signature verification)
 - ✅ Brute force attacks (rate limiting)
 - ✅ Session hijacking (encrypted cookies, CSRF protection)
+- ✅ Refresh-token-as-access-token confusion (mandatory `type` claim on access and refresh tokens)
+- ✅ Silent device-code resource binding (mandatory confirmation page for resource-bound device codes)
+- ✅ Cross-resource token replay (per-request [RFC 8707][rfc8707] audience binding)
+
+### MCP & multi-resource hardening
+
+**Refresh tokens cannot masquerade as access tokens.** Refresh JWTs are signed with the same key as access JWTs, so a resource server that only verifies signature/`iss`/`exp`/`aud` would silently accept a refresh token as a valid access token whenever `JWT_AUDIENCE` happens to match its resource identifier. AuthGate hard-codes the distinction: every OAuth bearer token (access and refresh) carries a `type` claim, `ValidateToken` rejects any token whose `type` is not `"access"`, and `/oauth/tokeninfo` therefore returns 401 for refresh tokens — it never advertises a refresh-token `aud`. (OIDC ID tokens are a separate JWT class with no `type` claim; resource servers distinguish them as usual via `aud` and `iss`. `/oauth/introspect` follows RFC 7662 and returns metadata for both token classes, but omits `aud` on refresh tokens for the same reason.) **Operational constraint: `JWT_AUDIENCE` MUST be either unset or set to an AS-only identifier — never a resource server's `aud`.** See [docs/MCP.md → Configuration checklist](docs/MCP.md#configuration-checklist) and [docs/CONFIGURATION.md](docs/CONFIGURATION.md#environment-variables).
+
+**Device-code resource confirmation is mandatory.** When a device-code request is bound to a resource ([RFC 8707][rfc8707]), AuthGate routes the user through an explicit confirmation screen that displays the requesting client and the resource(s) being authorized **before** the device code is marked authorized — regardless of whether the user landed via `verification_uri_complete` or typed the user code into the verification form by hand. This prevents silent resource binding to an attacker-controlled MCP server. See [docs/MCP.md → Audience binding](docs/MCP.md#audience-binding-via-resource-indicators-rfc-8707).
+
+**Standards-compliance baseline.** AuthGate implements the OAuth 2.0 / OIDC stack required for MCP and multi-resource deployments. For the full integrator walkthrough, see [docs/MCP.md](docs/MCP.md).
+
+- [RFC 8628][rfc8628] — Device Authorization Grant
+- [RFC 6749][rfc6749] + [RFC 7636][rfc7636] — Authorization Code Flow with PKCE S256 (`plain` rejected)
+- [RFC 8707][rfc8707] — Resource Indicators, bound at issuance and verified per refresh
+- [RFC 8414][rfc8414] — Authorization Server Metadata at `/.well-known/oauth-authorization-server`
+- [RFC 7591][rfc7591] — Dynamic Client Registration at `/oauth/register` (opt-in via `ENABLE_DYNAMIC_CLIENT_REGISTRATION=true`)
+- [RFC 7009][rfc7009] — Token Revocation
+- [RFC 7662][rfc7662] — Token Introspection
 
 ---
 
