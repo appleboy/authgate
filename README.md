@@ -140,8 +140,8 @@ AuthGate also serves as a lightweight **centralised identity gateway** for inter
 
 > ⚠️ **Security highlights for MCP / multi-resource deployments**
 >
-> - **Refresh-as-access confusion blocked at the protocol layer** — every OAuth bearer token (access and refresh) carries a `type` claim that AuthGate enforces at validation, so `/oauth/tokeninfo` returns 401 for refresh tokens and a refresh token cannot be replayed as an access token by a resource server that only verifies signature/`iss`/`exp`/`aud`. See [MCP Integration Guide → Audience binding (RFC 8707)](docs/MCP.md#audience-binding-via-resource-indicators-rfc-8707) and the [JWT Verification Guide](docs/JWT_VERIFICATION.md).
-> - **Device-code phishing surface eliminated** — resource-bound device codes always route through an explicit confirmation screen displaying the client and requested resource(s), regardless of whether the user landed via `verification_uri_complete` or typed the user code by hand (documented in the same MCP guide).
+> - **Refresh-as-access confusion: clear AS / RS boundary** — every OAuth bearer token (access and refresh) carries a `type` claim. AuthGate's own endpoints (`ValidateToken`, `/oauth/tokeninfo`) reject any token whose `type` is not `"access"`, and `JWT_AUDIENCE` must be configured AS-only (never a resource server identifier) so refresh tokens cannot collide with an RS's expected audience. **Resource servers validating JWTs locally must also enforce `type == "access"`** — a refresh token can otherwise be accepted if the RS only checks signature/`iss`/`exp`/`aud`. See [MCP Integration Guide → Audience binding (RFC 8707)](docs/MCP.md#audience-binding-via-resource-indicators-rfc-8707) and the [JWT Verification Guide](docs/JWT_VERIFICATION.md).
+> - **Silent device-code resource binding blocked** — resource-bound device codes always route through an explicit confirmation screen displaying the client and requested resource(s) before authorization, regardless of whether the user landed via `verification_uri_complete` or typed the user code by hand (documented in the same MCP guide).
 > - **MCP-ready out of the box** — [RFC 8414][rfc8414] AS metadata at `/.well-known/oauth-authorization-server`, [RFC 8707][rfc8707] per-request audience binding, and PKCE S256 (rejecting `plain`) for all public clients. [RFC 7591][rfc7591] Dynamic Client Registration at `/oauth/register` is opt-in via `ENABLE_DYNAMIC_CLIENT_REGISTRATION=true`. See the [MCP Integration Guide](docs/MCP.md).
 
 ---
@@ -573,7 +573,7 @@ docker run -d \
 - ✅ Brute force attacks (rate limiting)
 - ✅ Session hijacking (encrypted cookies, CSRF protection)
 - ✅ Refresh-token-as-access-token confusion (mandatory `type` claim on access and refresh tokens)
-- ✅ Device-flow phishing (forced confirmation page for resource-bound device codes)
+- ✅ Silent device-code resource binding (mandatory confirmation page for resource-bound device codes)
 - ✅ Cross-resource token replay (per-request [RFC 8707][rfc8707] audience binding)
 
 ### MCP & multi-resource hardening
