@@ -120,12 +120,17 @@ func validateServiceAccount(sa string) error {
 // syntax validation applied to request-time `resource` values, so an admin
 // cannot save an entry no client could ever match. Empty slice is valid
 // (deny-all). On any malformed entry it returns ErrInvalidAllowedResource.
+//
+// Entries are validated one at a time rather than as a slice: the allowlist is
+// admin-controlled, so the per-request count cap in ValidateResourceIndicators
+// (MaxResourceIndicators, a DoS guard for caller-supplied `resource` params)
+// must not bound how many resources a client may be authorized for. Each entry
+// is still held to the identical per-value syntax rules.
 func validateAllowedResources(resources []string) error {
-	if len(resources) == 0 {
-		return nil
-	}
-	if _, err := util.ValidateResourceIndicators(resources); err != nil {
-		return ErrInvalidAllowedResource
+	for _, entry := range resources {
+		if _, err := util.ValidateResourceIndicators([]string{entry}); err != nil {
+			return ErrInvalidAllowedResource
+		}
 	}
 	return nil
 }

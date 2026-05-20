@@ -25,16 +25,25 @@ func NewClientHandler(
 	return &ClientHandler{clientService: cs, authorizationService: as}
 }
 
-func parseRedirectURIs(input string) []string {
-	redirectURIs := make([]string, 0)
+// parseURIList splits a comma/newline-separated form field into a trimmed,
+// blank-free list of URIs. Shared by the redirect-URI and allowed-resource
+// form fields, which use the same input convention (tag picker → hidden input).
+func parseURIList(input string) []string {
+	list := make([]string, 0)
 	for _, uri := range strings.FieldsFunc(input, func(r rune) bool {
 		return r == ',' || r == '\n' || r == '\r'
 	}) {
 		if trimmed := strings.TrimSpace(uri); trimmed != "" {
-			redirectURIs = append(redirectURIs, trimmed)
+			list = append(list, trimmed)
 		}
 	}
-	return redirectURIs
+	return list
+}
+
+// parseRedirectURIs parses the redirect_uris form field. Thin wrapper over
+// parseURIList kept for call-site readability.
+func parseRedirectURIs(input string) []string {
+	return parseURIList(input)
 }
 
 // InjectPendingCount is a middleware that queries the pending client count for
@@ -114,7 +123,7 @@ func (h *ClientHandler) CreateClient(c *gin.Context) {
 		UserID:                      userID,
 		Scopes:                      c.PostForm("scopes"),
 		RedirectURIs:                parseRedirectURIs(c.PostForm("redirect_uris")),
-		AllowedResources:            parseRedirectURIs(c.PostForm("allowed_resources")),
+		AllowedResources:            parseURIList(c.PostForm("allowed_resources")),
 		CreatedBy:                   userID,
 		ClientType:                  core.NormalizeClientType(c.PostForm("client_type")),
 		EnableDeviceFlow:            c.PostForm("enable_device_flow") == queryValueTrue,
@@ -215,7 +224,7 @@ func (h *ClientHandler) UpdateClient(c *gin.Context) {
 		Description:                 c.PostForm("description"),
 		Scopes:                      c.PostForm("scopes"),
 		RedirectURIs:                parseRedirectURIs(c.PostForm("redirect_uris")),
-		AllowedResources:            parseRedirectURIs(c.PostForm("allowed_resources")),
+		AllowedResources:            parseURIList(c.PostForm("allowed_resources")),
 		Status:                      c.PostForm("status"),
 		ClientType:                  core.NormalizeClientType(c.PostForm("client_type")),
 		EnableDeviceFlow:            c.PostForm("enable_device_flow") == queryValueTrue,
