@@ -176,7 +176,7 @@ uniformly to all four grants — including the `client_credentials` (M2M) path,
 which has no human consent gate. AuthGate is therefore the authority that
 attests a given client may target a given resource, as RFC 8707 intends.
 
-- **Deny-all by default.** An empty `AllowedResources` rejects *any* non-empty
+- **Deny-all by default.** An empty `AllowedResources` rejects _any_ non-empty
   client-supplied `resource` with `invalid_target`. The client still receives
   the operator-configured `JWT_AUDIENCE` fallback `aud` when it sends no
   `resource` parameter (that value is operator-controlled, not client-controlled).
