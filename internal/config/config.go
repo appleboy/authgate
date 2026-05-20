@@ -332,6 +332,7 @@ type Config struct {
 	// Authorization Code Flow settings (RFC 6749)
 	AuthCodeExpiration time.Duration // Authorization code lifetime (default: 10 minutes)
 	PKCERequired       bool          // Force PKCE for all public clients (default: false)
+	StrictRedirectURIs bool          // Require redirect URIs to be loopback or HTTPS (OAuth 2.1 §1.5 / MCP); default: false
 	ConsentRemember    bool          // Skip consent page if user already authorized same scope (default: true)
 
 	// CORS settings
@@ -590,6 +591,7 @@ func Load() *Config {
 		// Authorization Code Flow settings
 		AuthCodeExpiration: getEnvDuration("AUTH_CODE_EXPIRATION", 10*time.Minute),
 		PKCERequired:       getEnvBool("PKCE_REQUIRED", false),
+		StrictRedirectURIs: getEnvBool("STRICT_REDIRECT_URIS", false),
 		ConsentRemember:    getEnvBool("CONSENT_REMEMBER", true),
 
 		// Bootstrap and shutdown timeout settings

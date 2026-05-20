@@ -220,6 +220,13 @@ For an MCP-ready deployment:
 - `ENABLE_REFRESH_TOKENS=true` (long-running MCP sessions)
 - `PKCE_REQUIRED=true` recommended; AuthGate already requires `S256` for public
   clients and rejects `plain`.
+- `STRICT_REDIRECT_URIS=true` recommended. OAuth 2.1 §1.5 requires every redirect
+  URI to be loopback or HTTPS. With this flag on, AuthGate rejects a redirect URI
+  that uses plain `http://` to a non-loopback host (`http://127.0.0.1...`,
+  `http://localhost...`, and any `https://...` are still accepted). Enforced when
+  a client is created or updated — including via Dynamic Client Registration —
+  so pre-existing clients keep working until they are next edited. Default is
+  `false` for backward compatibility.
 
 No new configuration keys are required to support MCP — Resource Indicators
 are always-on and backward-compatible: callers that don't send `resource`

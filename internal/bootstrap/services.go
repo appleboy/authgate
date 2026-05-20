@@ -50,6 +50,7 @@ func initializeServices(
 		db, auditService,
 		clientCountCache, cfg.ClientCountCacheTTL,
 		clientCache, cfg.ClientCacheTTL,
+		services.WithStrictRedirectURIs(cfg.StrictRedirectURIs),
 	)
 	deviceService := services.NewDeviceService(
 		db,

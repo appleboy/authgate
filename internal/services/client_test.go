@@ -539,6 +539,7 @@ func TestValidateRedirectURIs(t *testing.T) {
 	tests := []struct {
 		name    string
 		uris    []string
+		strict  bool
 		wantErr bool
 	}{
 		{
@@ -586,11 +587,49 @@ func TestValidateRedirectURIs(t *testing.T) {
 			uris:    []string{"https://valid.example.com/cb", "not-a-uri"},
 			wantErr: true,
 		},
+		// Backward compat: without strict mode plain-http non-loopback is allowed.
+		{
+			name:    "non-strict allows http non-loopback",
+			uris:    []string{"http://app.example.com/cb"},
+			strict:  false,
+			wantErr: false,
+		},
+		// Strict mode (OAuth 2.1 §1.5 / MCP): http only for loopback.
+		{
+			name:    "strict rejects http non-loopback",
+			uris:    []string{"http://app.example.com/cb"},
+			strict:  true,
+			wantErr: true,
+		},
+		{
+			name:    "strict allows https",
+			uris:    []string{"https://app.example.com/cb"},
+			strict:  true,
+			wantErr: false,
+		},
+		{
+			name:    "strict allows http 127.0.0.1",
+			uris:    []string{"http://127.0.0.1:1729/callback"},
+			strict:  true,
+			wantErr: false,
+		},
+		{
+			name:    "strict allows http localhost",
+			uris:    []string{"http://localhost:8080/cb"},
+			strict:  true,
+			wantErr: false,
+		},
+		{
+			name:    "strict allows http ipv6 loopback",
+			uris:    []string{"http://[::1]:8080/cb"},
+			strict:  true,
+			wantErr: false,
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validateRedirectURIs(tc.uris)
+			err := validateRedirectURIs(tc.uris, tc.strict)
 			if tc.wantErr {
 				assert.ErrorIs(t, err, ErrInvalidRedirectURI)
 			} else {
@@ -598,6 +637,49 @@ func TestValidateRedirectURIs(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCreateClient_StrictRedirectURIs(t *testing.T) {
+	newSvc := func() *ClientService {
+		return NewClientService(
+			setupTestStore(t), NewNoopAuditService(), nil, 0, nil, 0,
+			WithStrictRedirectURIs(true),
+		)
+	}
+	userID := uuid.New().String()
+	baseReq := func(uris []string) CreateClientRequest {
+		return CreateClientRequest{
+			ClientName:         "Strict Redirect Client",
+			UserID:             userID,
+			CreatedBy:          userID,
+			EnableAuthCodeFlow: true,
+			RedirectURIs:       uris,
+		}
+	}
+
+	t.Run("https accepted", func(t *testing.T) {
+		_, err := newSvc().CreateClient(context.Background(), baseReq([]string{"https://app.example.com/cb"}))
+		assert.NoError(t, err)
+	})
+
+	t.Run("http non-loopback rejected", func(t *testing.T) {
+		_, err := newSvc().CreateClient(context.Background(), baseReq([]string{"http://app.example.com/cb"}))
+		assert.ErrorIs(t, err, ErrInvalidRedirectURI)
+	})
+
+	t.Run("http loopback accepted", func(t *testing.T) {
+		_, err := newSvc().CreateClient(context.Background(), baseReq([]string{"http://127.0.0.1:1729/callback"}))
+		assert.NoError(t, err)
+	})
+
+	t.Run("non-strict default allows http non-loopback", func(t *testing.T) {
+		svc := NewClientService(setupTestStore(t), NewNoopAuditService(), nil, 0, nil, 0)
+		_, err := svc.CreateClient(
+			context.Background(),
+			baseReq([]string{"http://app.example.com/cb"}),
+		)
+		assert.NoError(t, err)
+	})
 }
 
 func TestCreateClient_InvalidRedirectURIRejected(t *testing.T) {

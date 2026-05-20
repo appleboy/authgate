@@ -69,7 +69,7 @@ func (s *ClientService) UserUpdateClient(
 		return ErrRedirectURIRequired
 	}
 
-	if err := validateRedirectURIs(req.RedirectURIs); err != nil {
+	if err := validateRedirectURIs(req.RedirectURIs, s.strictRedirectURIs); err != nil {
 		return err
 	}
 
