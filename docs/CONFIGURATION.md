@@ -185,6 +185,7 @@ OAUTH_INSECURE_SKIP_VERIFY=false # Skip TLS verification for OAuth (dev/testing 
 # Authorization Code Flow (RFC 6749 + RFC 7636)
 AUTH_CODE_EXPIRATION=10m            # Authorization code lifetime (default: 10 min)
 PKCE_REQUIRED=false                 # Require PKCE for all clients, including confidential (default: false)
+STRICT_REDIRECT_URIS=false          # Require redirect URIs to be loopback or HTTPS, rejecting plain-http to non-loopback hosts (OAuth 2.1 §1.5 / MCP; default: false). Enforced at client create/update.
 CONSENT_REMEMBER=true               # Skip consent page if user already approved same scopes (default: true)
 
 # Dynamic Client Registration (RFC 7591)

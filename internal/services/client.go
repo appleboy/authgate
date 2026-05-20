@@ -113,8 +113,11 @@ func validateServiceAccount(sa string) error {
 }
 
 // validateRedirectURIs checks that every URI in the slice is an absolute http/https
-// URI without a fragment, as required by RFC 6749.
-func validateRedirectURIs(uris []string) error {
+// URI without a fragment, as required by RFC 6749. When strict is true it
+// additionally enforces the OAuth 2.1 §1.5 / MCP requirement that redirect URIs
+// be either loopback or HTTPS: a plain-http scheme is only permitted for
+// loopback hosts (localhost, 127.0.0.0/8, ::1).
+func validateRedirectURIs(uris []string, strict bool) error {
 	for _, raw := range uris {
 		if strings.TrimSpace(raw) == "" {
 			return fmt.Errorf("%w: URI must not be empty", ErrInvalidRedirectURI)
@@ -132,17 +135,36 @@ func validateRedirectURIs(uris []string) error {
 		if u.Fragment != "" {
 			return fmt.Errorf("%w: %q must not contain a fragment", ErrInvalidRedirectURI, raw)
 		}
+		if strict && u.Scheme == "http" && !util.IsLoopbackHost(u.Hostname()) {
+			return fmt.Errorf(
+				"%w: %q must use https; http is only permitted for loopback hosts",
+				ErrInvalidRedirectURI, raw,
+			)
+		}
 	}
 	return nil
 }
 
 type ClientService struct {
-	store          core.Store
-	auditService   core.AuditLogger
-	countCache     core.Cache[int64]
-	countCacheTTL  time.Duration
-	clientCache    core.Cache[models.OAuthApplication]
-	clientCacheTTL time.Duration
+	store              core.Store
+	auditService       core.AuditLogger
+	countCache         core.Cache[int64]
+	countCacheTTL      time.Duration
+	clientCache        core.Cache[models.OAuthApplication]
+	clientCacheTTL     time.Duration
+	strictRedirectURIs bool
+}
+
+// ClientOption configures a ClientService at construction.
+type ClientOption func(*ClientService)
+
+// WithStrictRedirectURIs enables OAuth 2.1 §1.5 / MCP redirect-URI enforcement
+// (plain http only for loopback hosts). It defaults to false so callers that omit
+// the option preserve legacy behavior; bootstrap wires it from STRICT_REDIRECT_URIS.
+func WithStrictRedirectURIs(v bool) ClientOption {
+	return func(s *ClientService) {
+		s.strictRedirectURIs = v
+	}
 }
 
 func NewClientService(
@@ -152,6 +174,7 @@ func NewClientService(
 	countCacheTTL time.Duration,
 	clientCache core.Cache[models.OAuthApplication],
 	clientCacheTTL time.Duration,
+	opts ...ClientOption,
 ) *ClientService {
 	if auditService == nil {
 		auditService = NewNoopAuditService()
@@ -168,7 +191,7 @@ func NewClientService(
 	if clientCacheTTL <= 0 {
 		clientCacheTTL = 5 * time.Minute
 	}
-	return &ClientService{
+	svc := &ClientService{
 		store:          s,
 		auditService:   auditService,
 		countCache:     countCache,
@@ -176,6 +199,10 @@ func NewClientService(
 		clientCache:    clientCache,
 		clientCacheTTL: clientCacheTTL,
 	}
+	for _, opt := range opts {
+		opt(svc)
+	}
+	return svc
 }
 
 type CreateClientRequest struct {
@@ -250,7 +277,7 @@ func (s *ClientService) CreateClient(
 		return nil, ErrRedirectURIRequired
 	}
 
-	if err := validateRedirectURIs(req.RedirectURIs); err != nil {
+	if err := validateRedirectURIs(req.RedirectURIs, s.strictRedirectURIs); err != nil {
 		return nil, err
 	}
 
@@ -377,7 +404,7 @@ func (s *ClientService) UpdateClient(
 		return ErrRedirectURIRequired
 	}
 
-	if err := validateRedirectURIs(req.RedirectURIs); err != nil {
+	if err := validateRedirectURIs(req.RedirectURIs, s.strictRedirectURIs); err != nil {
 		return err
 	}
 

@@ -1,9 +1,28 @@
 package util
 
 import (
+	"net"
 	"net/url"
 	"strings"
 )
+
+// IsLoopbackHost reports whether host (a hostname without a port, e.g. the
+// result of url.URL.Hostname()) is a loopback target: the literal "localhost",
+// an IPv4 127.0.0.0/8 address, or the IPv6 ::1 address. It is used to permit
+// plain-http redirect URIs only for loopback hosts when STRICT_REDIRECT_URIS
+// is enabled (OAuth 2.1 §1.5 / MCP authorization spec).
+func IsLoopbackHost(host string) bool {
+	if host == "" {
+		return false
+	}
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
+}
 
 // IsRedirectSafe validates that a redirect URL is safe to use.
 // It only allows:

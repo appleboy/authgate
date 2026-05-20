@@ -6,6 +6,28 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestIsLoopbackHost(t *testing.T) {
+	tests := []struct {
+		host string
+		want bool
+	}{
+		{"localhost", true},
+		{"LOCALHOST", true},
+		{"127.0.0.1", true},
+		{"127.0.0.5", true},
+		{"::1", true},
+		{"example.com", false},
+		{"0.0.0.0", false},
+		{"10.0.0.1", false},
+		{"", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.host, func(t *testing.T) {
+			assert.Equal(t, tc.want, IsLoopbackHost(tc.host))
+		})
+	}
+}
+
 func TestIsRedirectSafe(t *testing.T) {
 	baseURL := "http://localhost:8080"
 
