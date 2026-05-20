@@ -1,6 +1,7 @@
 package util
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -22,7 +23,7 @@ func TestIsLoopbackHost(t *testing.T) {
 		{"", false},
 	}
 	for _, tc := range tests {
-		t.Run(tc.host, func(t *testing.T) {
+		t.Run(fmt.Sprintf("%q", tc.host), func(t *testing.T) {
 			assert.Equal(t, tc.want, IsLoopbackHost(tc.host))
 		})
 	}
