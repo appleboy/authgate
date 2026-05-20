@@ -184,13 +184,24 @@ func (s *TokenService) RefreshAccessToken(
 		} else {
 			accessTTL, refreshTTL = s.ttlForClient(c)
 			client = c
-			// Enforce the per-client RFC 8707 allowlist on a client-supplied
-			// `resource`. The original grant was already allowlist-checked at
-			// issuance and requestedResource is narrowed to that grant's subset,
-			// so this only additionally catches an allowlist tightened after
-			// issuance. No-op when no resource was requested; only reachable when
-			// the client loaded (a transient lookup failure already fell back to
-			// provider defaults above rather than failing the refresh).
+			// Enforce the per-client RFC 8707 allowlist on the client-supplied
+			// `resource` for THIS refresh (requestedResource), not on
+			// effectiveResource. We deliberately do NOT gate the reused original
+			// grant: when the client omits `resource`, effectiveResource is the
+			// originalResource snapshot, which — for a grant that carried no
+			// client resource — is the operator-controlled JWT_AUDIENCE fallback.
+			// That fallback is exempt from the allowlist by design (it is not
+			// client-controlled), and the persisted Resource column cannot tell a
+			// fallback-derived audience apart from a client-derived one, so
+			// validating effectiveResource would wrongly gate the operator's own
+			// audience. A client-supplied requestedResource is already bounded by
+			// narrowResource to a subset of the original grant (validated at
+			// issuance); re-checking it here additionally rejects a value the
+			// admin has since removed from the allowlist. Killing an existing
+			// audience lineage is the job of token revocation, not the allowlist.
+			// No-op when requestedResource is empty. Only reachable when the
+			// client loaded — a transient lookup failure already fell back to
+			// provider defaults above rather than failing the refresh.
 			if err := validateClientResource(client, requestedResource); err != nil {
 				s.metrics.RecordTokenRefresh(false)
 				return nil, nil, err

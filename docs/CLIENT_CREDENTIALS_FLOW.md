@@ -141,7 +141,7 @@ grant_type=client_credentials&client_id=<id>&client_secret=<secret>&scope=read
 | `scope`         | No       | Space-separated list of scopes. Defaults to all client scopes if omitted.                                                                                                                                                                                                                                        |
 | `client_id`     | Cond.    | Required if not using HTTP Basic Auth                                                                                                                                                                                                                                                                            |
 | `client_secret` | Cond.    | Required if not using HTTP Basic Auth                                                                                                                                                                                                                                                                            |
-| `resource`      | No       | [RFC 8707][rfc8707] Resource Indicator(s). Repeat for multiple resources. Each value must be an absolute `http`/`https` URL with a non-empty host and no fragment, ≤ 1024 chars, max 10 per request. When supplied, the issued token's `aud` claim is bound to these values. **Read the multi-RS caveat below.** |
+| `resource`      | No       | [RFC 8707][rfc8707] Resource Indicator(s). Repeat for multiple resources. Each value must be an absolute `http`/`https` URL with a non-empty host and no fragment, ≤ 1024 chars, max 10 per request. When supplied, the issued token's `aud` claim is bound to these values — but **only if each value exactly matches the client's `AllowedResources` allowlist**. **Read the allowlist note below.** |
 
 **Example with Resource Indicators:**
 
@@ -155,13 +155,15 @@ curl -X POST https://auth.example.com/oauth/token \
 
 The issued JWT's `aud` will be `"https://billing-api.corp.internal"`, so a token requested for `billing-api` cannot be replayed at `reports-api` (provided each resource server verifies `aud` — see [JWT Verification Guide](JWT_VERIFICATION.md#audience-binding-rfc-8707)).
 
-### Multi-resource-server caveat (read before enabling resource on client_credentials)
+### Per-client resource allowlist (read before enabling resource on client_credentials)
 
-> ⚠️ **There is currently NO per-client allowed-resources allowlist on the `client_credentials` grant.** Any confidential client with this grant enabled may request **any** syntactically valid `resource` indicator and have it become the JWT `aud`.
+> ✅ **AuthGate enforces a per-client `AllowedResources` allowlist on the `client_credentials` grant (and all other grants).** A client may obtain a token whose `aud` is derived from a `resource` value **only** when that value is an **exact-string match** of an allowlist entry; otherwise the request fails with `invalid_target`. The allowlist is **deny-all by default** — an empty allowlist rejects any client-supplied `resource`. (Sending no `resource` is unaffected: the operator-controlled `JWT_AUDIENCE` fallback still applies.)
 >
-> In deployments where multiple resource servers trust the same AuthGate issuer, this means a resource server **MUST NOT** treat `aud == its-own-id` as evidence that AuthGate authorized this specific client to reach it. The resource server is responsible for validating the `(client_id, sub, aud)` tuple against its own policy — typically a per-client API allowlist at the RS, or a network-level allowlist. For user-delegated grants (`authorization_code`, `device_code`), the user's consent screen displays the requested resource so the binding is user-attested; the `client_credentials` path has no such human gate.
+> Admins manage the allowlist in the client create/edit screen. Exact match means `https://api.x.com` ≠ `https://api.x.com/` and case is significant — enter exactly what the client will request.
 >
-> A future change may add a per-client `AllowedResources` column to OAuthApplication so the AS can enforce this directly. Until then, treat the `resource` indicator on `client_credentials` as **caller-asserted intent**, not AS-attested authorization.
+> A resource server SHOULD still verify `aud == its-own-id` (defense-in-depth / RFC 8707 RS-side hygiene), but it can now also rely on AuthGate having refused to mint an out-of-allowlist `aud`. See [docs/MCP.md](MCP.md) "Per-client resource allowlist" for full details.
+>
+> ⚠️ **Breaking change:** a client that currently sends `resource` will receive `invalid_target` until an admin populates its `AllowedResources`. Clients that never send `resource` are unaffected.
 
 [rfc8707]: https://datatracker.ietf.org/doc/html/rfc8707
 
