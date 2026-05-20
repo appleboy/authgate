@@ -208,6 +208,17 @@ func (s *TokenService) RefreshAccessToken(
 			}
 		}
 	}
+	// Fail closed: if the client could not be loaded (clientService is nil, or
+	// the lookup failed) we cannot verify the allowlist. A client-supplied
+	// `resource` on this refresh must never slip through that unverified path,
+	// so reject it — otherwise a transient DB/cache failure would let a client
+	// mint a resource-derived `aud` the AS never attested. Omitting `resource`
+	// is still tolerated: it reuses the original grant's already-issued
+	// audience and needs no per-client gate (see validateClientResource above).
+	if client == nil && len(requestedResource) > 0 {
+		s.metrics.RecordTokenRefresh(false)
+		return nil, nil, ErrInvalidTarget
+	}
 	extraClaims := s.composeIssuanceClaims(client, refreshToken.UserID, callerExtra)
 	// Access token's `aud` = effectiveResource (possibly narrowed).
 	// Refresh token's `aud` override = nil → provider falls back to the

@@ -513,6 +513,61 @@ func TestRefresh_LegacyRefreshToken_AudienceFromJWT(t *testing.T) {
 	)
 }
 
+// TestRefresh_ClientLoadFails_RejectsResource asserts the fail-closed guard:
+// when the client cannot be loaded at refresh time (here, no client row exists
+// for the token's client_id) a client-supplied `resource` must NOT slip through
+// the unverified path — it is rejected with ErrInvalidTarget so a transient
+// DB/cache failure can't be used to mint an un-attested resource-derived aud.
+func TestRefresh_ClientLoadFails_RejectsResource(t *testing.T) {
+	s := setupTestStore(t)
+	cfg := &config.Config{
+		JWTExpiration:          1 * time.Hour,
+		JWTSecret:              "test-secret-refresh-failclosed",
+		BaseURL:                "http://localhost:8080",
+		EnableRefreshTokens:    true,
+		RefreshTokenExpiration: 30 * 24 * time.Hour,
+	}
+	tokenService := createTestTokenService(t, s, cfg)
+
+	// A client_id with no corresponding client row → GetClient fails on refresh.
+	missingClientID := uuid.New().String()
+	userID := uuid.New().String()
+
+	provider, err := token.NewLocalTokenProvider(cfg)
+	require.NoError(t, err)
+	refreshResult, err := provider.GenerateRefreshToken(
+		context.Background(), userID, missingClientID, "read", 0, nil,
+		[]string{"https://api.a.example"},
+	)
+	require.NoError(t, err)
+
+	require.NoError(t, s.CreateAccessToken(&models.AccessToken{
+		ID:            uuid.New().String(),
+		TokenHash:     util.SHA256Hex(refreshResult.TokenString),
+		RawToken:      refreshResult.TokenString,
+		TokenType:     refreshResult.TokenType,
+		TokenCategory: models.TokenCategoryRefresh,
+		Status:        models.TokenStatusActive,
+		UserID:        userID,
+		ClientID:      missingClientID,
+		Scopes:        "read",
+		ExpiresAt:     refreshResult.ExpiresAt,
+		Resource:      models.StringArray{"https://api.a.example"},
+	}))
+
+	// requestedResource is a subset of the grant (passes narrowResource) but the
+	// client cannot be loaded → fail closed with invalid_target.
+	_, _, err = tokenService.RefreshAccessToken(
+		context.Background(),
+		refreshResult.TokenString,
+		missingClientID,
+		"",
+		nil,
+		[]string{"https://api.a.example"},
+	)
+	require.ErrorIs(t, err, ErrInvalidTarget)
+}
+
 // TestDeviceCode_RejectsResourceWhenNoneGranted asserts that a token-time
 // resource is rejected when the user authorized a device code without one —
 // the empty granted set means "no audience binding" and any resource on
