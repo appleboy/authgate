@@ -229,7 +229,14 @@ func (h *ClientHandler) UpdateClient(c *gin.Context) {
 	userID := getUserIDFromContext(c)
 	err := h.clientService.UpdateClient(c.Request.Context(), clientID, userID, req)
 	if err != nil {
-		client, _ := h.clientService.GetClient(c.Request.Context(), clientID)
+		// Reload for the ID/timestamps shown on the re-rendered form. The reload
+		// can fail (e.g. client deleted concurrently / DB error); fall back to a
+		// minimal struct so the error page still renders the user's input rather
+		// than panicking on a nil dereference.
+		client, getErr := h.clientService.GetClient(c.Request.Context(), clientID)
+		if getErr != nil || client == nil {
+			client = &models.OAuthApplication{ClientID: clientID}
+		}
 
 		userModel := getUserFromContext(c)
 

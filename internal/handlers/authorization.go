@@ -255,11 +255,11 @@ func (h *AuthorizationHandler) issueCodeAndRedirect(
 		},
 	)
 	if err != nil {
-		// An out-of-allowlist `resource` surfaces as ErrInvalidTarget here and
-		// must redirect with invalid_target (RFC 8707), not server_error. Any
-		// other failure stays a generic server_error. oauthErrorCode maps
-		// ErrInvalidTarget → invalid_target and defaults the rest to
-		// invalid_request, so special-case ErrInvalidTarget explicitly.
+		// Every failure here is an authorization-code generation failure →
+		// server_error, except an out-of-allowlist `resource` (ErrInvalidTarget),
+		// which must surface as invalid_target per RFC 8707. We deliberately do
+		// NOT route through oauthErrorCode: its default for unmatched errors is
+		// invalid_request, which is the wrong code for this path.
 		errCode := errServerError
 		errDesc := "Failed to generate authorization code"
 		if errors.Is(err, services.ErrInvalidTarget) {
