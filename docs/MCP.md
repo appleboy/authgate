@@ -120,6 +120,16 @@ issued JWT's `aud` claim is **bound to the requested resource**. AuthGate:
   never widen it. Widening returns 400 `invalid_target`.
 - On `authorization_code` token exchange, validates that any token-time
   `resource` is a subset of what was bound at `/authorize`.
+- **Enforces a per-client `AllowedResources` allowlist on every grant**
+  (`client_credentials`, `authorization_code`, `device_code`, `refresh_token`):
+  a client-supplied `resource` is accepted only when it is an **exact-string
+  match** of an allowlist entry, otherwise the request fails with 400 / redirect
+  `error=invalid_target`. The allowlist is **deny-all by default** — an empty
+  allowlist rejects any client-supplied `resource`. Sending no `resource` is
+  unaffected (the static `JWT_AUDIENCE` fallback still applies, since that value
+  is operator-controlled, not client-controlled). Admins manage the allowlist in
+  the client create/edit screen. See the [allowlist section](#per-client-resource-allowlist-rfc-8707)
+  below, including the **breaking-change** note.
 
 **Trust model:** the `aud` claim is server-attested for the user-delegated
 grants (`authorization_code`, `device_code`, `refresh_token`) — the user
@@ -157,22 +167,39 @@ mitigation, and code samples in Go / Python / Node — see the
 [Audience Binding (RFC 8707)](JWT_VERIFICATION.md#audience-binding-rfc-8707)
 section.
 
-### Multi-resource-server caveat for `client_credentials`
+### Per-client resource allowlist (RFC 8707)
 
-There is currently no per-client allowed-resources allowlist on the
-`client_credentials` grant. Any confidential client with this grant enabled
-may request any syntactically valid `resource` indicator and have it become
-the JWT `aud`. In a deployment where multiple MCP / resource servers trust
-the same AuthGate issuer, this means an MCP server **MUST NOT** treat
-`aud == its-own-id` as evidence that AuthGate authorized this specific
-client to reach it — the resource server is responsible for validating the
-`(client_id, sub, aud)` tuple against its own policy (typically a
-per-client API allowlist on the resource server, or a network-level
-allowlist). For user-delegated grants (`authorization_code`,
-`device_code`), the user's consent screen displays the requested resource
-so the binding is user-attested; the `client_credentials` path has no such
-human gate. A future change may add a per-client `AllowedResources` column
-to AuthGate so the AS can enforce this directly.
+Each OAuth client carries an `AllowedResources` allowlist. A client may obtain a
+token whose `aud` was derived from a client-supplied `resource` value **only**
+when that value is an **exact-string match** of an allowlist entry. This applies
+uniformly to all four grants — including the `client_credentials` (M2M) path,
+which has no human consent gate. AuthGate is therefore the authority that
+attests a given client may target a given resource, as RFC 8707 intends.
+
+- **Deny-all by default.** An empty `AllowedResources` rejects *any* non-empty
+  client-supplied `resource` with `invalid_target`. The client still receives
+  the operator-configured `JWT_AUDIENCE` fallback `aud` when it sends no
+  `resource` parameter (that value is operator-controlled, not client-controlled).
+- **Exact match, no normalization.** `https://api.x.com` ≠ `https://api.x.com/`
+  and case is significant — enter exactly what clients will request. Entries are
+  validated at client-save time against the same RFC 8707 §2.1 syntax rules as
+  request-time `resource` values (absolute `http`/`https` URI, non-empty host, no
+  fragment); malformed entries are rejected.
+- **Managed by admins** in the client create/edit screen (tag picker).
+
+> **Breaking change.** A client that currently passes `resource` will start
+> receiving `invalid_target` until an admin populates its `AllowedResources`.
+> This is an intentional security fix (the resource-indicator feature shipped
+> recently in #187/#190/#192). Before upgrading, inventory the `resource` values
+> your clients send and pre-populate each client's allowlist. Clients that never
+> send `resource` are unaffected.
+
+A resource server SHOULD still verify `aud == its-own-id` (defense-in-depth and
+RFC 8707 RS-side hygiene), but it can now also rely on AuthGate having refused to
+mint an out-of-allowlist `aud` in the first place. For user-delegated grants
+(`authorization_code`, `device_code`) the user's consent screen additionally
+displays the requested resource, so the binding is both user-attested and
+allowlist-attested.
 
 ## curl walkthrough
 
@@ -251,4 +278,4 @@ keep getting `aud` from `JWT_AUDIENCE`.
 - [Authorization Code Flow Guide](AUTHORIZATION_CODE_FLOW.md) — `/oauth/authorize`
   parameters including `resource`
 - [Client Credentials Flow Guide](CLIENT_CREDENTIALS_FLOW.md) — M2M tokens and
-  the multi-resource-server caveat
+  the per-client resource allowlist

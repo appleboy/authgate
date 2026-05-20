@@ -251,16 +251,22 @@ func (h *AuthorizationHandler) issueCodeAndRedirect(
 			CodeChallengeMethod: req.CodeChallengeMethod,
 			Nonce:               req.Nonce,
 			Resource:            req.Resource,
+			Client:              req.Client,
 		},
 	)
 	if err != nil {
-		h.redirectWithError(
-			c,
-			req.RedirectURI,
-			state,
-			errServerError,
-			"Failed to generate authorization code",
-		)
+		// An out-of-allowlist `resource` surfaces as ErrInvalidTarget here and
+		// must redirect with invalid_target (RFC 8707), not server_error. Any
+		// other failure stays a generic server_error. oauthErrorCode maps
+		// ErrInvalidTarget → invalid_target and defaults the rest to
+		// invalid_request, so special-case ErrInvalidTarget explicitly.
+		errCode := errServerError
+		errDesc := "Failed to generate authorization code"
+		if errors.Is(err, services.ErrInvalidTarget) {
+			errCode = errInvalidTarget
+			errDesc = "resource is not in the client's allowlist"
+		}
+		h.redirectWithError(c, req.RedirectURI, state, errCode, errDesc)
 		return
 	}
 

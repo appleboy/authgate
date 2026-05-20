@@ -287,6 +287,70 @@ func TestCreateClient_AuthCodeFlowEnabled(t *testing.T) {
 	assert.NotEmpty(t, resp.ClientSecretPlain) // Secret returned on creation only
 }
 
+// TestCreateClient_AllowedResources_Valid confirms a well-formed RFC 8707
+// allowlist is accepted and persisted (round-trips through the store).
+func TestCreateClient_AllowedResources_Valid(t *testing.T) {
+	s := setupTestStore(t)
+	svc := NewClientService(s, NewNoopAuditService(), nil, 0, nil, 0)
+	userID := uuid.New().String()
+
+	req := CreateClientRequest{
+		ClientName:       "Resource Client",
+		UserID:           userID,
+		CreatedBy:        userID,
+		Scopes:           "read",
+		EnableDeviceFlow: true,
+		AllowedResources: []string{"https://api.a.example", "https://api.b.example"},
+	}
+
+	resp, err := svc.CreateClient(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(
+		t,
+		models.StringArray{"https://api.a.example", "https://api.b.example"},
+		resp.AllowedResources,
+	)
+
+	// Round-trip: reload from the store and confirm persistence.
+	reloaded, err := s.GetClient(resp.ClientID)
+	require.NoError(t, err)
+	assert.Equal(
+		t,
+		models.StringArray{"https://api.a.example", "https://api.b.example"},
+		reloaded.AllowedResources,
+	)
+}
+
+// TestCreateClient_AllowedResources_Malformed confirms each entry is held to
+// the same RFC 8707 syntax rules as request-time resources: a relative URI, a
+// dangerous scheme, and a fragment-bearing value are all rejected at save time.
+func TestCreateClient_AllowedResources_Malformed(t *testing.T) {
+	cases := map[string]string{
+		"relative":         "not-a-url",
+		"dangerous_scheme": "javascript:alert(1)",
+		"fragment":         "https://api.example.com/#frag",
+	}
+	for name, bad := range cases {
+		t.Run(name, func(t *testing.T) {
+			s := setupTestStore(t)
+			svc := NewClientService(s, NewNoopAuditService(), nil, 0, nil, 0)
+			userID := uuid.New().String()
+
+			req := CreateClientRequest{
+				ClientName:       "Bad Resource Client",
+				UserID:           userID,
+				CreatedBy:        userID,
+				Scopes:           "read",
+				EnableDeviceFlow: true,
+				AllowedResources: []string{bad},
+			}
+
+			_, err := svc.CreateClient(context.Background(), req)
+			assert.ErrorIs(t, err, ErrInvalidAllowedResource)
+		})
+	}
+}
+
 func TestCreateClient_PublicClientType(t *testing.T) {
 	s := setupTestStore(t)
 	svc := NewClientService(s, NewNoopAuditService(), nil, 0, nil, 0)

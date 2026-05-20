@@ -69,6 +69,7 @@ type OAuthApplication struct {
 	Scopes                      string      `gorm:"not null"`
 	GrantTypes                  string      `gorm:"not null;default:'device_code'"`
 	RedirectURIs                StringArray `gorm:"type:json"`
+	AllowedResources            StringArray `gorm:"type:json"`                 // RFC 8707 resource allowlist (exact match); empty = deny-all. Enforced in services.validateClientResource.
 	ClientType                  string      `gorm:"not null;default:'public'"` // "confidential" or "public"
 	EnableDeviceFlow            bool        `gorm:"not null;default:true"`
 	EnableAuthCodeFlow          bool        `gorm:"not null;default:false"`

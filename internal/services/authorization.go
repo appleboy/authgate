@@ -305,6 +305,12 @@ type CreateAuthorizationCodeParams struct {
 	// authorization code so the /token grant can bind them to the issued
 	// JWT's "aud" claim. Empty means no resource was requested.
 	Resource []string
+	// Client is the OAuth client this code is for, already loaded by the
+	// caller (ValidateAuthorizationRequest). Used to enforce the RFC 8707
+	// AllowedResources allowlist without a second lookup. May be nil when no
+	// Resource is requested; a lookup is the fallback if a Resource is bound
+	// but Client was not supplied.
+	Client *models.OAuthApplication
 }
 
 // CreateAuthorizationCode generates a one-time authorization code and saves it to the database.
@@ -313,6 +319,26 @@ func (s *AuthorizationService) CreateAuthorizationCode(
 	ctx context.Context,
 	params CreateAuthorizationCodeParams,
 ) (plainCode string, record *models.AuthorizationCode, err error) {
+	// Enforce the per-client RFC 8707 allowlist on the resource set being bound
+	// to this code (deny-all when the allowlist is empty). This is the chokepoint
+	// for the authorization_code grant: both the consent-remember shortcut and
+	// the POST-approve path funnel through here, and the token-time subset check
+	// in ExchangeCode then keeps any narrowed token-time resource within bounds.
+	// Returns ErrInvalidTarget, which issueCodeAndRedirect maps to invalid_target.
+	if len(params.Resource) > 0 {
+		client := params.Client
+		if client == nil {
+			c, err := s.clientService.GetClient(ctx, params.ClientID)
+			if err != nil {
+				return "", nil, ErrUnauthorizedClient
+			}
+			client = c
+		}
+		if err := validateClientResource(client, params.Resource); err != nil {
+			return "", nil, err
+		}
+	}
+
 	// Generate 32 cryptographically random bytes (256-bit entropy)
 	rawBytes, err := util.CryptoRandomBytes(32)
 	if err != nil {

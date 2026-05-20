@@ -85,6 +85,10 @@ var (
 		"service_account must be empty or 1–255 characters of letters, digits, underscore, dot, at-sign, or hyphen, " +
 			"starting with a letter or digit",
 	)
+	ErrInvalidAllowedResource = errors.New(
+		"each allowed resource must be an absolute http/https URI with a host and no fragment " +
+			"(RFC 8707); exact-match — enter exactly what clients will request",
+	)
 )
 
 // validateProject returns nil for an empty value (the field is optional) and
@@ -108,6 +112,20 @@ func validateServiceAccount(sa string) error {
 	}
 	if !serviceAccountPattern.MatchString(sa) {
 		return ErrInvalidServiceAccount
+	}
+	return nil
+}
+
+// validateAllowedResources runs every allowlist entry through the SAME RFC 8707
+// syntax validation applied to request-time `resource` values, so an admin
+// cannot save an entry no client could ever match. Empty slice is valid
+// (deny-all). On any malformed entry it returns ErrInvalidAllowedResource.
+func validateAllowedResources(resources []string) error {
+	if len(resources) == 0 {
+		return nil
+	}
+	if _, err := util.ValidateResourceIndicators(resources); err != nil {
+		return ErrInvalidAllowedResource
 	}
 	return nil
 }
@@ -211,6 +229,7 @@ type CreateClientRequest struct {
 	UserID                      string
 	Scopes                      string
 	RedirectURIs                []string
+	AllowedResources            []string // RFC 8707 allowlist; each entry validated via util.ValidateResourceIndicators. Empty = deny-all.
 	CreatedBy                   string
 	ClientType                  core.ClientType
 	EnableDeviceFlow            bool   // Enable Device Authorization Grant (RFC 8628)
@@ -227,7 +246,8 @@ type UpdateClientRequest struct {
 	Description                 string
 	Scopes                      string
 	RedirectURIs                []string
-	Status                      string // "active" or "inactive"
+	AllowedResources            []string // RFC 8707 allowlist; each entry validated via util.ValidateResourceIndicators. Empty = deny-all.
+	Status                      string   // "active" or "inactive"
 	ClientType                  core.ClientType
 	EnableDeviceFlow            bool
 	EnableAuthCodeFlow          bool
@@ -294,6 +314,9 @@ func (s *ClientService) CreateClient(
 	if err := validateServiceAccount(serviceAccount); err != nil {
 		return nil, err
 	}
+	if err := validateAllowedResources(req.AllowedResources); err != nil {
+		return nil, err
+	}
 
 	// Generate client ID
 	clientID := uuid.New().String()
@@ -331,6 +354,7 @@ func (s *ClientService) CreateClient(
 		Scopes:                      scopes,
 		GrantTypes:                  grantTypes,
 		RedirectURIs:                models.StringArray(req.RedirectURIs),
+		AllowedResources:            models.StringArray(req.AllowedResources),
 		ClientType:                  clientType.String(),
 		EnableDeviceFlow:            enableDevice,
 		EnableAuthCodeFlow:          enableAuthCode,
@@ -421,6 +445,9 @@ func (s *ClientService) UpdateClient(
 	if err := validateServiceAccount(serviceAccount); err != nil {
 		return err
 	}
+	if err := validateAllowedResources(req.AllowedResources); err != nil {
+		return err
+	}
 
 	client, err := s.store.GetClient(clientID)
 	if err != nil {
@@ -444,6 +471,7 @@ func (s *ClientService) UpdateClient(
 	client.Description = strings.TrimSpace(req.Description)
 	client.Scopes = strings.TrimSpace(req.Scopes)
 	client.RedirectURIs = models.StringArray(req.RedirectURIs)
+	client.AllowedResources = models.StringArray(req.AllowedResources)
 	client.Status = req.Status
 	client.ClientType = clientType.String()
 	client.TokenProfile = tokenProfile
@@ -615,6 +643,7 @@ func (s *ClientService) GetClient(
 			cached := *c
 			cached.ClientSecret = ""
 			cached.RedirectURIs = append(models.StringArray(nil), c.RedirectURIs...)
+			cached.AllowedResources = append(models.StringArray(nil), c.AllowedResources...)
 			return cached, nil
 		},
 	)

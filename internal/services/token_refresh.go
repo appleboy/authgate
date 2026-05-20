@@ -184,6 +184,17 @@ func (s *TokenService) RefreshAccessToken(
 		} else {
 			accessTTL, refreshTTL = s.ttlForClient(c)
 			client = c
+			// Enforce the per-client RFC 8707 allowlist on a client-supplied
+			// `resource`. The original grant was already allowlist-checked at
+			// issuance and requestedResource is narrowed to that grant's subset,
+			// so this only additionally catches an allowlist tightened after
+			// issuance. No-op when no resource was requested; only reachable when
+			// the client loaded (a transient lookup failure already fell back to
+			// provider defaults above rather than failing the refresh).
+			if err := validateClientResource(client, requestedResource); err != nil {
+				s.metrics.RecordTokenRefresh(false)
+				return nil, nil, err
+			}
 		}
 	}
 	extraClaims := s.composeIssuanceClaims(client, refreshToken.UserID, callerExtra)

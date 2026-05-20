@@ -167,6 +167,7 @@ func TestClientCredentials_WithResource_PropagatesToAud(t *testing.T) {
 		RedirectURIs:                models.StringArray{},
 		ClientType:                  "confidential",
 		EnableClientCredentialsFlow: true,
+		AllowedResources:            models.StringArray{"https://mcp.example.com"},
 		Status:                      models.ClientStatusActive,
 	}
 	require.NoError(t, s.CreateClient(client))
