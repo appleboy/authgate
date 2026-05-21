@@ -114,7 +114,7 @@ In addition to Device Code Flow, AuthGate supports Authorization Code Flow with 
 - `UserAuthorization` - Per-app consent grants (one record per user+app pair)
 - `AccessToken` - Unified storage for both access and refresh tokens (distinguished by `token_category` field)
 - `User.IsActive` - Boolean (default `true`) controlling whether a user may log in. Disabling revokes all of the user's tokens and `RequireAuth` clears any live session on the next request. Guards prevent self-disable and disabling the last _active_ admin.
-- `OAuthConnection` - Per-user binding to a third-party provider (GitHub, Gitea, Microsoft). Stores provider tokens and `LastUsedAt`; admins can list/unlink them per user via `/admin/users/:id/connections`.
+- `OAuthConnection` - Per-user binding to a third-party provider (GitHub, Gitea, GitLab, Microsoft). Stores provider tokens and `LastUsedAt`; admins can list/unlink them per user via `/admin/users/:id/connections`.
 
 ### Key Features
 
@@ -160,7 +160,7 @@ In addition to Device Code Flow, AuthGate supports Authorization Code Flow with 
 
 **OAuth Provider Support**
 
-- Microsoft Entra ID (Azure AD), GitHub, Gitea
+- Microsoft Entra ID (Azure AD), GitHub, Gitea, GitLab
 - Auto-registration of users (configurable via `OAUTH_AUTO_REGISTER`)
 - Uses OAuth 2.0 authorization code flow
 - For Microsoft, `User.Username` derives from `onPremisesSamAccountName` (AD logon name like `mtk12345`) when the tenant is hybrid-synced; otherwise falls back to `mailNickname`, then the email local-part. Existing Microsoft-linked users are re-synced on next login; collisions are skipped (login still succeeds). JWT `sub` remains the user UUID and is unaffected.
@@ -224,7 +224,7 @@ In addition to Device Code Flow, AuthGate supports Authorization Code Flow with 
 - `GET /login` - Login page
 - `POST /login` - Submit credentials
 - `GET /logout` - Clear session
-- `GET /oauth/:provider` - Initiate OAuth login (GitHub, Gitea, Microsoft)
+- `GET /oauth/:provider` - Initiate OAuth login (GitHub, Gitea, GitLab, Microsoft)
 - `GET /oauth/:provider/callback` - OAuth callback handler
 
 **Admin**
@@ -289,7 +289,7 @@ Key configuration categories (see `.env.example` and `docs/CONFIGURATION.md` for
 
 **OAuth Providers**
 
-- `GITHUB_OAUTH_ENABLED`, `GITEA_OAUTH_ENABLED`, `MICROSOFT_OAUTH_ENABLED` - Third-party OAuth login
+- `GITHUB_OAUTH_ENABLED`, `GITEA_OAUTH_ENABLED`, `GITLAB_OAUTH_ENABLED`, `MICROSOFT_OAUTH_ENABLED` - Third-party OAuth login
 
 **Token Cache**
 

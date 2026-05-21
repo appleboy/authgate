@@ -177,6 +177,14 @@ MICROSOFT_CLIENT_SECRET=
 MICROSOFT_REDIRECT_URL=http://localhost:8080/auth/callback/microsoft
 MICROSOFT_SCOPES=openid,profile,email,User.Read
 
+# GitLab OAuth
+GITLAB_OAUTH_ENABLED=false
+GITLAB_URL=https://gitlab.com
+GITLAB_CLIENT_ID=your_gitlab_client_id
+GITLAB_CLIENT_SECRET=your_gitlab_client_secret
+GITLAB_REDIRECT_URL=http://localhost:8080/auth/callback/gitlab
+GITLAB_SCOPES=read_user
+
 # OAuth Settings
 OAUTH_AUTO_REGISTER=true         # Allow OAuth to auto-create accounts (default: true)
 OAUTH_TIMEOUT=15s                # HTTP client timeout for OAuth requests (default: 15s)
@@ -622,14 +630,15 @@ The server initializes with default test accounts:
 
 ## OAuth Third-Party Login
 
-AuthGate supports OAuth 2.0 authentication with third-party providers, allowing users to sign in with their existing accounts from GitHub, Gitea, and other OAuth providers.
+AuthGate supports OAuth 2.0 authentication with third-party providers, allowing users to sign in with their existing accounts from GitHub, Gitea, GitLab, Microsoft Entra ID, and other OAuth providers.
 
 ### Supported Providers
 
 - **GitHub** - Sign in with GitHub accounts
 - **Gitea** - Sign in with self-hosted or public Gitea instances
+- **GitLab** - Sign in with GitLab.com or self-hosted GitLab instances
 - **Microsoft Entra ID (Azure AD)** - Sign in with Microsoft work, school, or personal accounts
-- **Extensible** - Easy to add GitLab, Google, or other OAuth 2.0 providers
+- **Extensible** - Easy to add Google or other OAuth 2.0 providers
 
 ### Key Features
 
@@ -642,7 +651,7 @@ AuthGate supports OAuth 2.0 authentication with third-party providers, allowing 
 
 ### Quick Setup
 
-1. **Create OAuth Application** in your provider (GitHub/Gitea)
+1. **Create OAuth Application** in your provider (GitHub/Gitea/GitLab/Microsoft)
 2. **Configure AuthGate** with client credentials:
 
 ```bash
@@ -665,6 +674,13 @@ MICROSOFT_TENANT_ID=common
 MICROSOFT_CLIENT_ID=your_client_id
 MICROSOFT_CLIENT_SECRET=your_client_secret
 MICROSOFT_REDIRECT_URL=http://localhost:8080/auth/callback/microsoft
+
+# Enable GitLab OAuth
+GITLAB_OAUTH_ENABLED=true
+GITLAB_URL=https://gitlab.com
+GITLAB_CLIENT_ID=your_client_id
+GITLAB_CLIENT_SECRET=your_client_secret
+GITLAB_REDIRECT_URL=http://localhost:8080/auth/callback/gitlab
 ```
 
 3. **Restart server** and visit `/login` to see OAuth buttons
@@ -688,7 +704,7 @@ MICROSOFT_REDIRECT_URL=http://localhost:8080/auth/callback/microsoft
 
 **Scenario 3: Multiple OAuth Accounts**
 
-- User can link multiple OAuth providers (GitHub + Gitea + Microsoft)
+- User can link multiple OAuth providers (GitHub + Gitea + GitLab + Microsoft)
 - All methods log into the same AuthGate account
 
 ### Security Considerations
