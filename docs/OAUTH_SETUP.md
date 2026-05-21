@@ -4,7 +4,7 @@ This guide explains how to integrate GitHub, Gitea, and GitLab OAuth authenticat
 
 ## Features
 
-- **Multiple OAuth Providers**: Support for GitHub, Gitea, GitLab, Microsoft Entra ID, and extensible to other providers
+- **Multiple OAuth Providers**: Step-by-step setup for GitHub, Gitea, and GitLab below; Microsoft Entra ID is also supported (configured via [CONFIGURATION.md](CONFIGURATION.md#oauth-third-party-login)), and the design is extensible to other providers
 - **Email-based Account Linking**: Automatically links OAuth accounts to existing users with the same email
 - **Auto-registration**: New users can be automatically created via OAuth (controlled by `OAUTH_AUTO_REGISTER` config)
 - **Multiple Authentication Methods**: Users can have both password and OAuth authentication

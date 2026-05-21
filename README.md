@@ -280,7 +280,7 @@ The Authorization Code Flow CLI starts a local callback server, opens your brows
 - **[Client Credentials Flow Guide](docs/CLIENT_CREDENTIALS_FLOW.md)** - Machine-to-machine authentication, M2M token management
 - **[MCP Integration Guide](docs/MCP.md)** - Resource Indicators (RFC 8707), AS metadata (RFC 8414), audience binding, CORS for browser-based MCP clients, multi-resource-server caveats
 - **[JWT Verification Guide](docs/JWT_VERIFICATION.md)** - Verify tokens at resource servers using JWKS public keys (RS256/ES256), `aud` and `type` claim validation
-- **[OAuth Setup Guide](docs/OAUTH_SETUP.md)** - GitHub, Gitea, GitLab, Microsoft Entra ID integration
+- **[OAuth Setup Guide](docs/OAUTH_SETUP.md)** - GitHub, Gitea, GitLab setup (Microsoft Entra ID settings in the [Configuration Guide](docs/CONFIGURATION.md#oauth-third-party-login))
 - **[Rate Limiting Guide](docs/RATE_LIMITING.md)** - Protect against brute force and API abuse
 - **[Performance Guide](docs/PERFORMANCE.md)** - Scalability, optimization, benchmarks
 - **[Use Cases](docs/USE_CASES.md)** - Real-world examples and code samples
