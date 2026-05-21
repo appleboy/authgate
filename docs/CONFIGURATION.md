@@ -177,6 +177,14 @@ MICROSOFT_CLIENT_SECRET=
 MICROSOFT_REDIRECT_URL=http://localhost:8080/auth/callback/microsoft
 MICROSOFT_SCOPES=openid,profile,email,User.Read
 
+# GitLab OAuth
+GITLAB_OAUTH_ENABLED=false
+GITLAB_URL=https://gitlab.com
+GITLAB_CLIENT_ID=your_gitlab_client_id
+GITLAB_CLIENT_SECRET=your_gitlab_client_secret
+GITLAB_REDIRECT_URL=http://localhost:8080/auth/callback/gitlab
+GITLAB_SCOPES=read_user
+
 # OAuth Settings
 OAUTH_AUTO_REGISTER=true         # Allow OAuth to auto-create accounts (default: true)
 OAUTH_TIMEOUT=15s                # HTTP client timeout for OAuth requests (default: 15s)
@@ -622,18 +630,19 @@ The server initializes with default test accounts:
 
 ## OAuth Third-Party Login
 
-AuthGate supports OAuth 2.0 authentication with third-party providers, allowing users to sign in with their existing accounts from GitHub, Gitea, and other OAuth providers.
+AuthGate supports OAuth 2.0 authentication with third-party providers, allowing users to sign in with their existing accounts from GitHub, Gitea, GitLab, Microsoft Entra ID, and other OAuth providers.
 
 ### Supported Providers
 
 - **GitHub** - Sign in with GitHub accounts
 - **Gitea** - Sign in with self-hosted or public Gitea instances
+- **GitLab** - Sign in with GitLab.com or self-hosted GitLab instances
 - **Microsoft Entra ID (Azure AD)** - Sign in with Microsoft work, school, or personal accounts
-- **Extensible** - Easy to add GitLab, Google, or other OAuth 2.0 providers
+- **Extensible** - Easy to add Google or other OAuth 2.0 providers
 
 ### Key Features
 
-- **Email-Based Account Linking**: Automatically links OAuth accounts to existing users with matching email addresses
+- **Email-Based Account Linking**: Links an OAuth identity to an existing user with a matching email, but only when the provider attests the email is verified (GitHub, Microsoft Entra ID). GitLab and Gitea do not expose verification status, so their emails are treated as unverified and are never auto-linked to a pre-existing account — they sign in only to an account that already holds their connection; otherwise a new account is created (or the login is rejected if the email is already taken or `OAUTH_AUTO_REGISTER=false`)
 - **Auto-Registration**: New users can be automatically created via OAuth login
 - **Multiple Authentication Methods**: Users can have both password and OAuth authentication
 - **Profile Sync**: Avatar and profile information synced from OAuth providers
@@ -642,7 +651,7 @@ AuthGate supports OAuth 2.0 authentication with third-party providers, allowing 
 
 ### Quick Setup
 
-1. **Create OAuth Application** in your provider (GitHub/Gitea)
+1. **Create OAuth Application** in your provider (GitHub/Gitea/GitLab/Microsoft)
 2. **Configure AuthGate** with client credentials:
 
 ```bash
@@ -665,6 +674,13 @@ MICROSOFT_TENANT_ID=common
 MICROSOFT_CLIENT_ID=your_client_id
 MICROSOFT_CLIENT_SECRET=your_client_secret
 MICROSOFT_REDIRECT_URL=http://localhost:8080/auth/callback/microsoft
+
+# Enable GitLab OAuth
+GITLAB_OAUTH_ENABLED=true
+GITLAB_URL=https://gitlab.com
+GITLAB_CLIENT_ID=your_client_id
+GITLAB_CLIENT_SECRET=your_client_secret
+GITLAB_REDIRECT_URL=http://localhost:8080/auth/callback/gitlab
 ```
 
 3. **Restart server** and visit `/login` to see OAuth buttons
@@ -686,10 +702,10 @@ MICROSOFT_REDIRECT_URL=http://localhost:8080/auth/callback/microsoft
 - System automatically links GitHub to Bob's account
 - Bob can now login with either password or GitHub
 
-**Scenario 3: Multiple OAuth Accounts**
+**Scenario 3: Multiple Verified Providers**
 
-- User can link multiple OAuth providers (GitHub + Gitea + Microsoft)
-- All methods log into the same AuthGate account
+- A user can link multiple verified-email providers (e.g., GitHub + Microsoft Entra ID) to one account via email matching
+- GitLab and Gitea report email as unverified, so they are not auto-linked by email — they sign in only to an account that already holds their connection
 
 ### Security Considerations
 

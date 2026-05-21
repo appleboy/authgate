@@ -181,7 +181,7 @@ sequenceDiagram
 | `/account/authorizations`                      | GET      | Yes (Session) | View apps authorized via Authorization Code Flow                                                  |
 | `/login`                                       | GET/POST | No            | User login (creates session)                                                                      |
 | `/logout`                                      | GET      | Yes (Session) | User logout (destroys session)                                                                    |
-| `/auth/login/:provider`                        | GET      | No            | Initiate OAuth login (provider: github, gitea, microsoft)                                         |
+| `/auth/login/:provider`                        | GET      | No            | Initiate OAuth login (provider: github, gitea, gitlab, microsoft)                                         |
 | `/auth/callback/:provider`                     | GET      | No            | OAuth callback endpoint                                                                           |
 | `/admin/audit`                                 | GET      | Yes (Admin)   | View audit logs (HTML interface)                                                                  |
 | `/admin/audit/export`                          | GET      | Yes (Admin)   | Export audit logs as CSV                                                                          |
@@ -195,7 +195,7 @@ sequenceDiagram
 | `/admin/users/:id/delete`                      | POST     | Yes (Admin)   | Delete user (blocked for self and last active admin)                                              |
 | `/admin/users/:id/disable`                     | POST     | Yes (Admin)   | Disable user — revokes all tokens, clears any live session on next request                        |
 | `/admin/users/:id/enable`                      | POST     | Yes (Admin)   | Re-enable a disabled user                                                                         |
-| `/admin/users/:id/connections`                 | GET      | Yes (Admin)   | List the user's third-party OAuth connections (GitHub, Gitea, Microsoft)                          |
+| `/admin/users/:id/connections`                 | GET      | Yes (Admin)   | List the user's third-party OAuth connections (GitHub, Gitea, GitLab, Microsoft)                          |
 | `/admin/users/:id/connections/:conn_id/delete` | POST     | Yes (Admin)   | Unlink a specific third-party OAuth connection                                                    |
 | `/admin/users/:id/authorizations`              | GET      | Yes (Admin)   | List apps the user has authorized                                                                 |
 | `/admin/users/:id/authorizations/:uuid/revoke` | POST     | Yes (Admin)   | Revoke a single user authorization                                                                |
@@ -463,7 +463,7 @@ The application automatically creates these tables:
 - `authorization_codes` - One-time authorization codes for the Authorization Code Flow
 - `user_authorizations` - Per-user, per-application consent grants
 - `access_tokens` - Issued JWT tokens (both access and refresh tokens)
-- `oauth_connections` - OAuth provider connections (GitHub, Gitea, etc.)
+- `oauth_connections` - OAuth provider connections (GitHub, Gitea, GitLab, Microsoft)
 - `audit_logs` - Comprehensive audit trail of all operations (authentication, tokens, admin actions, security events)
 
 ### RFC 8707 Resource Indicator Columns

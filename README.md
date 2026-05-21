@@ -104,7 +104,7 @@ AuthGate also serves as a lightweight **centralised identity gateway** for inter
 **How AuthGate helps:** A single **Identity Gateway** that all services integrate with as a standard OAuth 2.0 / OIDC client — no more direct LDAP wiring:
 
 - Outward-facing: standard OAuth 2.0 APIs (Device Code, PKCE, Client Credentials).
-- Inward-facing: centralised handling of LDAP, GitHub, Microsoft, and other identity sources.
+- Inward-facing: centralised handling of LDAP, GitHub, Gitea, GitLab, Microsoft, and other identity sources.
 - New services register as OAuth clients and never touch LDAP directly.
 
 #### 2. No token lifecycle management — tokens issued, never tracked or revoked
@@ -155,7 +155,7 @@ AuthGate also serves as a lightweight **centralised identity gateway** for inter
 - **Security First**: Rate limiting, audit logging, CSRF protection, PKCE enforcement, and session management built-in
 - **Production Ready**: Built-in monitoring with Prometheus metrics, health checks, comprehensive audit trails, and graceful shutdown with configurable timeouts
 - **Zero Dependencies**: Single static binary with SQLite embedded, or use PostgreSQL for scale
-- **Multi-Auth Support**: Local authentication, external HTTP API, OAuth providers (GitHub, Gitea, Microsoft)
+- **Multi-Auth Support**: Local authentication, external HTTP API, OAuth providers (GitHub, Gitea, GitLab, Microsoft)
 - **Flexible Deployment**: Docker-ready, cloud-friendly, runs anywhere with context-aware lifecycle management
 - **Token Management**: Fixed and rotation refresh token modes, web UI for session management
 - **Per-Client Token Profiles**: Choose `short` (15 min / 1 day), `standard` (default), or `long` (24 h / 90 days) access/refresh TTLs per OAuth client; preset TTLs are configurable via `TOKEN_PROFILE_*` env vars and capped by `JWT_EXPIRATION_MAX` / `REFRESH_TOKEN_EXPIRATION_MAX`
@@ -280,7 +280,7 @@ The Authorization Code Flow CLI starts a local callback server, opens your brows
 - **[Client Credentials Flow Guide](docs/CLIENT_CREDENTIALS_FLOW.md)** - Machine-to-machine authentication, M2M token management
 - **[MCP Integration Guide](docs/MCP.md)** - Resource Indicators (RFC 8707), AS metadata (RFC 8414), audience binding, CORS for browser-based MCP clients, multi-resource-server caveats
 - **[JWT Verification Guide](docs/JWT_VERIFICATION.md)** - Verify tokens at resource servers using JWKS public keys (RS256/ES256), `aud` and `type` claim validation
-- **[OAuth Setup Guide](docs/OAUTH_SETUP.md)** - GitHub, Gitea, Microsoft Entra ID integration
+- **[OAuth Setup Guide](docs/OAUTH_SETUP.md)** - GitHub, Gitea, GitLab setup (Microsoft Entra ID settings in the [Configuration Guide](docs/CONFIGURATION.md#oauth-third-party-login))
 - **[Rate Limiting Guide](docs/RATE_LIMITING.md)** - Protect against brute force and API abuse
 - **[Performance Guide](docs/PERFORMANCE.md)** - Scalability, optimization, benchmarks
 - **[Use Cases](docs/USE_CASES.md)** - Real-world examples and code samples
@@ -456,7 +456,7 @@ ENABLE_AUDIT_LOGGING=true       # Comprehensive audit trails
 
 ### Advanced Features
 
-- **OAuth Third-Party Login**: GitHub, Gitea, Microsoft Entra ID
+- **OAuth Third-Party Login**: GitHub, Gitea, GitLab, Microsoft Entra ID
 - **External Authentication**: Integrate with existing auth systems
 - **Service-to-Service Auth**: HMAC or simple header authentication
 - **HTTP Retry with Backoff**: Resilient external API calls

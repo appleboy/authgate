@@ -80,9 +80,9 @@ openssl rand -base64 48
 | Metric                               | Type      | Description                   | Labels                                                                                 |
 | ------------------------------------ | --------- | ----------------------------- | -------------------------------------------------------------------------------------- |
 | `auth_attempts_total`                | Counter   | Total authentication attempts | `method` (local, http_api, oauth), `result` (success, failure)                         |
-| `auth_login_total`                   | Counter   | Total login attempts          | `auth_source` (local, http_api, microsoft, github, gitea), `result` (success, failure) |
+| `auth_login_total`                   | Counter   | Total login attempts          | `auth_source` (local, http_api), `result` (success, failure) |
 | `auth_logout_total`                  | Counter   | Total logouts                 | -                                                                                      |
-| `auth_oauth_callback_total`          | Counter   | OAuth callback attempts       | `provider` (microsoft, github, gitea), `result` (success, error)                       |
+| `auth_oauth_callback_total`          | Counter   | OAuth callback attempts       | `provider` (microsoft, github, gitea, gitlab), `result` (success, error)                       |
 | `auth_login_duration_seconds`        | Histogram | Login completion time         | `method` (local, http_api, oauth)                                                      |
 | `auth_external_api_duration_seconds` | Histogram | External API auth call time   | `provider` (http_api)                                                                  |
 
