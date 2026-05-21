@@ -83,6 +83,13 @@ func createDeviceFlowClient(
 func TestDeviceCodeRequest_WithResource_PersistsOnDeviceCode(t *testing.T) {
 	r, s := setupDeviceTestEnv(t)
 	client := createDeviceFlowClient(t, s, true, true)
+	// RFC 8707 allowlist is deny-all by default; pre-authorize the two resources
+	// this test binds so the request is accepted rather than invalid_target.
+	client.AllowedResources = models.StringArray{
+		"https://mcp1.example.com",
+		"https://mcp2.example.com",
+	}
+	require.NoError(t, s.UpdateClient(client))
 
 	w := httptest.NewRecorder()
 	form := url.Values{
@@ -138,6 +145,64 @@ func TestDeviceCodeRequest_InvalidResource_ReturnsInvalidTarget(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "invalid_target", resp["error"])
+}
+
+// TestDeviceCodeRequest_Resource_NotInAllowlist_Rejected confirms the RFC 8707
+// allowlist is enforced at the device-code bind point: a resource outside the
+// client's allowlist is rejected with invalid_target and no device code is
+// persisted.
+func TestDeviceCodeRequest_Resource_NotInAllowlist_Rejected(t *testing.T) {
+	r, s := setupDeviceTestEnv(t)
+	client := createDeviceFlowClient(t, s, true, true)
+	client.AllowedResources = models.StringArray{"https://api.a.example"}
+	require.NoError(t, s.UpdateClient(client))
+
+	w := httptest.NewRecorder()
+	form := url.Values{
+		"client_id": {client.ClientID},
+		"resource":  {"https://api.b.example"},
+	}
+	req, _ := http.NewRequest(
+		http.MethodPost,
+		"/oauth/device/code",
+		strings.NewReader(form.Encode()),
+	)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "invalid_target", resp["error"])
+
+	count, err := s.CountTotalDeviceCodes()
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), count, "no device code must be persisted on invalid_target")
+}
+
+// TestDeviceCodeRequest_Resource_EmptyAllowlist_DenyAll confirms deny-all: an
+// empty allowlist rejects any client-supplied resource.
+func TestDeviceCodeRequest_Resource_EmptyAllowlist_DenyAll(t *testing.T) {
+	r, s := setupDeviceTestEnv(t)
+	client := createDeviceFlowClient(t, s, true, true) // empty allowlist
+
+	w := httptest.NewRecorder()
+	form := url.Values{
+		"client_id": {client.ClientID},
+		"resource":  {"https://api.b.example"},
+	}
+	req, _ := http.NewRequest(
+		http.MethodPost,
+		"/oauth/device/code",
+		strings.NewReader(form.Encode()),
+	)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusBadRequest, w.Code)
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(t, "invalid_target", resp["error"])

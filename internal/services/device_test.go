@@ -28,14 +28,21 @@ func setupTestStore(t *testing.T) *store.Store {
 
 func createTestClient(t *testing.T, s *store.Store, isActive bool) *models.OAuthApplication {
 	client := &models.OAuthApplication{
-		ClientID:         uuid.New().String(),
-		ClientSecret:     "secret",
-		ClientName:       "Test Client",
-		Description:      "Test client for testing",
-		UserID:           uuid.New().String(),
-		Scopes:           "read write",
-		GrantTypes:       "device_code",
-		RedirectURIs:     models.StringArray{},
+		ClientID:     uuid.New().String(),
+		ClientSecret: "secret",
+		ClientName:   "Test Client",
+		Description:  "Test client for testing",
+		UserID:       uuid.New().String(),
+		Scopes:       "read write",
+		GrantTypes:   "device_code",
+		RedirectURIs: models.StringArray{},
+		// RFC 8707 allowlist: deny-all is the default, so resource-binding tests
+		// need the grant-time resources they exercise pre-authorized here.
+		AllowedResources: models.StringArray{
+			"https://mcp.example.com",
+			"https://mcp1.example.com",
+			"https://mcp2.example.com",
+		},
 		EnableDeviceFlow: true,
 		Status:           models.ClientStatusActive,
 	}

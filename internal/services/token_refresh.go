@@ -184,7 +184,40 @@ func (s *TokenService) RefreshAccessToken(
 		} else {
 			accessTTL, refreshTTL = s.ttlForClient(c)
 			client = c
+			// Enforce the per-client RFC 8707 allowlist on the client-supplied
+			// `resource` for THIS refresh (requestedResource), not on
+			// effectiveResource. We deliberately do NOT gate the reused original
+			// grant: when the client omits `resource`, effectiveResource is the
+			// originalResource snapshot, which — for a grant that carried no
+			// client resource — is the operator-controlled JWT_AUDIENCE fallback.
+			// That fallback is exempt from the allowlist by design (it is not
+			// client-controlled), and the persisted Resource column cannot tell a
+			// fallback-derived audience apart from a client-derived one, so
+			// validating effectiveResource would wrongly gate the operator's own
+			// audience. A client-supplied requestedResource is already bounded by
+			// narrowResource to a subset of the original grant (validated at
+			// issuance); re-checking it here additionally rejects a value the
+			// admin has since removed from the allowlist. Killing an existing
+			// audience lineage is the job of token revocation, not the allowlist.
+			// No-op when requestedResource is empty. Only reachable when the
+			// client loaded — a transient lookup failure already fell back to
+			// provider defaults above rather than failing the refresh.
+			if err := validateClientResource(client, requestedResource); err != nil {
+				s.metrics.RecordTokenRefresh(false)
+				return nil, nil, err
+			}
 		}
+	}
+	// Fail closed: if the client could not be loaded (clientService is nil, or
+	// the lookup failed) we cannot verify the allowlist. A client-supplied
+	// `resource` on this refresh must never slip through that unverified path,
+	// so reject it — otherwise a transient DB/cache failure would let a client
+	// mint a resource-derived `aud` the AS never attested. Omitting `resource`
+	// is still tolerated: it reuses the original grant's already-issued
+	// audience and needs no per-client gate (see validateClientResource above).
+	if client == nil && len(requestedResource) > 0 {
+		s.metrics.RecordTokenRefresh(false)
+		return nil, nil, ErrInvalidTarget
 	}
 	extraClaims := s.composeIssuanceClaims(client, refreshToken.UserID, callerExtra)
 	// Access token's `aud` = effectiveResource (possibly narrowed).

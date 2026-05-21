@@ -83,6 +83,14 @@ func (s *DeviceService) GenerateDeviceCode(
 		return nil, ErrDeviceFlowNotEnabled
 	}
 
+	// Enforce the per-client RFC 8707 allowlist on the resource set being bound
+	// to this device code (deny-all when the allowlist is empty). Binding here
+	// stops the polling client from later picking an out-of-allowlist `aud` at
+	// /oauth/token. Returns ErrInvalidTarget → handler maps to invalid_target.
+	if err := validateClientResource(client, resource); err != nil {
+		return nil, err
+	}
+
 	// Generate cryptographically secure device code (20 bytes = 40 hex chars)
 	codeBytes, err := util.CryptoRandomBytes(20)
 	if err != nil {

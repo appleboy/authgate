@@ -380,6 +380,27 @@ func effectiveAudience(requested, fallback []string) []string {
 	return slices.Clone(fallback)
 }
 
+// validateClientResource enforces the per-client RFC 8707 allowlist: a
+// client-supplied `resource` set is accepted only when every value is an exact
+// match of an entry in client.AllowedResources. An empty allowlist is deny-all —
+// any non-empty `requested` is rejected. An empty `requested` is a no-op (the
+// client sent no resource, so the static JWT_AUDIENCE fallback applies and there
+// is nothing client-controlled to gate). Rejection returns ErrInvalidTarget,
+// which the handler layer maps to the OAuth `invalid_target` error.
+//
+// This is the single chokepoint reused by all four grants (client_credentials,
+// refresh_token, authorization_code, device_code) so no grant path can mint an
+// `aud` outside the client's allowlist.
+func validateClientResource(client *models.OAuthApplication, requested []string) error {
+	if len(requested) == 0 {
+		return nil
+	}
+	if !util.IsStringSliceSubset([]string(client.AllowedResources), requested) {
+		return ErrInvalidTarget
+	}
+	return nil
+}
+
 // narrowResource implements RFC 8707 §2.2 audience narrowing for token-time
 // `resource` parameters: the requested set MUST be a subset of the granted
 // set (the resources the user originally authorized). Returns the requested

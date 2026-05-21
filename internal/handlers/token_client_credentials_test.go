@@ -271,6 +271,116 @@ func TestHandleClientCredentialsGrant_OpenIDScopeRejected(t *testing.T) {
 	assert.Equal(t, "invalid_scope", resp["error"])
 }
 
+// ─── RFC 8707 AllowedResources allowlist enforcement ──────────────────────────
+
+// setCCAllowedResources sets the client's allowlist and persists it. CC uses an
+// uncached client lookup, so the update is visible on the next token request.
+func setCCAllowedResources(
+	t *testing.T,
+	s *store.Store,
+	client *models.OAuthApplication,
+	resources ...string,
+) {
+	t.Helper()
+	client.AllowedResources = models.StringArray(resources)
+	require.NoError(t, s.UpdateClient(client))
+}
+
+// Happy path: a resource that is an exact match of an allowlist entry is issued
+// and burned into the JWT `aud` (verified via /oauth/tokeninfo).
+func TestClientCredentials_Resource_InAllowlist_Issued(t *testing.T) {
+	r, s := setupCCTestEnv(t)
+	client, plainSecret := createCCClient(t, s, true, core.ClientTypeConfidential)
+	setCCAllowedResources(t, s, client, "https://api.a.example")
+
+	form := url.Values{
+		"grant_type": {"client_credentials"},
+		"resource":   {"https://api.a.example"},
+	}
+	w := postToken(t, r, form, &[2]string{client.ClientID, plainSecret})
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var tokResp map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&tokResp))
+	accessToken := tokResp["access_token"].(string)
+
+	w2 := tokenInfoReq(t, r, accessToken)
+	require.Equal(t, http.StatusOK, w2.Code)
+	var infoResp map[string]any
+	require.NoError(t, json.NewDecoder(w2.Body).Decode(&infoResp))
+	assert.Equal(t, "https://api.a.example", infoResp["aud"],
+		"aud must be the allowlisted resource that was requested")
+}
+
+// Error: a syntactically valid resource that is NOT in the allowlist is rejected
+// with invalid_target and no token is persisted.
+func TestClientCredentials_Resource_NotInAllowlist_Rejected(t *testing.T) {
+	r, s := setupCCTestEnv(t)
+	client, plainSecret := createCCClient(t, s, true, core.ClientTypeConfidential)
+	setCCAllowedResources(t, s, client, "https://api.a.example")
+
+	form := url.Values{
+		"grant_type": {"client_credentials"},
+		"resource":   {"https://api.b.example"},
+	}
+	w := postToken(t, r, form, &[2]string{client.ClientID, plainSecret})
+
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	var resp map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+	assert.Equal(t, "invalid_target", resp["error"])
+
+	count, err := s.CountActiveTokensByClientID(client.ClientID)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), count, "no token must be persisted on invalid_target")
+}
+
+// Error: deny-all — an empty allowlist rejects ANY client-supplied resource.
+func TestClientCredentials_Resource_EmptyAllowlist_DenyAll(t *testing.T) {
+	r, s := setupCCTestEnv(t)
+	client, plainSecret := createCCClient(t, s, true, core.ClientTypeConfidential)
+	// AllowedResources left empty (deny-all default).
+
+	form := url.Values{
+		"grant_type": {"client_credentials"},
+		"resource":   {"https://api.b.example"},
+	}
+	w := postToken(t, r, form, &[2]string{client.ClientID, plainSecret})
+
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	var resp map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+	assert.Equal(t, "invalid_target", resp["error"])
+
+	count, err := s.CountActiveTokensByClientID(client.ClientID)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+}
+
+// Backward-compat: an empty allowlist with NO resource param still issues a
+// token whose `aud` comes from the static JWT_AUDIENCE fallback — proving
+// deny-all only gates client-supplied resources.
+func TestClientCredentials_EmptyAllowlist_NoResource_UsesJWTAudience(t *testing.T) {
+	cfg := defaultTokenTestConfig()
+	cfg.JWTAudience = []string{"static.example.com"}
+	r, s := newTokenTestEnv(t, cfg)
+	client, plainSecret := createCCClient(t, s, true, core.ClientTypeConfidential)
+	// Empty allowlist, no resource sent.
+
+	form := url.Values{"grant_type": {"client_credentials"}}
+	w := postToken(t, r, form, &[2]string{client.ClientID, plainSecret})
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var tokResp map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&tokResp))
+	w2 := tokenInfoReq(t, r, tokResp["access_token"].(string))
+	require.Equal(t, http.StatusOK, w2.Code)
+	var infoResp map[string]any
+	require.NoError(t, json.NewDecoder(w2.Body).Decode(&infoResp))
+	assert.Equal(t, "static.example.com", infoResp["aud"],
+		"deny-all must not block the JWT_AUDIENCE fallback when no resource is sent")
+}
+
 // ─── TokenInfo: subject_type for machine tokens ───────────────────────────────
 
 func TestTokenInfo_SubjectType_Client(t *testing.T) {
@@ -309,6 +419,9 @@ func TestTokenInfo_IncludesAudFromResource(t *testing.T) {
 	r, s := setupCCTestEnv(t)
 	// Override the client to allow a specific resource on issuance.
 	client, plainSecret := createCCClient(t, s, true, core.ClientTypeConfidential)
+	// RFC 8707 allowlist is deny-all by default; pre-authorize the resource.
+	client.AllowedResources = models.StringArray{"https://mcp.example.com"}
+	require.NoError(t, s.UpdateClient(client))
 
 	form := url.Values{
 		"grant_type": {"client_credentials"},

@@ -60,7 +60,14 @@ func createAuthCodeFlowClient(
 		RedirectURIs:       models.StringArray{"https://app.example.com/callback"},
 		ClientType:         clientType,
 		EnableAuthCodeFlow: true,
-		Status:             models.ClientStatusActive,
+		// RFC 8707 allowlist: deny-all default, so pre-authorize the grant-time
+		// resources the resource-binding tests bind via CreateAuthorizationCode.
+		AllowedResources: models.StringArray{
+			"https://mcp.example.com",
+			"https://mcp1.example.com",
+			"https://mcp2.example.com",
+		},
+		Status: models.ClientStatusActive,
 	}
 	err = svc.store.CreateClient(client)
 	require.NoError(t, err)
@@ -265,6 +272,7 @@ func TestExchangeCode_Resource_SubsetAllowed(t *testing.T) {
 				"https://mcp1.example.com",
 				"https://mcp2.example.com",
 			},
+			Client: client,
 		},
 	)
 	require.NoError(t, err)
@@ -301,6 +309,7 @@ func TestExchangeCode_Resource_SupersetRejected(t *testing.T) {
 			RedirectURI:   "https://app.example.com/callback",
 			Scopes:        "read",
 			Resource:      []string{"https://mcp.example.com"},
+			Client:        client,
 		},
 	)
 	require.NoError(t, err)

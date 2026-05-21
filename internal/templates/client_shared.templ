@@ -271,7 +271,7 @@ templ ClientFormCommonFields(props ClientFormFieldsProps) {
 		} else {
 			<input type="hidden" id="redirect_uris" name="redirect_uris" value=""/>
 		}
-		<div class="admin-uri-picker" id="uriPicker">
+		<div class="admin-uri-picker" id="uriPicker" data-hidden-id="redirect_uris">
 			<div class="admin-uri-tags" id="uriTags"></div>
 			<input
 				type="text"
@@ -289,6 +289,36 @@ templ ClientFormCommonFields(props ClientFormFieldsProps) {
 			Required when Authorization Code Flow is enabled.
 		</small>
 	</div>
+	if props.ShowAllowedResources {
+		<!-- Allowed Resources (RFC 8707 allowlist) -->
+		<div class="admin-form-group">
+			<label for="resTextInput" class="admin-form-label">Allowed Resources <span class="admin-form-optional">(RFC 8707)</span></label>
+			if props.Client != nil {
+				<input type="hidden" id="allowed_resources" name="allowed_resources" value={ props.Client.AllowedResources }/>
+			} else {
+				<input type="hidden" id="allowed_resources" name="allowed_resources" value=""/>
+			}
+			<div class="admin-uri-picker" id="resPicker" data-hidden-id="allowed_resources">
+				<div class="admin-uri-tags" id="resTags"></div>
+				<input
+					type="text"
+					class="admin-uri-text-input"
+					id="resTextInput"
+					placeholder="https://api.example.com"
+					autocomplete="off"
+					spellcheck="false"
+					inputmode="url"
+				/>
+			</div>
+			<small class="admin-form-hint">
+				The client may only request a <code>resource</code> (token audience) that <strong>exactly matches</strong>
+				an entry here — <code>https://api.x.com</code> ≠ <code>https://api.x.com/</code>. Enter exactly what the
+				client will send. Leave empty to deny all client-supplied resources (the static <code>JWT_AUDIENCE</code>
+				fallback still applies when the client sends no <code>resource</code>).
+				Press <kbd>Enter</kbd> to add; paste multiple separated by commas or newlines.
+			</small>
+		</div>
+	}
 	<!-- JWT custom claims -->
 	<div class="admin-form-group">
 		<label for="project" class="admin-form-label">Project <span class="admin-form-optional">(optional)</span></label>
@@ -326,7 +356,7 @@ templ ClientFormCommonFields(props ClientFormFieldsProps) {
 		@clientCredentialsScript()
 	}
 	@clientScopePickerScript()
-	@clientRedirectURIPickerScript()
+	@clientTagPickerScript()
 }
 
 // clientCredentialsScript renders the JS that syncs the Client Credentials checkbox
@@ -448,103 +478,114 @@ templ clientScopePickerScript() {
 	</script>
 }
 
-templ clientRedirectURIPickerScript() {
+// clientTagPickerScript wires every URI-style tag picker on the page from one
+// shared implementation. Each picker is a `.admin-uri-picker` element carrying
+// `data-hidden-id="<id>"` (the comma/newline-joined hidden input it syncs to);
+// the tag container and text input are found by class within it. This serves
+// both the Redirect URIs picker and the (admin-only) RFC 8707 Allowed Resources
+// picker — they differ only in element IDs.
+templ clientTagPickerScript() {
 	<script>
 		(function () {
-			var hiddenInput = document.getElementById('redirect_uris');
-			var picker      = document.getElementById('uriPicker');
-			var tagsEl      = document.getElementById('uriTags');
-			var textInput   = document.getElementById('uriTextInput');
-			var selected    = [];
+			function initPicker(picker) {
+				var hiddenInput = document.getElementById(picker.getAttribute('data-hidden-id'));
+				var tagsEl      = picker.querySelector('.admin-uri-tags');
+				var textInput   = picker.querySelector('.admin-uri-text-input');
+				if (!hiddenInput || !tagsEl || !textInput) { return; }
+				var selected    = [];
 
-			function syncHidden() { hiddenInput.value = selected.join('\n'); }
+				function syncHidden() { hiddenInput.value = selected.join('\n'); }
 
-			function renderTags() {
-				tagsEl.innerHTML = '';
-				selected.forEach(function (uri) {
-					var tag = document.createElement('span');
-					tag.className = 'admin-uri-tag';
-					var label = document.createElement('span');
-					label.className = 'admin-uri-tag-label';
-					label.textContent = uri;
-					var btn = document.createElement('button');
-					btn.type = 'button';
-					btn.className = 'admin-uri-tag-remove';
-					btn.setAttribute('aria-label', 'Remove ' + uri);
-					btn.textContent = '×';
-					btn.addEventListener('click', function () { removeURI(uri); });
-					tag.appendChild(label);
-					tag.appendChild(btn);
-					tagsEl.appendChild(tag);
-				});
-			}
-
-			function render() { renderTags(); syncHidden(); }
-
-			function addURI(u) {
-				u = u.trim();
-				if (u && selected.indexOf(u) === -1) { selected.push(u); render(); }
-			}
-
-			function addMany(text) {
-				text.split(/[,\r\n]+/).forEach(function (u) {
-					if (u) { addURI(u); }
-				});
-			}
-
-			function removeURI(u) {
-				var i = selected.indexOf(u);
-				if (i !== -1) { selected.splice(i, 1); render(); }
-			}
-
-			function commitInput() {
-				var v = textInput.value;
-				if (v.trim()) { addMany(v); textInput.value = ''; }
-			}
-
-			function init() {
-				var v = hiddenInput.value;
-				if (v && v.trim()) {
-					v.split(/[,\r\n]+/).forEach(function (u) {
-						u = u.trim();
-						if (u && selected.indexOf(u) === -1) { selected.push(u); }
+				function renderTags() {
+					tagsEl.innerHTML = '';
+					selected.forEach(function (uri) {
+						var tag = document.createElement('span');
+						tag.className = 'admin-uri-tag';
+						var label = document.createElement('span');
+						label.className = 'admin-uri-tag-label';
+						label.textContent = uri;
+						var btn = document.createElement('button');
+						btn.type = 'button';
+						btn.className = 'admin-uri-tag-remove';
+						btn.setAttribute('aria-label', 'Remove ' + uri);
+						btn.textContent = '×';
+						btn.addEventListener('click', function () { removeURI(uri); });
+						tag.appendChild(label);
+						tag.appendChild(btn);
+						tagsEl.appendChild(tag);
 					});
 				}
-				render();
+
+				function render() { renderTags(); syncHidden(); }
+
+				function addURI(u) {
+					u = u.trim();
+					if (u && selected.indexOf(u) === -1) { selected.push(u); render(); }
+				}
+
+				function addMany(text) {
+					text.split(/[,\r\n]+/).forEach(function (u) {
+						if (u) { addURI(u); }
+					});
+				}
+
+				function removeURI(u) {
+					var i = selected.indexOf(u);
+					if (i !== -1) { selected.splice(i, 1); render(); }
+				}
+
+				function commitInput() {
+					var v = textInput.value;
+					if (v.trim()) { addMany(v); textInput.value = ''; }
+				}
+
+				function init() {
+					var v = hiddenInput.value;
+					if (v && v.trim()) {
+						v.split(/[,\r\n]+/).forEach(function (u) {
+							u = u.trim();
+							if (u && selected.indexOf(u) === -1) { selected.push(u); }
+						});
+					}
+					render();
+				}
+
+				textInput.addEventListener('keydown', function (e) {
+					if (e.key === 'Enter' || e.key === ',') {
+						e.preventDefault();
+						commitInput();
+					} else if (e.key === 'Backspace' && !textInput.value && selected.length) {
+						removeURI(selected[selected.length - 1]);
+					}
+				});
+				textInput.addEventListener('blur', commitInput);
+				textInput.addEventListener('paste', function (e) {
+					var data = '';
+					if (e.clipboardData) {
+						data = e.clipboardData.getData('text/plain');
+					} else if (window.clipboardData) {
+						data = window.clipboardData.getData('Text');
+					}
+					if (data && /[,\r\n]/.test(data)) {
+						e.preventDefault();
+						addMany(data);
+						textInput.value = '';
+					}
+				});
+				picker.addEventListener('click', function (e) {
+					if (e.target !== textInput) { textInput.focus(); }
+				});
+
+				var form = picker.closest('form');
+				if (form) {
+					form.addEventListener('submit', function () { commitInput(); });
+				}
+
+				init();
 			}
 
-			textInput.addEventListener('keydown', function (e) {
-				if (e.key === 'Enter' || e.key === ',') {
-					e.preventDefault();
-					commitInput();
-				} else if (e.key === 'Backspace' && !textInput.value && selected.length) {
-					removeURI(selected[selected.length - 1]);
-				}
-			});
-			textInput.addEventListener('blur', commitInput);
-			textInput.addEventListener('paste', function (e) {
-				var data = '';
-				if (e.clipboardData) {
-					data = e.clipboardData.getData('text/plain');
-				} else if (window.clipboardData) {
-					data = window.clipboardData.getData('Text');
-				}
-				if (data && /[,\r\n]/.test(data)) {
-					e.preventDefault();
-					addMany(data);
-					textInput.value = '';
-				}
-			});
-			picker.addEventListener('click', function (e) {
-				if (e.target !== textInput) { textInput.focus(); }
-			});
-
-			var form = picker.closest('form');
-			if (form) {
-				form.addEventListener('submit', function () { commitInput(); });
-			}
-
-			init();
+			var pickers = document.querySelectorAll('.admin-uri-picker[data-hidden-id]');
+			for (var i = 0; i < pickers.length; i++) { initPicker(pickers[i]); }
 		})();
 	</script>
 }

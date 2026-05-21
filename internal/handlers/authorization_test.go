@@ -464,6 +464,117 @@ func TestAuthorize_GlobalPKCEDeny_RedirectsAccessDenied(t *testing.T) {
 	assert.NotContains(t, loc, "invalid_request")
 }
 
+// setupAuthorizeAllowlistEnv builds a confidential auth-code client and the
+// POST /oauth/authorize route, returning the store so tests can set the
+// client's RFC 8707 AllowedResources before issuing an approve.
+func setupAuthorizeAllowlistEnv(
+	t *testing.T,
+) (engine *gin.Engine, client *models.OAuthApplication, s *store.Store) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+
+	cfg := &config.Config{
+		BaseURL:            "http://localhost:8080",
+		AuthCodeExpiration: 10 * time.Minute,
+	}
+
+	var err error
+	s, err = store.New(context.Background(), "sqlite", ":memory:", &config.Config{})
+	require.NoError(t, err)
+
+	auditSvc := services.NewNoopAuditService()
+	clientSvc := services.NewClientService(s, auditSvc, nil, 0, nil, 0)
+	userSvc := services.NewUserService(s, nil, nil, "local", false, auditSvc, nil, 0)
+	authzSvc := services.NewAuthorizationService(s, cfg, auditSvc, nil, clientSvc)
+	handler := NewAuthorizationHandler(authzSvc, nil, userSvc, cfg)
+
+	client = &models.OAuthApplication{
+		ClientID:           uuid.New().String(),
+		ClientSecret:       "test-secret-hash",
+		ClientName:         "Allowlist Test Client",
+		UserID:             uuid.New().String(),
+		Scopes:             "read",
+		GrantTypes:         "authorization_code",
+		RedirectURIs:       models.StringArray{"https://app.example.com/callback"},
+		ClientType:         "confidential",
+		EnableAuthCodeFlow: true,
+		Status:             models.ClientStatusActive,
+	}
+	require.NoError(t, s.CreateClient(client))
+
+	user := &models.User{
+		ID:       uuid.New().String(),
+		Username: "allowlist-user",
+		Email:    "allowlist@example.com",
+		IsActive: true,
+	}
+	require.NoError(t, s.CreateUser(user))
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("user_id", user.ID)
+		c.Set("user", user)
+		c.Next()
+	})
+	r.POST("/oauth/authorize", handler.HandleAuthorize)
+	return r, client, s
+}
+
+// postApproveWithResource submits an approve consent with the given resource.
+func postApproveWithResource(
+	t *testing.T, r *gin.Engine, clientID, resource string,
+) *httptest.ResponseRecorder {
+	t.Helper()
+	form := url.Values{
+		"action":        {"approve"},
+		"client_id":     {clientID},
+		"redirect_uri":  {"https://app.example.com/callback"},
+		"scope":         {"read"},
+		"state":         {"st-1"},
+		"response_type": {"code"},
+		"resource":      {resource},
+	}
+	req := httptest.NewRequest(
+		http.MethodPost, "/oauth/authorize", strings.NewReader(form.Encode()),
+	)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return w
+}
+
+// TestAuthorize_Resource_NotInAllowlist_RedirectsInvalidTarget proves the
+// authorize code-issuance path maps the service-level allowlist rejection to an
+// invalid_target redirect (deny-all default: empty allowlist rejects any
+// resource). This guards the issueCodeAndRedirect error-mapping wiring.
+func TestAuthorize_Resource_NotInAllowlist_RedirectsInvalidTarget(t *testing.T) {
+	r, client, _ := setupAuthorizeAllowlistEnv(t) // empty allowlist (deny-all)
+
+	w := postApproveWithResource(t, r, client.ClientID, "https://api.b.example")
+
+	require.Equal(t, http.StatusFound, w.Code)
+	loc := w.Header().Get("Location")
+	assert.Contains(t, loc, "https://app.example.com/callback")
+	assert.Contains(t, loc, "error=invalid_target")
+	assert.NotContains(t, loc, "code=", "no authorization code may be issued")
+}
+
+// TestAuthorize_Resource_InAllowlist_IssuesCode proves an allowlisted resource
+// is accepted and an authorization code is redirected back.
+func TestAuthorize_Resource_InAllowlist_IssuesCode(t *testing.T) {
+	r, client, s := setupAuthorizeAllowlistEnv(t)
+	client.AllowedResources = models.StringArray{"https://api.a.example"}
+	require.NoError(t, s.UpdateClient(client))
+
+	w := postApproveWithResource(t, r, client.ClientID, "https://api.a.example")
+
+	require.Equal(t, http.StatusFound, w.Code)
+	loc := w.Header().Get("Location")
+	assert.Contains(t, loc, "https://app.example.com/callback")
+	assert.Contains(t, loc, "code=")
+	assert.NotContains(t, loc, "error=")
+}
+
 // TestAuthorize_DenyUnregisteredRedirectURI_NotReflected confirms the open-
 // redirect guard remains intact on the deny path: an unregistered
 // redirect_uri must NOT be honored, even though deny short-circuits before

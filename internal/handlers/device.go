@@ -149,6 +149,17 @@ func (h *DeviceHandler) DeviceCodeRequest(c *gin.Context) {
 			)
 			return
 		}
+		// RFC 8707: a `resource` outside the client's allowlist (or any resource
+		// against an empty allowlist) is rejected with invalid_target, not 500.
+		if errors.Is(err, services.ErrInvalidTarget) {
+			respondOAuthError(
+				c,
+				http.StatusBadRequest,
+				errInvalidTarget,
+				"resource is not in the client's allowlist",
+			)
+			return
+		}
 		log.Printf("[device] device code generation error: %v", err)
 		respondOAuthError(
 			c,
