@@ -104,7 +104,7 @@ AuthGate also serves as a lightweight **centralised identity gateway** for inter
 **How AuthGate helps:** A single **Identity Gateway** that all services integrate with as a standard OAuth 2.0 / OIDC client — no more direct LDAP wiring:
 
 - Outward-facing: standard OAuth 2.0 APIs (Device Code, PKCE, Client Credentials).
-- Inward-facing: centralised handling of LDAP, GitHub, GitLab, Microsoft, and other identity sources.
+- Inward-facing: centralised handling of LDAP, GitHub, Gitea, GitLab, Microsoft, and other identity sources.
 - New services register as OAuth clients and never touch LDAP directly.
 
 #### 2. No token lifecycle management — tokens issued, never tracked or revoked

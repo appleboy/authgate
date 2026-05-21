@@ -925,7 +925,7 @@ curl -X POST https://auth.yourplatform.com/admin/users/<user-id>/enable \
   -H "X-CSRF-Token: ..."
 ```
 
-If a third-party OAuth account (GitHub/Gitea/Microsoft) is the suspected entry vector, unlink just that binding instead of disabling the whole account: `POST /admin/users/<user-id>/connections/<conn-id>/delete`.
+If a third-party OAuth account (GitHub/Gitea/GitLab/Microsoft) is the suspected entry vector, unlink just that binding instead of disabling the whole account: `POST /admin/users/<user-id>/connections/<conn-id>/delete`.
 
 ---
 

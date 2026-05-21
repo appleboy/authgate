@@ -1,6 +1,6 @@
 # OAuth Setup Guide
 
-This guide explains how to integrate GitHub, Gitea, GitLab, and Microsoft Entra ID OAuth authentication with AuthGate.
+This guide explains how to integrate GitHub, Gitea, and GitLab OAuth authentication with AuthGate. Microsoft Entra ID is also built in; see [docs/CONFIGURATION.md](CONFIGURATION.md#oauth-third-party-login) for its settings.
 
 ## Features
 
@@ -120,14 +120,17 @@ Works with both GitLab.com (SaaS) and self-hosted GitLab instances.
 ### 1. Create GitLab OAuth Application
 
 1. Log in to your GitLab instance
-2. Go to User Settings → Applications (`/-/profile/applications`)
-   - For instance-wide apps, an admin can instead use Admin Area → Applications
+2. Open **Edit profile → Applications** (`/-/profile/applications`)
+   - For instance-wide apps, an admin can instead use **Admin Area → Applications** (`/-/admin/applications`)
 3. Fill in:
    - **Name**: AuthGate
    - **Redirect URI**: `http://localhost:8080/auth/callback/gitlab`
    - **Scopes**: check `read_user`
 4. Click "Save application"
 5. Copy the **Application ID** (Client ID) and **Secret** (Client Secret)
+
+> **Note**: GitLab.com requires HTTPS redirect URIs, with `http://localhost` / `127.0.0.1`
+> exempted for local development. For any non-loopback host, use an `https://` redirect URI.
 
 ### 2. Configure AuthGate
 
@@ -222,8 +225,9 @@ Alice can have:
   - Local auth: alice / password123
   - GitHub: alice-github (linked)
   - Gitea: alice-work (linked)
+  - GitLab: alice-gitlab (linked)
 
-All three methods log into the same AuthGate account.
+All methods log into the same AuthGate account.
 ```
 
 ## Troubleshooting
@@ -236,7 +240,7 @@ All three methods log into the same AuthGate account.
 
 - GitHub: Make sure your email is public or grant `user:email` scope
 - Gitea: Check that your Gitea account has an email address
-- GitLab: Ensure your GitLab account has a public email set (the `read_user` scope returns the account's primary email)
+- GitLab: Ensure your GitLab account has a confirmed primary email. The `read_user` scope returns the account's primary email (not the separately configured public email)
 
 ### "Username already exists"
 
@@ -319,7 +323,12 @@ func NewGoogleProvider(cfg OAuthProviderConfig) *OAuthProvider {
             ClientSecret: cfg.ClientSecret,
             RedirectURL:  cfg.RedirectURL,
             Scopes:       cfg.Scopes,
-            Endpoint:     google.Endpoint, // golang.org/x/oauth2/google
+            // Set the endpoint inline (as Gitea/GitLab do) to avoid pulling in a
+            // provider-specific oauth2 subpackage and its transitive dependencies.
+            Endpoint: oauth2.Endpoint{
+                AuthURL:  "https://accounts.google.com/o/oauth2/v2/auth",
+                TokenURL: "https://oauth2.googleapis.com/token",
+            },
         },
     }
 }

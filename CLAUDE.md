@@ -224,8 +224,8 @@ In addition to Device Code Flow, AuthGate supports Authorization Code Flow with 
 - `GET /login` - Login page
 - `POST /login` - Submit credentials
 - `GET /logout` - Clear session
-- `GET /oauth/:provider` - Initiate OAuth login (GitHub, Gitea, GitLab, Microsoft)
-- `GET /oauth/:provider/callback` - OAuth callback handler
+- `GET /auth/login/:provider` - Initiate OAuth login (GitHub, Gitea, GitLab, Microsoft)
+- `GET /auth/callback/:provider` - OAuth callback handler
 
 **Admin**
 
