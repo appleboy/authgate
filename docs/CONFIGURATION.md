@@ -642,7 +642,7 @@ AuthGate supports OAuth 2.0 authentication with third-party providers, allowing 
 
 ### Key Features
 
-- **Email-Based Account Linking**: Automatically links OAuth accounts to existing users with matching email addresses
+- **Email-Based Account Linking**: Links an OAuth identity to an existing user with a matching email, but only when the provider attests the email is verified (GitHub, Microsoft Entra ID). GitLab and Gitea do not expose verification status, so their emails are treated as unverified and are not auto-linked to pre-existing accounts
 - **Auto-Registration**: New users can be automatically created via OAuth login
 - **Multiple Authentication Methods**: Users can have both password and OAuth authentication
 - **Profile Sync**: Avatar and profile information synced from OAuth providers
