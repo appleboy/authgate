@@ -76,7 +76,7 @@ GITHUB_SCOPES=user:email
 2. Visit `http://localhost:8080/login`
 3. Click "Sign in with GitHub"
 4. Authorize the application
-5. You'll be logged in and redirected to `/device`
+5. You'll be logged in and redirected back to AuthGate — to the page you started from, or `/account/sessions` by default
 
 ## Gitea OAuth Setup
 
@@ -111,7 +111,7 @@ GITEA_SCOPES=read:user
 2. Visit `http://localhost:8080/login`
 3. Click "Sign in with Gitea"
 4. Authorize the application
-5. You'll be logged in and redirected to `/device`
+5. You'll be logged in and redirected back to AuthGate — to the page you started from, or `/account/sessions` by default
 
 ## GitLab OAuth Setup
 
@@ -155,7 +155,7 @@ GITLAB_SCOPES=read_user
 2. Visit `http://localhost:8080/login`
 3. Click "Sign in with GitLab"
 4. Authorize the application
-5. You'll be logged in and redirected to `/device`
+5. You'll be logged in and redirected back to AuthGate — to the page you started from, or `/account/sessions` by default
 
 ## Production Deployment
 
