@@ -642,7 +642,7 @@ AuthGate supports OAuth 2.0 authentication with third-party providers, allowing 
 
 ### Key Features
 
-- **Email-Based Account Linking**: Links an OAuth identity to an existing user with a matching email, but only when the provider attests the email is verified (GitHub, Microsoft Entra ID). GitLab and Gitea do not expose verification status, so their emails are treated as unverified and are not auto-linked to pre-existing accounts
+- **Email-Based Account Linking**: Links an OAuth identity to an existing user with a matching email, but only when the provider attests the email is verified (GitHub, Microsoft Entra ID). GitLab and Gitea do not expose verification status, so their emails are treated as unverified and are never auto-linked to a pre-existing account — they sign in only to an account that already holds their connection; otherwise a new account is created (or the login is rejected if the email is already taken or `OAUTH_AUTO_REGISTER=false`)
 - **Auto-Registration**: New users can be automatically created via OAuth login
 - **Multiple Authentication Methods**: Users can have both password and OAuth authentication
 - **Profile Sync**: Avatar and profile information synced from OAuth providers
@@ -702,10 +702,10 @@ GITLAB_REDIRECT_URL=http://localhost:8080/auth/callback/gitlab
 - System automatically links GitHub to Bob's account
 - Bob can now login with either password or GitHub
 
-**Scenario 3: Multiple OAuth Accounts**
+**Scenario 3: Multiple Verified Providers**
 
-- User can link multiple OAuth providers (GitHub + Gitea + GitLab + Microsoft)
-- All methods log into the same AuthGate account
+- A user can link multiple verified-email providers (e.g., GitHub + Microsoft Entra ID) to one account via email matching
+- GitLab and Gitea report email as unverified, so they are not auto-linked by email — they sign in only to an account that already holds their connection
 
 ### Security Considerations
 

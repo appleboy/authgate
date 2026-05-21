@@ -5,7 +5,7 @@ This guide explains how to integrate GitHub, Gitea, and GitLab OAuth authenticat
 ## Features
 
 - **Multiple OAuth Providers**: Step-by-step setup for GitHub, Gitea, and GitLab below; Microsoft Entra ID is also supported (configured via [CONFIGURATION.md](CONFIGURATION.md#oauth-third-party-login)), and the design is extensible to other providers
-- **Email-based Account Linking**: Links an OAuth identity to an existing user with the same email — but only when the provider attests the email is verified. GitHub and Microsoft Entra ID are treated as verified; GitLab and Gitea do not expose verification status, so AuthGate treats their email as unverified and will not auto-link by email (it creates a separate account, or rejects login when `OAUTH_AUTO_REGISTER=false`)
+- **Email-based Account Linking**: Links an OAuth identity to an existing user with the same email — but only when the provider attests the email is verified. GitHub and Microsoft Entra ID are treated as verified; GitLab and Gitea do not expose verification status, so AuthGate treats their email as unverified and never auto-links them to an existing same-email account. An unverified provider can sign in only to an account that already holds its connection; otherwise a new account is created — and if that email is already taken by another account, or `OAUTH_AUTO_REGISTER=false`, the login is rejected
 - **Auto-registration**: New users can be automatically created via OAuth (controlled by `OAUTH_AUTO_REGISTER` config)
 - **Multiple Authentication Methods**: Users can have both password and OAuth authentication
 - **Profile Sync**: Avatar and profile information synced from OAuth providers
@@ -218,17 +218,25 @@ Bob can now login with:
   - GitHub OAuth (newly added)
 ```
 
-### Scenario 3: User Has Multiple OAuth Accounts
+### Scenario 3: User Links Multiple Verified Providers
 
 ```txt
-Alice can have:
-  - Local auth: alice / password123
-  - GitHub: alice-github (linked)
-  - Gitea: alice-work (linked)
-  - GitLab: alice-gitlab (linked)
+Alice already has an account: alice@example.com
 
-All methods log into the same AuthGate account.
+She signs in with GitHub (verified email) → links to her account by email.
+She later signs in with Microsoft Entra ID (verified email) → links the same way.
+
+  - Local auth: alice / password123
+  - GitHub: alice-github (linked by verified email)
+  - Microsoft: alice@corp (linked by verified email)
+
+All of these log into the same AuthGate account.
 ```
+
+Only providers that attest a verified email (GitHub, Microsoft Entra ID) auto-link
+by matching email. GitLab and Gitea report email as unverified, so they are not
+auto-linked to a pre-existing account — they sign in only to an account that already
+holds their connection (typically one they originally created).
 
 ## Troubleshooting
 
